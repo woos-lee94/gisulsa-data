@@ -517,7 +517,7 @@ def cmd_publish_set(ds):
     for x in warns:
         print('경고: ' + x)
     print(f'올릴 준비 완료: {ds} rev {rev} "{o["title"]}" — 새 카드 {len(added)}장, 백로그 1교시 {b1}→{len(bl["p1"])}, 논술 {be}→{len(bl["essay"])}')
-    print(f'다음: git add -A && git commit -m "세트 {ds}: {o["title"]}" && git push')
+    print(f'다음: git add -A && git commit -m "세트 {ds}: {o["title"]}" && git fetch origin main && git rebase origin/main && git push origin HEAD:main')
     return 0
 
 
@@ -687,7 +687,7 @@ def cmd_publish_mock(ds):
     for x in warns:
         print('경고: ' + x)
     print(f'올릴 준비 완료: 모의 {ds} rev {rev} "{o["title"]}" — 논술 백로그 {be}→{len(bl["essay"])}')
-    print(f'다음: git add -A && git commit -m "모의 {ds}: {o["title"]}" && git push')
+    print(f'다음: git add -A && git commit -m "모의 {ds}: {o["title"]}" && git fetch origin main && git rebase origin/main && git push origin HEAD:main')
     return 0
 
 
