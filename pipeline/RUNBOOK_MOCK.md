@@ -1,0 +1,41 @@
+# 토요일 아침 주간 모의고사 만들기
+
+목표: 이번 주 모의고사 JSON 하나를 `data/mocks/`에 올린다. 사용자는 앱의 테스트 탭에서 바로 푼다.
+
+## 순서
+
+1. 브리프 보기
+   ```
+   python3 pipeline/tool.py mock-brief
+   ```
+   첫 줄이 `SKIP`이면 그 이유를 한 줄로 보고하고 끝낸다.
+   형식이 `문제 없음(notice만)`이면 `notice`와 `guide`만 쓴 파일을 만든다(실제 시험일 응원과 당일 체크 3가지).
+
+2. 문항 고르기와 목차 쓰기: `pipeline/spec_mock.md`를 따른다.
+   수치·기준은 1차 출처로 확인한 것만 쓴다.
+
+3. 검사와 올리기
+   ```
+   python3 pipeline/tool.py check-mock <날짜>
+   python3 pipeline/tool.py publish-mock <날짜>
+   git add -A
+   git commit -m "모의 <날짜>: <제목>"
+   git push
+   ```
+
+4. 새 회차 기출 반영(해당될 때만)
+   실제 시험(제141회 2027-02-06 예상, 이후 회차 포함)이 끝나고 2주가 지났는데 `python3 pipeline/tool.py status`의 기출에 그 회차가 없으면:
+   - 사당기술사학원 기출문제 게시판(https://www.sadangac.com/past/index.asp)이나 큐넷 기출문제(기술사) 자료실에서 토목시공기술사 해당 회차 문제지를 찾는다.
+   - 문항마다 문제 요지(원문을 그대로 옮기지 않고 요지만), 단원 번호(1~16, `pipeline/curriculum.json`의 units)를 붙여 JSON 파일을 만들고 `python3 pipeline/tool.py add-round <파일>`로 넣는다.
+   - 출력에 "비슷한 카드"가 나오면 같은 개념인지 보고 `python3 pipeline/tool.py link <기출id> <카드id>`로 잇는다.
+   - 찾지 못하면 건너뛰고 다음 주에 다시 본다.
+
+## 마지막 보고(사용자 휴대폰 알림으로 간다)
+
+```
+이번 주 모의고사가 올라왔어요: <제목>
+<형식 한 줄, 예: 1교시 13문 + 논술 2문>
+앱 테스트 탭에서 타이머를 켜고 풀어 보세요.
+```
+
+새 회차를 넣었으면 한 줄 덧붙인다(예: `제141회 기출 31문항도 앱에 들어갔어요`). 링크나 파일 경로는 넣지 않는다.
