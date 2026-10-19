@@ -27,7 +27,7 @@ FULL = {'p1': 13, 'p2': 6, 'p3': 6, 'p4': 6}
 KID_RE = re.compile(r'^\d{3}-[1-4]-\d{2}$')
 DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 # 사용자에게 보이는 글에 들어가면 안 되는 말(메타 문구)
-META_ERR = ['Claude', '클로드', '사용자님', '제가 ', '저는 ', 'ChatGPT', '챗GPT']
+META_ERR = [r'Claude', r'클로드', r'사용자님', r'(?:^|[\s("“])제가\s', r'(?:^|[\s("“])저는\s', r'ChatGPT', r'챗GPT']
 META_WARN = ['이 카드는', '이 세트는', '확인 필요', '확인이 필요', '참고로', '도움이 되', '좋은 질문']
 MD_ERR = ['**', '##', '```', '](']
 
@@ -186,8 +186,9 @@ def index():
 def scan_text(obj, where, errs, warns):
     if isinstance(obj, str):
         for m in META_ERR:
-            if m in obj:
-                errs.append(f'{where}: 사용자에게 보이는 글에 "{m}" 같은 메타 문구가 있습니다')
+            hit = re.search(m, obj)
+            if hit:
+                errs.append(f'{where}: 사용자에게 보이는 글에 "{hit.group(0).strip()}" 같은 메타 문구가 있습니다')
         for m in MD_ERR:
             if m in obj:
                 errs.append(f'{where}: 마크다운 기호 "{m}"는 앱에서 그대로 보입니다')
