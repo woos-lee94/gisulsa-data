@@ -13,12 +13,19 @@
   python3 pipeline/tool.py add-round FILE.json              새 회차 기출 추가(제141회부터)
   python3 pipeline/tool.py link 기출id 카드id|목차id        기존 카드·목차를 새 기출에 연결
   python3 pipeline/tool.py status
+  python3 pipeline/tool.py kds "KDS 11 80 05" [검색어 ...]       국가건설기준(KDS·KCS) 현행 원문
+  python3 pipeline/tool.py law "건설기술 진흥법 시행령" [검색어 ...] 현행 법령 조문
+  python3 pipeline/tool.py admrul "고시·훈령 이름" [검색어 ...]      현행 행정규칙(고시·훈령·지침)
 """
 import datetime as dt
+import html
 import json
 import os
 import re
+import signal
 import sys
+import urllib.parse
+import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KST = dt.timezone(dt.timedelta(hours=9))
@@ -778,7 +785,135 @@ def cmd_status():
     return 0
 
 
+# ───────────────────────── 1차 출처 열기 ─────────────────────────
+
+def http_json(url):
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (gisulsa-data)'})
+    with urllib.request.urlopen(req, timeout=40) as r:
+        return json.loads(r.read().decode('utf-8'))
+
+
+def plain(s):
+    s = re.sub(r'<br\s*/?>|</p>|</tr>', '\n', str(s or ''))
+    s = re.sub(r'</t[dh]>', ' | ', s)
+    s = html.unescape(re.sub(r'<[^>]+>', ' ', s))
+    return re.sub(r'[ \t]+', ' ', s).strip()
+
+
+def show_hits(blocks, terms, limit=40):
+    """blocks: [(제목, 본문)]. 검색어가 하나라도 들어 있는 블록만 보여 준다."""
+    if not terms:
+        for t, _ in blocks:
+            print('  ' + t)
+        print('\n검색어를 덧붙이면 그 낱말이 든 조항만 보여 줍니다.')
+        return
+    n = 0
+    for t, body in blocks:
+        if any(w in body or w in t for w in terms):
+            print(f'\n[{t}]\n{body[:1500]}')
+            n += 1
+            if n >= limit:
+                print('\n… 결과가 많아 줄였습니다. 검색어를 좁히세요.')
+                break
+    if not n:
+        print('검색어가 든 조항이 없습니다. 다른 낱말로 찾아보세요.')
+
+
+def cmd_kds(code, terms):
+    """국가건설기준센터(KCSC) 공개 API로 KDS·KCS 최신판 본문을 연다."""
+    base = 'https://kcsc.re.kr/api/api/v1/'
+    try:
+        docs = http_json(base + 'tn_document_infos/by-kcsc_cd?kcsc_cd=' + urllib.parse.quote(code)).get('result') or []
+    except Exception as e:
+        print(f'열지 못했습니다: {e}')
+        return 1
+    if not docs:
+        print(f'{code}를 찾지 못했습니다. 코드 띄어쓰기를 "KDS 11 80 05"처럼 맞추세요.')
+        return 1
+    cur = [d for d in docs if d.get('last_yn') == 'Y'] or sorted(docs, key=lambda d: d.get('aplcn_bgng_ymd') or '')[-1:]
+    d = cur[0]
+    print(f"{d['kcsc_cd']} {d['doc_nm']} ({d['doc_yr']}판, 적용 {d.get('aplcn_bgng_ymd')}) — 국가건설기준센터 kcsc.re.kr")
+    if re.match(r'K[DC]S (57|61)', code) and str(d.get('doc_yr', '')) < '2023':
+        print('※ 상수도(57)·하수도(61) 기준은 국가건설기준센터에 옛 판만 있을 수 있습니다. admrul 명령으로 환경부 고시 개정전문을 확인하세요.')
+    rows = http_json(base + 'tn-document-contents?doc_info_seq=%d' % d['doc_info_seq']).get('result') or []
+    blocks = []
+    for c in sorted(rows, key=lambda c: c.get('cont_order', 0)):
+        body = plain(c.get('full_content') or c.get('table_content'))
+        if body:
+            blocks.append((f"{c.get('group_title') or ''} {c.get('cont_label') or ''}".strip(), body))
+    if not terms:
+        blocks = [(t, b) for t, b in blocks if re.match(r'^\d+(\.\d+)?\s', b)]
+    show_hits(blocks, terms)
+    return 0
+
+
+def _as_list(x):
+    if x is None:
+        return []
+    return x if isinstance(x, list) else [x]
+
+
+def cmd_law(name, terms, target='law'):
+    """국가법령정보센터 Open API로 현행 법령(law)이나 행정규칙(admrul)을 연다."""
+    api = 'https://www.law.go.kr/DRF/'
+    try:
+        res = http_json(api + f'lawSearch.do?OC=test&target={target}&type=JSON&display=50&query=' + urllib.parse.quote(name))
+    except Exception as e:
+        print(f'열지 못했습니다: {e}')
+        return 1
+    if target == 'law':
+        items = _as_list((res.get('LawSearch') or {}).get('law'))
+        key_name, key_id = '법령명한글', '법령일련번호'
+    else:
+        items = _as_list((res.get('AdmRulSearch') or {}).get('admrul'))
+        key_name, key_id = '행정규칙명', '행정규칙일련번호'
+    items = [i for i in items if i.get('현행연혁코드', i.get('현행연혁구분', '현행')) == '현행'] or items
+    exact = [i for i in items if i.get(key_name, '').replace(' ', '') == name.replace(' ', '')]
+    pick = (exact or items)[:1]
+    if not pick:
+        print(f'"{name}"을(를) 찾지 못했습니다. 정확한 이름으로 다시 찾아보세요.')
+        return 1
+    it = pick[0]
+    if not exact:
+        print('정확히 같은 이름이 없어 가장 가까운 결과를 엽니다. 후보: ' + ', '.join(i.get(key_name, '') for i in items[:6]))
+    if target == 'law':
+        body = http_json(api + f"lawService.do?OC=test&target=law&MST={it[key_id]}&type=JSON").get('법령') or {}
+        info = body.get('기본정보') or {}
+        print(f"{info.get('법령명_한글', it.get(key_name))} (시행 {info.get('시행일자', it.get('시행일자', ''))}) — https://www.law.go.kr/법령/" + it.get(key_name, '').replace(' ', ''))
+        blocks = []
+        for u in _as_list((body.get('조문') or {}).get('조문단위')):
+            if u.get('조문여부') == '전문':
+                continue
+            parts = [u.get('조문내용', '')]
+            for h in _as_list(u.get('항')):
+                parts.append(h.get('항내용', ''))
+                for ho in _as_list(h.get('호')):
+                    parts.append(ho.get('호내용', ''))
+                    for mo in _as_list(ho.get('목')):
+                        parts.append(mo.get('목내용', ''))
+            text = plain('\n'.join(p for p in parts if isinstance(p, str)))
+            title = (u.get('조문내용', '') or '').split(')')[0] + ')' if '(' in (u.get('조문내용', '') or '') else f"제{u.get('조문번호')}조"
+            blocks.append((title.strip(), text))
+    else:
+        body = http_json(api + f"lawService.do?OC=test&target=admrul&ID={it[key_id]}&type=JSON").get('AdmRulService') or {}
+        info = body.get('행정규칙기본정보') or {}
+        print(f"{info.get('행정규칙명', it.get(key_name))} ({info.get('행정규칙종류', '')} {info.get('발령번호', it.get('발령번호', ''))}, 시행 {info.get('시행일자', it.get('시행일자', ''))}) — https://www.law.go.kr/행정규칙/" + it.get(key_name, '').replace(' ', ''))
+        blocks = []
+        for t in _as_list(body.get('조문내용')):
+            t = plain(t)
+            if t:
+                blocks.append((t.split(')')[0] + ')' if t.startswith('제') and ')' in t[:40] else t[:30], t))
+        att = body.get('첨부파일') or {}
+        names, links = _as_list(att.get('첨부파일명')), _as_list(att.get('첨부파일링크'))
+        if names:
+            print('첨부(별표·개정전문): ' + ' / '.join(f'{n} {l}' for n, l in zip(names, links)))
+    show_hits(blocks, terms)
+    return 0
+
+
 def main():
+    if hasattr(signal, 'SIGPIPE'):
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)  # | head 로 잘라 봐도 오류를 내지 않게
     a = sys.argv[1:]
     if not a:
         print(__doc__)
@@ -802,6 +937,12 @@ def main():
         return cmd_link(a[1], a[2])
     if c == 'status':
         return cmd_status()
+    if c == 'kds' and len(a) > 1:
+        return cmd_kds(a[1], a[2:])
+    if c == 'law' and len(a) > 1:
+        return cmd_law(a[1], a[2:], 'law')
+    if c == 'admrul' and len(a) > 1:
+        return cmd_law(a[1], a[2:], 'admrul')
     print(__doc__)
     return 2
 

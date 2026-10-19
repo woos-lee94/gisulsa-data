@@ -17,7 +17,15 @@
    - `[최근 세트]`와 주제가 겹치지 않게 한다.
 
 3. 사실 확인
-   새 용어 정의와 논술 목차에 넣을 수치·기준·법령 조항은 WebSearch/WebFetch로 1차 출처(국가건설기준센터 KDS·KCS, 국가법령정보센터 현행 법령·행정규칙, 국토교통부·환경부 고시)를 찾아 확인한다. 확인하지 못한 수치는 쓰지 않고 `check`에 적는다. 확인한 출처는 카드의 `basis`에 짧게 적는다.
+   새 용어 정의와 논술 목차에 넣을 수치·기준·법령 조항은 1차 출처로 확인한다. 웹 페이지(kcsc.re.kr 뷰어 등)는 로그인 때문에 안 열리는 일이 많으니 아래 명령으로 원문을 바로 연다.
+   ```
+   python3 pipeline/tool.py kds "KDS 11 80 05" 이음 수축       # 국가건설기준(KDS·KCS) 최신판 본문에서 찾기
+   python3 pipeline/tool.py law "건설기술 진흥법 시행령" 안전관리계획   # 현행 법령 조문
+   python3 pipeline/tool.py admrul "공공 건설공사의 공사기간 산정기준" 비작업일수   # 현행 고시·훈령·지침
+   ```
+   - 기준 번호를 모르면 WebSearch로 "주제 + KDS" 또는 "주제 + KCS"를 찾아 번호만 얻은 뒤 kds 명령으로 연다.
+   - 상수도(KDS 57·KCS 57)·하수도(61) 기준은 국가건설기준센터에 옛 판만 있을 수 있다. `admrul`로 환경부 고시를 찾아 첨부된 개정전문으로 확인한다.
+   - 확인하지 못한 수치는 쓰지 않고 `check`에 적는다. 확인한 출처는 카드의 `basis`에 기준 번호·조항으로 짧게 적는다(예: `KDS 11 80 05 4.6.2`).
 
 4. 파일 쓰기: `data/sets/<날짜>.json`
    형식과 문체는 `pipeline/spec_set.md`를 따른다. 기존 카드 정의는 `pipeline/deck.json`에서 볼 수 있다.
@@ -32,20 +40,23 @@
    ```
    오류가 0개가 될 때까지 고친다. 경고는 읽고 판단한다(고칠 이유가 없으면 그대로 둔다).
 
-6. 올리기
+6. 올리기: 반드시 main 브랜치에 올린다
    ```
    python3 pipeline/tool.py publish-set <날짜>
    git add -A
    git commit -m "세트 <날짜>: <제목>"
-   git push
+   git fetch origin main && git rebase origin/main
+   git push origin HEAD:main
    ```
-   push가 거부되면 `git pull --rebase` 후 다시 push한다.
+   - 이 작업 환경은 `claude/...` 작업 브랜치에서 시작한다. 그냥 `git push`를 하면 작업 브랜치에만 올라가 앱이 받지 못하므로 꼭 `HEAD:main`으로 올린다.
+   - rebase가 충돌로 멈추면(다른 업데이트가 먼저 올라감): 세트 파일을 `/tmp/`에 복사해 두고 `git rebase --abort && git reset --hard origin/main` 뒤, 세트 파일을 `data/sets/`에 다시 넣고 5단계(check-set)부터 다시 한다.
+   - push가 거절되면 fetch·rebase 후 한 번만 다시 한다. 그래도 main에 못 올리면 그 사실과 이유를 보고한다.
 
 7. 확인
    ```
-   curl -s "https://raw.githubusercontent.com/woos-lee94/gisulsa-data/main/data/index.json?t=$(date +%s)" | head -c 400
+   git fetch origin main && git log --oneline -1 origin/main
    ```
-   오늘 날짜가 `sets`에 보이면 끝. 반영까지 몇 분 걸릴 수 있다.
+   방금 만든 커밋이 origin/main 맨 위에 있으면 끝이다. 앱이 읽는 raw 주소는 캐시 때문에 반영까지 5분 정도 걸릴 수 있다.
 
 ## 마지막 보고(사용자 휴대폰 알림으로 간다)
 
