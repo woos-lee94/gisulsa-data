@@ -66,6 +66,24 @@
 - 사용자 혼자 쓰므로 `eas build -p ios` → TestFlight 내부 테스트로 설치한다.
 - TestFlight 빌드는 90일 뒤 만료되므로 그 전에 다시 빌드한다.
 - App Store 공개 출시는 이번 범위가 아니다.
+- 사용자는 Windows PowerShell에서 아래 순서를 그대로 쳐서 빌드한다(PowerShell을 연 위치, 보통 `C:\Users\이름`에서). 빌드 안내는 이 순서를 기준으로 하고, 다른 폴더 경로를 가정하지 않는다.
+
+  ```powershell
+  git clone https://github.com/woos-lee94/gisulsa-data.git
+  cd gisulsa-data
+  git stash
+  git checkout main
+  git pull
+  git stash pop
+  cd app
+  npm ci
+  npm test
+  eas build -p ios --profile production --auto-submit
+  ```
+
+  - 이미 받은 폴더가 있으면 `git clone`은 "already exists" 오류를 내고, 나머지 줄이 그 폴더를 최신으로 맞춘다.
+  - `git stash`·`git stash pop`은 `eas init`·`eas build`가 PC의 `app.json`에 적은 EAS 프로젝트 번호(`owner`, `extra.eas`)를 지키려고 쓴다. 저장소의 `app.json`을 고칠 때 그 줄과 겹치지 않게 한다.
+  - 앱 변경은 사용자가 `main`으로 받으므로 `main`에 올린다.
 
 ## 받아들이는 기준
 
