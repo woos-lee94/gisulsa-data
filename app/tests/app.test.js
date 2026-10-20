@@ -232,7 +232,56 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   await go('#study'); click('[data-act="start-study"]'); await sleep(40);
   ok(view().querySelector('.fc'), '오늘 학습 세션');
 
-  // 논술 답안 작성 요령(모범 답안)과 첨삭 프롬프트의 형식 점검표
+  // 용어 빈칸 쓰기(하·중·상, 직접 입력)
+  {
+    const want = { '하': [1, 1], '중': [2, 3], '상': [4, 6] }; const bad = [];
+    for (const c of pe.deck()) for (const lv of ['하', '중', '상']) {
+      const b = pe.fillBlanks(c, lv); const t = b.map(x => c.d.substr(x.i, x.len));
+      if (b.length < want[lv][0] || b.length > want[lv][1]) bad.push(c.id + lv + ' 개수 ' + b.length);
+      b.forEach((x, k) => { if (k && x.i < b[k - 1].i + b[k - 1].len) bad.push(c.id + ' 겹침'); });
+      t.forEach(w2 => { if (!w2.trim() || c.d.indexOf(w2) !== c.d.lastIndexOf(w2) || c.t.includes(w2)) bad.push(c.id + ' 답이 보임 ' + w2); });
+    }
+    ok(bad.length === 0, `카드 ${pe.deck().length}장 × 하·중·상 빈칸 개수·겹침·답 노출 ` + bad.slice(0, 3).join(' | '));
+    const J = pe.fillJudge;
+    ok(J('평균운반거리', '평균 운반거리').ok && J('0.75mpa', '0.75MPa').ok && !J('075MPa', '0.75MPa').ok && J('스펀지형상', '스펀지 현상').typo && !J('90', '90%').ok && J('m2', '㎡').ok && !J('', '함수비').ok, '채점: 띄어쓰기·대소문자 무시, 수치·단위는 정확히, 오타 1자 허용');
+  }
+  await go('#test'); click('[data-act="start-fill"]'); await sleep(20);
+  ok(d.querySelectorAll('#modal-wrap [data-act="fill-lv"]').length === 4, '빈칸 쓰기: 난이도 고르기(하·중·상·섞어서)');
+  click('#modal-wrap [data-act="fill-lv"][data-v="중"]'); await sleep(40);
+  {
+    const ses = pe.SES(), it = ses.items[0], c = pe.deck().find(x => x.id === it.id);
+    const ins = view().querySelectorAll('input.fill-in');
+    ok(ses.items.length === 10 && it.type === 'fill' && ins.length === it.b.length && ins.length >= 2 && ins.length <= 3, `중: 빈칸 ${ins.length}개, 10문`);
+    ok(d.activeElement === ins[0], '첫 빈칸에 바로 커서');
+    ins[0].dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    ok(d.activeElement === ins[1], '자판 다음 키 → 다음 빈칸');
+    it.b.forEach((x, k) => { ins[k].value = c.d.substr(x.i, x.len).replace(/\s/g, ''); });
+    click('[data-act="fill-check"]'); await sleep(20);
+    ok(view().querySelector('.ex.ok') && view().querySelectorAll('.fill-ok').length === it.b.length && !view().querySelector('input.fill-in'), '맞게 쓰면 정답');
+    click('[data-act="sess-next"]'); await sleep(20);
+    const it2 = pe.SES().items[1];
+    click('[data-act="fill-giveup"]'); await sleep(20);
+    ok(view().querySelector('.ex.no') && pe.S().wrong['F:' + it2.id] && pe.S().wrong['F:' + it2.id].type === 'fill', '모르겠어요 → 정답 표시 + 오답 노트');
+    click('[data-act="fill-accept"]'); await sleep(20);
+    ok(!pe.S().wrong['F:' + it2.id] && /맞은 걸로 바꿨어요/.test(txt()), '맞은 걸로 하기 → 오답 노트에서 뺌');
+    click('[data-act="sess-next"]'); await sleep(20);
+    const it3 = pe.SES().items[2];
+    view().querySelectorAll('input.fill-in').forEach(x => { x.value = '아무말'; });
+    click('[data-act="fill-check"]'); await sleep(20);
+    ok(view().querySelector('.fill-no s') && pe.S().wrong['F:' + it3.id], '틀리게 쓰면 내 답에 줄 긋고 정답');
+    await go('#review'); ok(/빈칸 1/.test(txt()), '복습 탭 오답 노트에 빈칸 1');
+    await go('#wrong'); ok(/빈칸 쓰기/.test(txt()), '오답 목록에 빈칸 쓰기');
+    await go('#review'); click('[data-act="start-wrong"]'); await sleep(40);
+    ok(pe.SES().items.some(x => x.type === 'fill' && x.wrongKey === 'F:' + it3.id), '오답 다시 풀기에 빈칸 문제');
+    await go('#set/2026-10-19'); click('[data-act="set-tab"][data-t="cards"]'); await sleep(20);
+    click('[data-act="start-fill"][data-d="2026-10-19"]'); await sleep(20);
+    click('#modal-wrap [data-act="fill-lv"][data-v="상"]'); await sleep(40);
+    const sset = pe.SES();
+    ok(/2026-10-19|10월 19일/.test(sset.title) && sset.items.every(x => x.type === 'fill' && x.lv === '상' && x.b.length >= 4), '세트 용어로 빈칸 쓰기(상)');
+    pe.S().wrong = {}; await go('#today');
+  }
+
+
   await go('#set/2026-10-19'); click('[data-act="set-tab"][data-t="essay"]'); await sleep(20);
   ok(view().querySelector('[data-act="go"][data-h="guide"]'), '세트 논술 탭 → 답안 작성 요령 링크');
   await go('#guide');

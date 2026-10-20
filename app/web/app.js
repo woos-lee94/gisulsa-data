@@ -120,8 +120,8 @@ function kLabelShort(id){const a=String(id).split('-');return a.length===3?a[0]+
 
 /* ════════ 4. 덱(카드)·논술 ════════ */
 const normTerm=t=>String(t||'').replace(/\([^)]*\)/g,'').replace(/[\s·・,.\-–—_/()（）\[\]'"“”‘’:;]/g,'').toLowerCase();
-let _deck=null,_byId=null,_byNorm=null,_kxRev=null,_essays=null;
-function invalidate(){_deck=_byId=_byNorm=_kxRev=_essays=null;_kq=null;}
+let _deck=null,_byId=null,_byNorm=null,_kxRev=null,_essays=null,_lex=null;
+function invalidate(){_deck=_byId=_byNorm=_kxRev=_essays=null;_kq=null;_lex=null;}
 function buildDeck(){
   const patch=window.PE_PATCH||{},kx=window.PE_KX||{},kx2=(SETS.kichul&&SETS.kichul.kx)||{};const list=[];_byId={};_byNorm={};
   const add=c=>{if(_byId[c.id])return;_byId[c.id]=c;const n=normTerm(c.t);if(n&&!_byNorm[n])_byNorm[n]=c.id;list.push(c);};
@@ -169,6 +169,7 @@ function rightOnWrong(key){const w=S.wrong[key];if(!w)return;w.streak=(w.streak|
 function wrongItem(key){const w=S.wrong[key];if(!w)return null;const a=key.split(':');
   if(a[0]==='C'){const c=card(a[1]);return c?{type:'card',id:c.id,key,label:c.t}:null;}
   if(a[0]==='Q'){const s=SETS.sets[a[1]];const q=s&&s.quiz&&s.quiz[Number(a[2])];return q?{type:'quiz',d:a[1],i:Number(a[2]),key,label:q.q}:null;}
+  if(a[0]==='F'){const c=card(a[1]);return c?{type:'fill',id:c.id,key,label:c.t}:null;}
   if(a[0]==='Z'){const c=card(a[1]);const toks=c?clozeTokens(c.d):[];const tk=toks[Number(a[2])];return(c&&tk)?{type:'cloze',id:c.id,k:Number(a[2]),key,label:c.t+' — '+tk.s}:null;}
   return null;}
 function wrongList(){return Object.keys(S.wrong).map(k=>{const it=wrongItem(k);return it?Object.assign(it,{w:S.wrong[k]}):null;}).filter(Boolean).sort((a,b)=>(b.w.last||'')<(a.w.last||'')?-1:1);}
@@ -185,6 +186,45 @@ function clozeTokens(text){const out=[];if(!text)return out;const re=new RegExp(
   return out;}
 function clozeHTML(text,tok){return esc(text.slice(0,tok.i))+'<span class="cloze">？</span>'+esc(text.slice(tok.i+tok.len));}
 function clozeRevealHTML(text,tok){return esc(text.slice(0,tok.i))+'<span class="hl"><b>'+esc(text.slice(tok.i,tok.i+tok.len))+'</b></span>'+esc(text.slice(tok.i+tok.len));}
+
+/* ════════ 7-2. 용어 빈칸 쓰기(직접 입력) ════════
+   빈칸 후보: 덱 전체의 용어·키워드에서 뽑은 낱말(토목 용어 사전)과 수치. 정의에서 사전 낱말이 나오면 그 부분만 가리고 조사는 남긴다.
+   하 1칸(첫소리 힌트), 중 2~3칸(글자 수 힌트), 상 4~6칸(힌트 없음). 이 카드 키워드와 수치를 먼저 가린다. */
+const FILL_LV={'하':'빈칸 1개, 첫소리 힌트','중':'빈칸 2~3개, 글자 수 힌트','상':'빈칸 4~6개, 힌트 없음'};
+const JOSA=['으로부터','에서부터','으로써','으로서','에서는','에서도','으로는','으로도','이므로','하므로','에서','에는','에도','으로','이며','이고','이나','이다','하여','하고','하며','하는','하면','되는','되며','되고','되어','된다','한다','에게','처럼','보다','까지','부터','마다','과의','와의','은','는','을','를','의','에','로','와','과'];  /* 이·가는 흙막이·높이·평가처럼 낱말 끝과 겹쳐 떼지 않는다 */
+const FILL_STOP=new Set('경우 이상 이하 이내 미만 초과 정도 이후 이전 사이 위해 위한 대한 통해 따라 의한 관한 대해 가장 매우 다른 같은 모든 해당 각각 여러 주로 특히 반드시 가능 필요 사용 통한 의해 따른 인한 있는 없는 함께 모두 각종 일반 다음 이용 활용 방법 방식 목적 기준 확인 관리 적용 검토 고려 실시 구분 비교 종류 특징 원인 대책 효과 문제 영향 결과 상태 부분 보다 자체 요인 방향 현상 순서 조사 평가 유지 공법 구조 품질 대부분 오히려 이를 그리고 또는 및 등 중요 반복 추가 조절 사항 내용 단계 설계 시공 현장 공사 대상 조건 반영 위치 연속 조정 설치 최소 최대 시간 비용 KCS KDS'.split(' '));
+function josaCut(w){if(/(도로|통로|경로|수로|선로|관로|항로|회로)$/.test(w))return w;for(const j of JOSA)if(w.length-j.length>=2&&w.endsWith(j))return w.slice(0,-j.length);return w;}
+function fillFrags(s){return String(s||'').split(/[^가-힣A-Za-z]+/).map(josaCut).filter(f=>f.length>=2&&!FILL_STOP.has(f)&&(/[가-힣]/.test(f)?!/(게|히|도록|으면|하면|되면)$/.test(f):/^[A-Z][A-Z0-9]+$/.test(f)));}
+function fillLex(){if(_lex)return _lex;const set=new Set();deck().forEach(c=>[c.t].concat(c.k||[]).forEach(x=>fillFrags(x).forEach(f=>set.add(f))));_lex=Array.from(set).sort((a,b)=>b.length-a.length);return _lex;}
+function fillCands(c){const d=c.d||'',out=[],used=new Uint8Array(d.length);const take=(i,len,p)=>{for(let k=i;k<i+len;k++)if(used[k])return;for(let k=i;k<i+len;k++)used[k]=1;out.push({i,len,p});};
+  const own=new Set();(c.k||[]).forEach(k=>fillFrags(k).forEach(f=>own.add(f)));
+  (c.k||[]).forEach(k=>String(k).split(/[·,=()<>↑↓/+×~]/).map(x=>x.trim()).forEach(ph=>{if(/\s/.test(ph)&&ph.length>=4){const i=d.indexOf(ph);if(i>=0)take(i,ph.length,3);}}));  /* 키워드 구절 그대로 */
+  clozeTokens(d).forEach(t=>take(t.i,t.len,2));                                                   /* 수치 */
+  fillLex().forEach(e=>{let i=-1;while((i=d.indexOf(e,i+1))>=0){if(i&&/[가-힣A-Za-z0-9]/.test(d.charAt(i-1)))continue;take(i,e.length,own.has(e)?2:1);}});
+  const title=c.t||'';return out.filter(x=>{const w=d.substr(x.i,x.len);return d.indexOf(w)===d.lastIndexOf(w)&&title.indexOf(w)<0;}).sort((a,b)=>a.i-b.i);}
+function fillBlanks(c,lv){const cs=fillCands(c);if(!cs.length)return[];const n=lv==='하'?1:lv==='중'?(c.d.length>=150?3:2):Math.min(6,Math.max(4,Math.round(c.d.length/40)));
+  const hi=shuffle(cs.filter(x=>x.p>=2)),lo=shuffle(cs.filter(x=>x.p<2));const order=lv==='상'?shuffle(hi.slice(0,Math.ceil(n*0.6)).concat(lo)).concat(hi.slice(Math.ceil(n*0.6))):hi.concat(lo);
+  const pick=[];for(const x of order){if(pick.length>=n)break;if(pick.some(y=>x.i<y.i+y.len+3&&y.i<x.i+x.len+3))continue;pick.push(x);}
+  return pick.sort((a,b)=>a.i-b.i).map(x=>({i:x.i,len:x.len}));}
+function fillNorm(s){return String(s==null?'':s).replace(/[ㆍ•·]/g,'').normalize('NFKC').toLowerCase().replace(/[∼～〜]/g,'~').replace(/[‐‑–—−]/g,'-').replace(/×/g,'x').replace(/\.(?!\d)/g,'').replace(/(^|\D)\./g,'$1').replace(/[\s·ㆍ•,'"“”‘’()\[\]{}:;!?]/g,'');}
+function editDist(a,b){if(Math.abs(a.length-b.length)>1)return 2;const m=[];for(let i=0;i<=a.length;i++){m[i]=[i];for(let j=1;j<=b.length;j++)m[i][j]=i?Math.min(m[i-1][j]+1,m[i][j-1]+1,m[i-1][j-1]+(a[i-1]===b[j-1]?0:1)):j;}return m[a.length][b.length];}
+function fillJudge(input,ans){const a=fillNorm(ans),v=fillNorm(input);if(!v)return{ok:false};if(v===a)return{ok:true};if(!/\d/.test(a)&&a.length>=4&&editDist(v,a)<=1)return{ok:true,typo:true};return{ok:false};}
+const CHO='ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
+function fillHint(ans,lv){if(lv==='상')return'';if(/\d/.test(ans))return lv==='하'?'수치와 단위':'수치 '+ans.replace(/\s/g,'').length+'자';
+  if(lv==='중')return'○'.repeat(Math.min(10,ans.replace(/\s/g,'').length));return Array.from(ans).map(ch=>{const k=ch.charCodeAt(0)-0xAC00;return k>=0&&k<11172?CHO.charAt(Math.floor(k/588)):/\s/.test(ch)?' ':ch;}).join('');}
+function fillHTML(text,it,A){let h='',at=0;it.b.forEach((bk,k)=>{const ans=text.substr(bk.i,bk.len);h+=esc(text.slice(at,bk.i));at=bk.i+bk.len;
+    if(!A){const w=it.lv==='상'?6.5:Math.max(3.2,Math.min(12,ans.length*1.05+1.4));h+=`<input class="fill-in" data-b="${k}" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="${k<it.b.length-1?'next':'done'}" aria-label="빈칸 ${k+1}" placeholder="${esc(fillHint(ans,it.lv))}" style="width:${w.toFixed(1)}em">`;}
+    else{const r=A.res[k],v=A.vals[k];h+=r.ok?`<span class="fill-ok">${esc(v)}</span>`:`<span class="fill-no">${v?`<s>${esc(v)}</s> `:''}<b>${esc(ans)}</b></span>`;}});
+  return h+esc(text.slice(at));}
+function fillItem(c,lv){if(!c)return null;if(lv==='mix')lv=['하','중','상'][Math.floor(Math.random()*3)];const b=fillBlanks(c,lv);return b.length?{type:'fill',id:c.id,lv,b}:null;}
+function fillLvHTML(d){return`<p class="qnum">용어 빈칸 쓰기${d?', '+esc(korDate(d))+' 세트 용어':''}</p><h3 style="margin:4px 0 12px">난이도를 고르세요</h3>
+  <div class="group">${['하','중','상','mix'].map(v=>row({t:v==='mix'?'섞어서':'난이도 '+v,d:v==='mix'?'문제마다 하, 중, 상 가운데 무작위':FILL_LV[v],act:'fill-lv',data:{v,d:d||''}})).join('')}</div>
+  <p class="note">정의 속 낱말과 수치를 무작위로 가려요. 휴대폰 자판으로 써 넣으면 바로 채점해요. 띄어쓰기, 가운뎃점, 대소문자는 달라도 되고 수치는 단위까지 맞아야 해요.</p>`;}
+function fillCheck(giveup){const it=SES&&SES.items[SES.i];if(!it||it.type!=='fill'||SES.answered)return;const c=card(it.id);if(!c)return;
+  const ins=document.querySelectorAll('.fill-in');const vals=it.b.map((_,k)=>giveup?'':((ins[k]&&ins[k].value)||'').trim());
+  const res=it.b.map((bk,k)=>fillJudge(vals[k],c.d.substr(bk.i,bk.len)));const all=res.every(r=>r.ok);const key='F:'+c.id;const prev=S.wrong[key]?Object.assign({},S.wrong[key]):null;const p=prog(c.id);
+  if(all){SES.stats.ok++;p.ok++;rightOnWrong(key);}else{SES.stats.no++;p.ng++;markWrong(key,'fill');}
+  SES.answered={vals,res,all,prev};touchDay();save();render();}
 
 /* ════════ 8. 세트 진행·다시 보기 ════════ */
 function sp(d){return S.sp[d]||(S.sp[d]={read:{},quiz:{},tasks:{},essay:{},rev:{}});}
@@ -240,7 +280,8 @@ function render(){R=parseHash();document.querySelectorAll('#nav button').forEach
     if(!R.page)html=({today:vToday,review:vReview,study:vStudy,test:vTest,more:vMore}[R.tab]||vToday)();
     else html=({set:vSet,sess:vSess,kichul:vKichul,mock:vMock,guide:vGuide,plan:vPlan,schedule:vSchedule,timer:vTimer,prompts:vPrompts,imp:vImport,settings:vSettings,backup:vBackup,about:vAbout,archive:vArchive,wrong:vWrong,stats:vStats}[R.page]||vToday)();
   }catch(e){html=`<div class="empty" style="margin-top:24px"><b>화면을 그리는 중 오류가 났어요</b>${esc(e.message)}</div>`;console.error(e);}
-  v.innerHTML=html;paintNavBadges();paintPill();if(R.page==='timer')paintTimer();}
+  v.innerHTML=html;paintNavBadges();paintPill();if(R.page==='timer')paintTimer();
+  if(R.page==='sess'&&SES&&!SES.answered&&SES.items[SES.i]&&SES.items[SES.i].type==='fill'){const f=v.querySelector('.fill-in');if(f)try{f.focus({preventScroll:true});}catch(e){}}}
 function softRender(){if(R.page==='sess')return paintNavBadges();if(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return paintNavBadges();render();}
 function paintNavBadges(){const rv=dueSetReviews().length+(Object.keys(S.wrong).length?1:0);const b=document.querySelector('#nav button[data-tab="review"]');if(b){let nb=b.querySelector('.nb');const n=dueSetReviews().length;if(n){if(!nb){nb=document.createElement('span');nb.className='nb';b.appendChild(nb);}nb.textContent=n;}else if(nb)nb.remove();}}
 const topbar=(title)=>`<div class="topbar"><button class="back" data-act="back">${icon('back')}뒤로</button><div class="ttl">${esc(title)}</div></div>`;
@@ -299,7 +340,7 @@ function vSet(){const d=R.a;const s=SETS.sets[d];
         ${sc.plus?`<p class="plus">${esc(sc.plus)}</p>`:''}${(sc.field||(c&&c.field))?`<p class="field">현장: ${esc(sc.field||c.field)}</p>`:''}
         ${c&&c.x&&c.x.length?`<p class="xref">기출 <b>${c.x.length}회</b> 출제: ${c.x.map(kLabelShort).join(', ')}</p>`:''}${(sc.basis||(c&&c.basis))?`<p class="xref">근거: ${esc(sc.basis||c.basis)}</p>`:''}
         ${c?`<div class="btns"><button class="btn sm sec" data-act="star" data-id="${c.id}">${pget(c.id).star?'★ 별표 해제':'☆ 별표'}</button><span class="note" style="margin:auto 0">${unitName(c.u)}</span></div>`:''}</div>`:''}</div>`;}).join('')
-      +`<div class="btns"><button class="btn sec" data-act="set-flash" data-d="${d}">카드로 넘겨 보며 외우기</button></div><p class="note">펼쳐 읽은 용어는 내일 카드 복습으로 다시 나와요.</p>`;}
+      +`<div class="btns"><button class="btn sec" data-act="set-flash" data-d="${d}">카드로 넘겨 보며 외우기</button><button class="btn sec" data-act="start-fill" data-d="${d}">빈칸 쓰기</button></div><p class="note">펼쳐 읽은 용어는 내일 카드 복습으로 다시 나와요.</p>`;}
   else if(tab==='quiz'){body=(s.quiz||[]).map((q,i)=>quizBlock(d,i,q,p.quiz[i])).join('')||'<div class="empty">이 세트엔 퀴즈가 없어요</div>';
     if(st.qa)body+=`<p class="note">${st.qok}/${st.nq} 정답. 틀린 문제는 오답 노트로 갔어요.</p>`;}
   else if(tab==='essay'){const e=s.essay;if(!e)body='<div class="empty">이 세트엔 논술 문제가 없어요</div>';else{const show=SV[d+':eo'];
@@ -321,12 +362,12 @@ function quizBlock(d,i,q,ans){const opts=q.o||[];const answered=ans!=null;
 
 /* ════════ 13. 화면: 복습 ════════ */
 function vReview(){const rv=dueSetReviews(),wl=wrongList(),stars=deck().filter(c=>pget(c.id).star);
-  const byT={card:0,quiz:0,cloze:0};wl.forEach(w=>byT[w.type]++);
+  const byT={card:0,quiz:0,cloze:0,fill:0};wl.forEach(w=>byT[w.type]++);
   return`<div class="ltitle"><div><h1>복습</h1><p class="lsub">잊기 직전에 다시 꺼내 보는 곳</p></div></div>
   ${sec('다시 볼 세트',rv.length?rv.length+'개':'',rv.length?`<div class="group">${rv.map(x=>{const s=SETS.sets[x.d];return row({ic:'redo',t:esc(korDate(x.d))+' 세트, '+x.step+'일 차',d:esc(s.title||''),act:'start-setrev',data:{d:x.d}});}).join('')}</div>
     ${rv.length>1?`<div class="btns"><button class="btn" data-act="start-setrev-all">${rv.length}개 이어서 복습</button></div>`:''}`
     :`<div class="empty"><b>오늘 다시 볼 세트가 없어요</b>세트를 연 날로부터 1·3·7·14·30일 뒤에 여기로 돌아와요. 카드 복습과 퀴즈를 짧게 다시 합니다.</div>`)}
-  ${sec('오답 노트',wl.length?`${wl.length}개`:'',wl.length?`<div class="group">${row({ic:'x',tone:'red',t:'오답만 다시 풀기',d:`카드 ${byT.card}, 퀴즈 ${byT.quiz}, 수치 ${byT.cloze}. 두 번 연속 맞히면 빠져요`,act:'start-wrong'})}${row({ic:'list',tone:'gray',t:'목록 보기',act:'go',data:{h:'wrong'}})}</div>`
+  ${sec('오답 노트',wl.length?`${wl.length}개`:'',wl.length?`<div class="group">${row({ic:'x',tone:'red',t:'오답만 다시 풀기',d:`카드 ${byT.card}, 퀴즈 ${byT.quiz}, 수치 ${byT.cloze}${byT.fill?`, 빈칸 ${byT.fill}`:''}. 두 번 연속 맞히면 빠져요`,act:'start-wrong'})}${row({ic:'list',tone:'gray',t:'목록 보기',act:'go',data:{h:'wrong'}})}</div>`
     :`<div class="empty"><b>오답이 없어요</b>퀴즈·테스트에서 틀리거나 카드에서 "모름"을 고르면 여기 모여요.</div>`)}
   ${sec('기준 수치 빈칸','',`<div class="group">${row({ic:'num',tone:'amber',t:'수치만 가려 놓고 맞히기',d:'정의 속 기준값(%, MPa, 일, m…)을 빈칸으로. 10문',act:'start-cloze'})}</div><p class="note">범위는 테스트 탭에서 고른 단원을 따라가요. 지금 범위: ${esc(rangeLabel(S.range||'week'))}</p>`)}
   ${sec('모아 보기','',`<div class="group">
@@ -334,7 +375,7 @@ function vReview(){const rv=dueSetReviews(),wl=wrongList(),stars=deck().filter(c
     ${row({ic:'box',tone:'gray',t:'세트 보관함',d:`받은 세트 ${Object.keys(SETS.sets).length}개, 모의고사 ${Object.keys(SETS.mocks).length}개`,act:'go',data:{h:'archive'}})}
   </div>`)}`;}
 
-function vWrong(){const wl=wrongList();const nm={card:'카드',quiz:'퀴즈',cloze:'수치'};
+function vWrong(){const wl=wrongList();const nm={card:'카드',quiz:'퀴즈',cloze:'수치',fill:'빈칸 쓰기'};
   return topbar('오답 노트')+`<h1 class="ptitle">오답 노트</h1><p class="lsub">${wl.length}개. 다시 풀어서 두 번 연속 맞히면 빠져요.</p>
   ${wl.length?`<div class="btns"><button class="btn" data-act="start-wrong">오답만 다시 풀기</button></div><div class="group" style="margin-top:14px">${wl.map(w=>`<div class="row noic"><span class="tx"><span class="tt">${esc(w.label)}</span><span class="ds">${nm[w.type]}, ${w.w.n}번 틀림, 마지막 ${esc(md(w.w.last||w.w.since))}</span></span><button class="btn sm ghost" data-act="wrong-del" data-k="${esc(w.key)}">빼기</button></div>`).join('')}</div>`:`<div class="empty" style="margin-top:14px"><b>비어 있어요</b>틀린 문제가 생기면 여기에 모여요.</div>`}`;}
 
@@ -387,6 +428,11 @@ function vSess(){if(!SES)return topbar('학습')+`<div class="empty" style="marg
     return head+`<div class="qcard"><p class="qnum">빈칸에 들어갈 수치는? ${esc(unitShort(c.u))}</p><p class="qtext" style="font-size:1.15rem">${esc(c.t)}</p><p class="defn ruled">${SES.back?clozeRevealHTML(c.d,tok):clozeHTML(c.d,tok)}</p></div>
     ${SES.back?`<div class="grade3" style="grid-template-columns:1fr 1fr"><button class="g0" data-act="sess-self" data-g="0">틀렸어요<small>오답 노트로</small></button><button class="g2" data-act="sess-self" data-g="2">맞혔어요<small>다음</small></button></div>`
       :`<div class="btns"><button class="btn" data-act="sess-flip">정답 보기</button></div><p class="note">머릿속으로 수치와 단위를 말해 본 뒤 정답을 여세요.</p>`}`;}
+  if(it.type==='fill'){const c=card(it.id);if(!c)return head+skipBtn();const A=SES.answered;const nok=A?A.res.filter(r=>r.ok).length:0;
+    return head+`<div class="qcard"><p class="qnum">빈칸 쓰기, 난이도 ${esc(it.lv)}, ${esc(unitShort(c.u))}</p><p class="qtext" style="font-size:1.15rem">${esc(c.t)}</p><p class="defn ruled fill">${fillHTML(c.d,it,A)}</p>
+      ${A?`<div class="ex ${A.all||A.accepted?'ok':'no'}"><b>${A.all?'정답':A.accepted?'맞은 걸로 바꿨어요':'오답'}</b> ${it.b.length}칸 중 ${nok}칸 맞힘${A.res.some(r=>r.typo)?'. 오타 한 글자는 맞은 걸로 쳤어요':''}${A.all||A.accepted?'':'. 오답 노트로 갔어요'}</div>`:''}</div>
+    ${A?`<div class="btns">${!A.all&&!A.accepted?'<button class="btn sec" data-act="fill-accept">맞은 걸로 하기</button>':''}<button class="btn" data-act="sess-next">${SES.i+1<n?'다음':'결과 보기'}</button></div>`
+      :`<div class="btns"><button class="btn" data-act="fill-check">채점</button><button class="btn sec" data-act="fill-giveup">모르겠어요</button></div><p class="note">빈칸을 눌러 직접 써 넣으세요. 자판의 다음 키로 다음 빈칸에 가요. 띄어쓰기, 가운뎃점, 대소문자는 달라도 되고 수치는 단위까지 맞아야 해요.</p>`}`;}
   if(it.type==='outline'){const e=essay(it.id);if(!e)return head+skipBtn();
     return head+`<div class="qcard"><p class="qnum">${esc(unitName(e.u))}${e.x&&e.x.length?', 기출 '+esc(e.x.map(kLabelShort).join(', ')):''}</p><p class="qtext">${esc(e.t)}</p>
       ${SES.back?`<ol style="margin:0 0 0 20px;padding:0;line-height:1.75">${e.o.map(o=>`<li>${esc(String(o).replace(/^\d+\.\s*/,''))}</li>`).join('')}</ol>${e.p?`<p class="plus">${esc(e.p)}</p>`:''}`:'<p class="note" style="margin:0">서론, 본론 소제목 4~6개, 결론을 정하고 그림·표 1개를 무엇으로 할지까지 정한 뒤 여세요.</p>'}</div>
@@ -414,7 +460,9 @@ function startFree(){startSession({title:'자유 복습',items:cardItems(shuffle
 function setReviewItems(d){const s=SETS.sets[d];const items=[];(s.cards||[]).forEach((_,i)=>{const id=setCardId(d,i);if(id)items.push({type:'card',id});});(s.quiz||[]).forEach((_,i)=>items.push({type:'quiz',d,i}));return items;}
 function startSetReview(d){const step=reviewDue(d)||1;startSession({title:korDate(d)+' 세트 다시 보기',items:setReviewItems(d),onDone:()=>{markReviewed(d,step);}});}
 function startSetReviewAll(){const rv=dueSetReviews();let items=[];rv.forEach(x=>{items=items.concat(setReviewItems(x.d));});startSession({title:'세트 다시 보기',items,onDone:()=>rv.forEach(x=>markReviewed(x.d,x.step))});}
-function startWrong(){const wl=wrongList();startSession({title:'오답 다시 풀기',items:shuffle(wl.map(w=>w.type==='card'?{type:'card',id:w.id,wrongKey:w.key}:w.type==='quiz'?{type:'quiz',d:w.d,i:w.i,wrongKey:w.key}:{type:'cloze',id:w.id,k:w.k,wrongKey:w.key}))});}
+function startWrong(){const wl=wrongList();startSession({title:'오답 다시 풀기',items:shuffle(wl.map(w=>w.type==='card'?{type:'card',id:w.id,wrongKey:w.key}:w.type==='quiz'?{type:'quiz',d:w.d,i:w.i,wrongKey:w.key}:w.type==='fill'?Object.assign(fillItem(card(w.id),S.fillLv||'중')||{type:'card',id:w.id},{wrongKey:w.key}):{type:'cloze',id:w.id,k:w.k,wrongKey:w.key}))});}
+function startFill(lv,d){let pool;if(d){const s=SETS.sets[d];pool=((s&&s.cards)||[]).map((_,i)=>card(setCardId(d,i))).filter(Boolean);}else{pool=deck().filter(rangeFilter(S.range));const seen=pool.filter(c=>pget(c.id).seen>0);if(seen.length>=10)pool=seen;}
+  const items=shuffle(pool).slice(0,10).map(c=>fillItem(c,lv)).filter(Boolean);startSession({title:'용어 빈칸 쓰기'+(d?', '+korDate(d)+' 세트':''),items,log:'fill'});}
 function startCloze(){const f=rangeFilter(S.range);let pool=deck().filter(f).filter(c=>clozeTokens(c.d).length);const seen=pool.filter(c=>pget(c.id).seen>0);if(seen.length>=10)pool=seen;
   const items=shuffle(pool).slice(0,10).map(c=>{const toks=clozeTokens(c.d);return{type:'cloze',id:c.id,k:Math.floor(Math.random()*toks.length)};});startSession({title:'기준 수치 빈칸',items,log:'cloze'});}
 function startStars(){startSession({title:'별표 카드',items:cardItems(shuffle(deck().filter(c=>pget(c.id).star)).map(c=>c.id))});}
@@ -433,6 +481,7 @@ function vTest(){const rg=S.range||'week';const lm=latestMockDate();const rounds
     ${row({ic:'list',t:'4지선다 10문',d:'설명을 보고 용어 고르기',act:'start-mcq'})}
     ${row({ic:'cards',t:'용어 회상 10문',d:'용어만 보고 정의·키워드 떠올리기',act:'start-recall'})}
     ${row({ic:'num',tone:'amber',t:'기준 수치 빈칸 10문',d:'정의 속 수치를 가리고 맞히기',act:'start-cloze'})}
+    ${row({ic:'pen',tone:'amber',t:'용어 빈칸 쓰기 10문',d:'정의 속 낱말을 가리고 직접 써 넣기, 난이도 하·중·상',act:'start-fill'})}
     ${row({ic:'pen',t:'논술 목차 5문',d:'문제만 보고 소제목 떠올리기',act:'start-outline'})}
   </div>`)}
   ${sec('실전','',`<div class="group">
@@ -499,7 +548,7 @@ function roundText(r){const lab={1:'1교시 단답형(13문 중 10문, 각 10점
 
 /* 통계 */
 function vStats(){const t=todayStr(),cs=deck();const rows=PE_UNITS.map(u=>{const ucs=cs.filter(c=>Number(c.u)===u.id);const ok=ucs.reduce((a,c)=>a+pget(c.id).ok,0),ng=ucs.reduce((a,c)=>a+pget(c.id).ng,0),l=ucs.filter(c=>pget(c.id).seen>0).length;return{u,ok,ng,l,n:ucs.length,acc:ok+ng?ok/(ok+ng):null};});
-  let sum=0;for(let i=0;i<7;i++)sum+=checkRate(addDays(t,-i));const last=S.log.slice(-8).reverse();const nm={mcq:'4지선다',recall:'회상',outline:'목차',cloze:'수치 빈칸'};
+  let sum=0;for(let i=0;i<7;i++)sum+=checkRate(addDays(t,-i));const last=S.log.slice(-8).reverse();const nm={mcq:'4지선다',recall:'회상',outline:'목차',cloze:'수치 빈칸',fill:'용어 빈칸 쓰기'};
   const sd=Object.keys(SETS.sets),sdone=sd.filter(d=>setStatus(d).done).length;
   return topbar('통계')+`<h1 class="ptitle">통계</h1>
   <div class="tiles" style="margin-top:12px"><div class="tile"><b>${cs.filter(c=>pget(c.id).seen>0).length}</b><span>학습한 카드</span></div><div class="tile"><b>${Math.round(sum/7*100)}%</b><span>7일 체크 달성</span></div><div class="tile"><b>${sdone}/${sd.length}</b><span>끝낸 세트</span></div></div>
@@ -709,6 +758,12 @@ document.addEventListener('click',e=>{
   case'start-setrev-all':return startSetReviewAll();
   case'start-wrong':return startWrong();
   case'start-cloze':return startCloze();
+  case'start-fill':return openModal(fillLvHTML(D.d||''));
+  case'fill-lv':closeModal();if(D.v!=='mix'){S.fillLv=D.v;save();}return startFill(D.v,D.d||'');
+  case'fill-check':return fillCheck(false);
+  case'fill-giveup':return fillCheck(true);
+  case'fill-accept':{const A=SES&&SES.answered,it=SES&&SES.items[SES.i];if(!A||A.all||A.accepted||!it)return;const key='F:'+it.id;if(A.prev)S.wrong[key]=A.prev;else delete S.wrong[key];rightOnWrong(key);
+    const p=prog(it.id);p.ng=Math.max(0,p.ng-1);p.ok++;SES.stats.no--;SES.stats.ok++;A.accepted=true;save();return render();}
   case'start-stars':return startStars();
   case'start-mcq':return startMCQ();
   case'start-recall':return startRecall();
@@ -770,6 +825,8 @@ document.addEventListener('change',e=>{if(e.target.id==='rangeSel'){S.range=e.ta
   else if(e.target.id==='schStart'||e.target.id==='schTarget'){SCH=SCH||{start:S.settings.start,target:S.settings.target||'auto'};
     if(e.target.id==='schStart'){if(!e.target.value)return;SCH.start=e.target.value;if(SCH.target!=='auto'&&!eligibleRounds(SCH.start).some(x=>x.r===Number(SCH.target)))SCH.target='auto';}
     else SCH.target=e.target.value==='auto'?'auto':Number(e.target.value);render();}});
+document.addEventListener('keydown',e=>{const t=e.target;if(e.key!=='Enter'||!t.classList||!t.classList.contains('fill-in'))return;e.preventDefault();
+  const all=Array.from(document.querySelectorAll('.fill-in'));const k=all.indexOf(t);if(k<all.length-1)all[k+1].focus();else fillCheck(false);});
 $('#nav').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b){closeModal();nav(b.dataset.tab);}});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){sync(false);if(!R.page)render();}});
 window.addEventListener('online',()=>sync(true));
@@ -778,5 +835,5 @@ window.addEventListener('online',()=>sync(true));
 PE_IO.init({toast});recalcPlan();applyLook();setPreset('essay');R=parseHash();
 if(!location.hash)history.replaceState(null,'','#today');
 render();sync(true);
-window.__pe={S:()=>S,SETS:()=>SETS,PLAN:()=>PLAN,computePlan,roundList,sync,deck,essays,kq,clozeTokens,render,invalidate,startSession};
+window.__pe={S:()=>S,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,render,invalidate,startSession};
 })();

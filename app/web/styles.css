@@ -307,3 +307,12 @@ table.at td:first-child{white-space:nowrap}
 .acap{text-align:center;font-weight:600;font-size:.8rem;margin:4px 0 2px}
 .apg{text-align:center;color:var(--ink3);font-size:.75rem;margin:6px 0 4px}
 .mk{display:inline-block;min-width:3.2em;margin-right:6px;font-weight:800;color:var(--blue-ink)}
+
+/* ── 용어 빈칸 쓰기 ── */
+.fill-in{display:inline-block;max-width:100%;font:inherit;font-size:max(16px,1rem);line-height:1.35;padding:0 6px;margin:0 2px;border:0;border-bottom:2.5px solid var(--blue);border-radius:6px 6px 0 0;background:var(--blue-soft);color:var(--ink);vertical-align:baseline}
+.fill-in:focus{outline:none;background:var(--sheet);box-shadow:0 0 0 2px var(--blue)}
+.fill-in::placeholder{color:var(--ink3);letter-spacing:.06em}
+.fill-ok{background:var(--ok-soft);color:var(--ok);font-weight:700;border-radius:4px;padding:0 4px}
+.fill-no{background:var(--red-soft);border-radius:4px;padding:0 4px}
+.fill-no s{color:var(--red)}
+.fill-no b{color:var(--ok)}

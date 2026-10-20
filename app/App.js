@@ -168,6 +168,7 @@ export default function App() {
           allowsBackForwardNavigationGestures
           allowsLinkPreview={false}
           dataDetectorTypes="none"
+          keyboardDisplayRequiresUserAction={false}
           webviewDebuggingEnabled={__DEV__}
           style={[styles.fill, { backgroundColor: bg }]}
         />
