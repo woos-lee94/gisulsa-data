@@ -116,4 +116,5 @@
 - `app.json`: Xcode 프로젝트 이름은 한글이 빠지면 "6"이 되므로 `name`은 `Gisulsa6`, 홈 화면 이름은 `ios.infoPlist.CFBundleDisplayName` "기술사 6개월". 원격 푸시를 쓰지 않으므로 `expo-notifications`의 `enableRemoteNotifications: false`(푸시 권한 없음).
 - `eas.json`: `production` 프로필(스토어 배포 → TestFlight), 빌드 번호는 EAS가 올린다(`appVersionSource: remote`).
 - 검사: `npm i -D jsdom && node tests/app.test.js`(웹), `node tests/native.test.js`(앱 묶음 + PE_NATIVE + host.js를 가짜 기기 기능으로). 둘 다 `npm test`.
+- 스토어 문구: `docs/app-store.md`(부제·프로모션·설명·키워드·카테고리·심사 메모). 지원·개인정보 처리방침 URL은 `docs/support.md`·`docs/privacy.md`의 GitHub 주소(저장소가 공개일 때만 열린다). 문구를 고치면 이 파일들도 함께 고친다.
 - 실기기에서 아직 확인할 것: 위 "받아들이는 기준 2". 특히 무음 모드에서 타이머 알림음(웹 오디오는 무음 스위치를 따른다), 알림 권한 묻기, 공유 시트의 "파일에 저장".
