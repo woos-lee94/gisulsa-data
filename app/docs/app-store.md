@@ -16,7 +16,7 @@
 토목시공기술사 필기를 혼자 준비하는 사람을 위한 학습 앱입니다. 평일마다 용어, 퀴즈, 논술 한 문제로 된 세트가 들어오고, 간격반복 카드와 제116회부터 제140회까지 기출 775문항으로 복습합니다.
 ```
 
-## 설명 (1592자 / 4,000자)
+## 설명 (1732자 / 4,000자)
 
 ```
 기술사 6개월은 토목시공기술사 필기를 혼자 준비하는 사람을 위한 학습 앱입니다. 시험일까지 주차별 계획을 세워 주고, 평일마다 새 학습 세트를 받아 용어 암기, 퀴즈, 논술 연습을 이어 가게 해 줍니다.
@@ -48,9 +48,10 @@
 준비 시작일을 고르면 6개월 이상 남은 가장 빠른 정기시험을 목표로 잡고 주차별 계획을 나눕니다.
 평일 아침 오늘 세트 확인과 일요일 복습 비우기 알림을 원하는 시각에 켤 수 있습니다. 알림은 서버 없이 휴대폰 안에서 예약합니다.
 
-개인정보
-회원가입과 로그인이 없습니다. 학습 기록은 이 iPhone 안에만 저장합니다.
-광고와 사용 분석 도구가 없습니다. 인터넷은 새 세트와 모의고사, 기출을 받을 때만 쓰고, 이때 개인 정보를 보내지 않습니다.
+회원과 개인정보
+관리자가 승인한 사람만 쓰는 앱입니다. 비밀번호 없이 아이디만 만들어 승인을 요청하고, 받은 초대 코드를 넣으면 기다리지 않고 바로 열립니다.
+아이디는 휴대폰마다 하나로 고정되고, 더보기의 설정에서 언제든 지울 수 있습니다. 한 번 승인되면 인터넷이 없어도 열립니다.
+학습 기록은 이 iPhone 안에만 저장합니다. 광고와 사용 분석 도구가 없습니다. 인터넷은 승인 확인과 새 세트, 모의고사, 기출을 받을 때 쓰고, 학습 기록은 보내지 않습니다.
 학습 기록은 백업 문구를 복사하거나 파일로 내보내 보관하고, 다시 복원할 수 있습니다.
 인터넷이 없어도 앱에 들어 있는 카드와 기출은 그대로 열립니다.
 
@@ -94,33 +95,34 @@ https://github.com/woos-lea94/gisulsa-data/blob/main/app/docs/privacy.md
 - 기본: 교육. 토목시공기술사 필기 시험 공부가 핵심 기능
 - 추가: 참고. 기출 문제 요지와 용어 카드를 찾아보는 용도
 
-## 앱 심사 메모 (3754자 / 4,000자)
+## 앱 심사 메모 (3891자 / 4,000자)
 
 ```
 OVERVIEW
-Gisulsa 6 (기술사 6개월, "Professional Engineer in 6 months") is a self-study app for people in Korea preparing for the written exam of the Professional Engineer Civil Engineering Execution licence (토목시공기술사). It plans weekly study up to the exam date, receives a new study set every weekday, and offers spaced-repetition cards, quizzes, past-exam practice, an exam timer and a guide to writing essay answers. The app is in Korean. No account or sign-in is needed. All screens and the built-in content are bundled in the app and work offline; the app does not load a remote website.
+Gisulsa 6 (기술사 6개월, "Professional Engineer in 6 months") is a self-study app for people in Korea preparing for the written exam of the Professional Engineer Civil Engineering Execution licence (토목시공기술사). It plans weekly study up to the exam date, receives a new study set every weekday, and offers spaced-repetition cards, quizzes, past-exam practice, an exam timer and a guide to writing essay answers. The app is in Korean. Access is invite-only: a user creates an ID (no password) and the administrator approves it in the app, or an invite code opens it at once. All screens and content are bundled in the app; the app does not load a remote website.
+
+DEMO ACCOUNT (no password)
+On first launch type the ID apple_review, tap "초대 코드가 있어요" (I have an invite code), enter the invite code INVITE_CODE (also in the password field of Sign-In Information) and tap "아이디 만들기" (Create ID). The app opens at once. The code stays valid until review ends.
 
 HOW TO TEST (about 2 minutes; the Korean labels can be pasted)
-1. Open the app. It starts on the "오늘" (Today) tab with the days left to the exam and today's checklist. On first launch it downloads the list of daily sets in the background.
-2. Tap the "테스트" (Test) tab at the bottom, then "4지선다 10문" (10 multiple-choice questions). Pick an answer: the right and wrong options are marked, then tap "다음" (Next).
-3. Go back to "테스트" and tap "기출 회차 그대로 풀기" (Past exams by round), then "제140회" (Round 140). The question summaries appear in exam order. Tap a question in the first period to see the linked study cards.
+1. After sign-in the app starts on the "오늘" (Today) tab with the days left to the exam and today's checklist.
+2. Tap the "테스트" (Test) tab, then "4지선다 10문" (10 multiple-choice questions). Pick an answer, then tap "다음" (Next).
+3. Go back to "테스트" and tap "기출 회차 그대로 풀기" (Past exams by round), then "제140회" (Round 140). Tap a question in the first period to see the linked study cards.
 4. On "테스트" tap "논술 답안 작성 요령" (How to write essay answers), then the "모범 답안" (Model answer) tab: a 4-page model answer sheet with 22 lines per page, a table and two figures.
-5. Tap the "복습" (Review) tab, then "세트 보관함" (Set archive). It lists the daily sets downloaded so far; tap one to see its "용어" (Terms), "퀴즈" (Quiz), "논술" (Essay) and "과제" (Tasks) tabs. New sets are added on Korean weekday mornings.
+5. Tap the "복습" (Review) tab, then "세트 보관함" (Set archive). It lists the daily sets downloaded so far; tap one to see its "용어" (Terms), "퀴즈" (Quiz), "논술" (Essay) and "과제" (Tasks) tabs.
 6. Tap the "더보기" (More) tab, then "교시 타이머" (Exam timer), then "시작" (Start). A short beep plays and the screen stays awake while the timer runs.
-7. On "더보기" tap "설정" (Settings) and scroll to "알림" (Notifications) at the bottom. Ticking the first box asks for notification permission and schedules a local weekday reminder at the chosen time.
-8. On "더보기" tap "백업·복원" (Backup and restore). "파일로 저장" (Save as file) opens the iOS share sheet with a JSON backup file, and "백업 복사" (Copy backup) copies the same text.
-
-DEMO ACCOUNT
-None. The app has no sign-in.
+7. On "더보기" tap "설정" (Settings), then "알림" (Notifications) at the bottom. Ticking the first box asks for permission and schedules a local weekday reminder.
+8. On "더보기" tap "백업·복원" (Backup and restore). "파일로 저장" (Save as file) opens the iOS share sheet with a JSON backup file.
+9. Account deletion: "더보기" > "설정" (Settings) > "아이디 지우기" (Delete ID) deletes the ID, approval record and account at once and returns to the first screen.
 
 DATA SOURCES
-Past-exam question summaries for rounds 116 to 140 (2018 to 2026) of the written exam administered by HRD Korea. They are summaries written by the developer, not the original wording. Study cards, essay outlines, daily sets and weekly mock exams were written by the developer with the help of an AI assistant (Claude by Anthropic) and partly checked against Korean design and construction standards (KDS and KCS) and laws. Items the developer could not confirm are listed in each set under "확인이 필요한 부분" (Needs checking). Sources are described in the app under "더보기" > "콘텐츠 출처" (Content sources). New sets are published by the developer as small public JSON files.
+Past-exam question summaries for rounds 116 to 140 (2018 to 2026) of the written exam administered by HRD Korea. They are summaries written by the developer, not the original wording. Study cards, essay outlines, daily sets and weekly mock exams were written by the developer with the help of an AI assistant (Claude by Anthropic) and partly checked against Korean design and construction standards (KDS and KCS) and laws. Items the developer could not confirm are listed in each set under "확인이 필요한 부분" (Needs checking). Sources are described under "더보기" > "콘텐츠 출처" (Content sources).
 
 METHOD
 No AI runs inside the app. Spaced repetition, weekly planning and exam dates are rule-based and computed on the device. The app can copy prompt text that the user may paste into an AI assistant of their choice to get feedback on a handwritten answer; the app itself sends nothing to any AI service.
 
 PRIVACY
-No account, server, ads, analytics or tracking. Study records stay on the device. The only network requests are HTTPS GET requests for public JSON files (set index, daily sets, mock exams and past-exam updates) on raw.githubusercontent.com, and they carry no user data. The only permission is notifications, requested when the user turns on a reminder. The clipboard is written only when the user taps a copy button, and the backup file is exported only when the user taps "파일로 저장".
+No ads, analytics or tracking. Study records stay on the device. For access control the app uses Firebase Anonymous Authentication and Cloud Firestore to store only the chosen ID, a random account number, the approval status and timestamps; no name, email or phone number. The account key is kept in the device keychain. Other network requests are HTTPS GET requests for public JSON files on raw.githubusercontent.com that carry no user data. The only permission is notifications, requested when the user turns on a reminder.
 
 EXTENSIONS
 None.
@@ -129,7 +131,11 @@ REGULATORY
 The app is an independent study aid and is not affiliated with HRD Korea or any exam body.
 ```
 
-같은 화면: 로그인 필요 체크 해제, 연락처(이름·전화·메일)는 직접 넣는다.
+`INVITE_CODE`는 앱의 더보기 → 승인 관리 → 초대 코드 만들기로 만든 6자리 코드로 바꾼다. 위 글자 수는 6자리 코드 기준이다. 만드는 법은 `docs/firebase-setup.md` 6.
+
+같은 화면: 로그인 필요 체크, 사용자 이름 `apple_review`, 암호 칸에 같은 초대 코드. 연락처(이름·전화·메일)는 직접 넣는다.
+
+심사 위험: 승인제 앱은 "계정 기능 없이 로그인을 요구한다"(가이드라인 5.1.1)나 "특정 사용자만 쓰는 앱"으로 반려될 수 있다. 반려되면 답장에 "자격시험 스터디 모임 전용, 관리자가 회원을 승인한다"고 설명하고, 그래도 안 되면 비공개(Unlisted) 배포를 신청하거나 TestFlight로만 나눠 준다.
 
 ## 이 버전의 새로운 기능
 
@@ -137,4 +143,10 @@ The app is an independent study aid and is not affiliated with HRD Korea or any 
 
 ## App Privacy(참고)
 
-데이터 수집 안 함(Data Not Collected). 기기 밖으로 나가는 것은 공개 JSON 파일을 받는 HTTPS GET 요청뿐이고 사용자 데이터를 담지 않는다. 분석·광고·오류 보고·로그인 SDK가 없다.
+데이터 수집함 → 식별자 → 사용자 ID 하나만 고른다.
+
+- 목적: 앱 기능(승인한 사람만 열기)
+- 사용자와 연결됨: 예(아이디와 Firebase 익명 계정 번호)
+- 추적에 사용: 아니요
+
+나머지(연락처, 위치, 사용 데이터, 진단 등)는 고르지 않는다. 학습 기록은 기기에만 있고, 세트 받기는 공개 JSON 파일을 받는 HTTPS GET 요청뿐이다. 분석·광고·오류 보고 SDK가 없고, Firebase는 SDK 없이 REST로 부른다.

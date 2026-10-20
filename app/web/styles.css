@@ -121,7 +121,7 @@ button.row:active,a.row:active{background:var(--rule2)}
   background:var(--blue);color:#fff;font-weight:700;font-size:1rem;border:1px solid transparent;text-align:center}
 :root[data-theme="dark"] .btn:not(.sec):not(.ghost){color:#08142E}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn:not(.sec):not(.ghost){color:#08142E}}
-.btn.sec{background:var(--sheet);color:var(--ink);border-color:var(--rule)}
+.btn.sec{background:var(--sheet);color:var(--ink);border-color:var(--rule);margin-top:0}
 .btn.ghost{background:transparent;color:var(--blue);border-color:transparent;min-height:44px}
 .btn.red{background:var(--red);color:#fff} .btn.ok{background:var(--ok);color:#fff}
 .btn.sm{min-height:40px;width:auto;padding:6px 14px;font-size:.92rem;border-radius:12px}

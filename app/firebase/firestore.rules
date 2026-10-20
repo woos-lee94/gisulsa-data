@@ -1,0 +1,53 @@
+rules_version = '2';
+// 기술사 6개월 회원 승인 규칙. Firebase 콘솔 → Firestore Database → 규칙에 그대로 붙여 넣고 게시한다.
+// members/{uid}: 이 휴대폰(익명 계정 uid)의 아이디와 승인 상태(pending·approved·rejected)
+// ids/{아이디}: 아이디 중복 방지(어느 휴대폰 것인지)
+// codes/{초대 코드}: 이 코드로 만들면 바로 승인(관리자가 만들고 지운다)
+// admins/{uid}: 관리자(콘솔에서 직접 만든다)
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && exists(/databases/$(db)/documents/admins/$(request.auth.uid)); }
+    function validId(id) { return id is string && id.size() >= 2 && id.size() <= 16 && id.matches('^[a-z0-9_가-힣]+$'); }
+
+    match /members/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      // 본인 휴대폰에서 한 번만 만든다. 아이디 문서를 같은 요청에서 함께 만들어야 한다.
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['id', 'status', 'createdAt', 'code'])
+        && validId(request.resource.data.id)
+        && request.resource.data.createdAt is timestamp
+        && getAfter(/databases/$(db)/documents/ids/$(request.resource.data.id)).data.uid == uid
+        && (request.resource.data.status == 'pending'
+            || (request.resource.data.status == 'approved'
+                && request.resource.data.code is string
+                && exists(/databases/$(db)/documents/codes/$(request.resource.data.code))));
+      // 승인 상태는 관리자만 바꾼다(아이디는 바꾸지 못한다)
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decidedAt'])
+        && request.resource.data.status in ['pending', 'approved', 'rejected'];
+      // 본인은 아이디 지우기, 관리자는 정리
+      allow delete: if signedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
+    match /ids/{id} {
+      allow get: if signedIn();
+      allow list: if isAdmin();
+      allow create: if signedIn() && validId(id)
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid
+        && getAfter(/databases/$(db)/documents/members/$(request.auth.uid)).data.id == id;
+      allow delete: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    match /codes/{code} {
+      allow read, delete: if isAdmin();
+      allow create: if isAdmin() && request.resource.data.keys().hasOnly(['createdAt']);
+    }
+
+    match /admins/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+    }
+  }
+}

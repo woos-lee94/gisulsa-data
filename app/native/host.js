@@ -9,8 +9,8 @@ function jsLiteral(v) {
 }
 
 // 페이지보다 먼저 넣는 스크립트: 저장해 둔 학습 기록과 알림 설정
-function bootScript({ store, notif, version }) {
-  return `window.PE_NATIVE=${jsLiteral({ platform: 'ios', version, store, notif })};true;`;
+function bootScript({ store, notif, version, member }) {
+  return `window.PE_NATIVE=${jsLiteral({ platform: 'ios', version, store, notif, member: member || null })};true;`;
 }
 
 function cleanNotif(c) {
@@ -45,7 +45,8 @@ function safeFileName(name) {
 }
 
 // deps: inject(code), writeStore(key, text), copy(text), saveFile(name, text, type), confirm(msg) → Promise<boolean>,
-//       keepAwake(on), fetchText(url) → Promise<{ok, status, text}>, setNotif(cfg) → Promise<cfg>, look(dark)
+//       keepAwake(on), fetchText(url) → Promise<{ok, status, text}>, setNotif(cfg) → Promise<cfg>, look(dark),
+//       member(op, args) → 관리자 화면·아이디 지우기(list, set, del, code-add, code-del, remove)
 function createHost(deps) {
   const reply = (id, ok, v, err) => deps.inject(`window.PE_IO&&PE_IO._reply(${jsLiteral({ id, ok, v, err })});true;`);
   const toast = m => deps.inject(`window.PE_IO&&PE_IO._toast(${jsLiteral(m)});true;`);
@@ -71,6 +72,9 @@ function createHost(deps) {
           if (!/^https:\/\//.test(m.url)) throw new Error('https 주소만 받아 와요');
           v = await deps.fetchText(m.url); break;
         case 'notif': v = { cfg: await deps.setNotif(cleanNotif(m.cfg)) }; break;
+        case 'member':
+          if (!['list', 'set', 'del', 'code-add', 'code-del', 'remove'].includes(m.op)) throw new Error('모르는 회원 요청');
+          v = await deps.member(m.op, m.args && typeof m.args === 'object' ? m.args : {}); break;
         default: throw new Error('모르는 요청: ' + m.t);
       }
       reply(m.id, true, v);

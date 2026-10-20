@@ -21,3 +21,5 @@ expo-env.d.ts
 *.jks
 *.mobileprovision
 credentials.json
+# Firebase 에뮬레이터 기록
+firebase/*.log

@@ -38,6 +38,9 @@ const IO={
   /* 받아 오기: 앱에서는 파일 출처의 CORS를 피하려고 네이티브 fetch로 받는다 */
   fetchJSON(url){return N?call('fetch',{url}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return JSON.parse(r.text);}):webFetch(url);},
   init(o){if(o&&o.toast)toast=o.toast;},
+  /* 회원(앱 전용): 이 휴대폰의 아이디·관리자 여부, 관리자 화면과 아이디 지우기 */
+  member(){return(N&&N.member&&N.member.id)?N.member:null;},
+  memberCall(op,args){return N?call('member',{op,args:args||{}}):Promise.reject(new Error('앱에서만 쓸 수 있어요'));},
   settingsHTML(){return N?`<section class="sec" id="peNotif">${notifHTML()}</section>`:'';},
   /* 앱이 부르는 것 */
   _reply(r){const w=wait[r.id];if(!w)return;delete wait[r.id];r.ok?w.res(r.v):w.rej(new Error(r.err||'실패'));},

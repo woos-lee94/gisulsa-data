@@ -265,7 +265,7 @@ function syncLine(){const s=S.sync||{};const n=Object.keys(SETS.sets).length;
 function paintSyncBits(){document.querySelectorAll('[data-syncline]').forEach(el=>el.innerHTML=syncLine());}
 
 /* ════════ 10. 라우터 ════════ */
-const TAB_OF={set:'today',sess:'',kichul:'test',mock:'test',guide:'test',plan:'more',schedule:'more',timer:'more',prompts:'more',imp:'more',settings:'more',backup:'more',about:'more',archive:'review',wrong:'review',stats:'test'};
+const TAB_OF={set:'today',sess:'',kichul:'test',mock:'test',guide:'test',admin:'more',plan:'more',schedule:'more',timer:'more',prompts:'more',imp:'more',settings:'more',backup:'more',about:'more',archive:'review',wrong:'review',stats:'test'};
 const TABS=['today','review','study','test','more'];
 let R={tab:'today',page:null,a:null,b:null};
 function parseHash(){const h=decodeURIComponent((location.hash||'').replace(/^#\/?/,''));const p=h.split('/');const r={tab:'today',page:null,a:p[1]||null,b:p[2]||null};
@@ -278,7 +278,7 @@ function render(){R=parseHash();document.querySelectorAll('#nav button').forEach
   const v=$('#view');let html='';
   try{
     if(!R.page)html=({today:vToday,review:vReview,study:vStudy,test:vTest,more:vMore}[R.tab]||vToday)();
-    else html=({set:vSet,sess:vSess,kichul:vKichul,mock:vMock,guide:vGuide,plan:vPlan,schedule:vSchedule,timer:vTimer,prompts:vPrompts,imp:vImport,settings:vSettings,backup:vBackup,about:vAbout,archive:vArchive,wrong:vWrong,stats:vStats}[R.page]||vToday)();
+    else html=({set:vSet,sess:vSess,kichul:vKichul,mock:vMock,guide:vGuide,admin:vAdmin,plan:vPlan,schedule:vSchedule,timer:vTimer,prompts:vPrompts,imp:vImport,settings:vSettings,backup:vBackup,about:vAbout,archive:vArchive,wrong:vWrong,stats:vStats}[R.page]||vToday)();
   }catch(e){html=`<div class="empty" style="margin-top:24px"><b>화면을 그리는 중 오류가 났어요</b>${esc(e.message)}</div>`;console.error(e);}
   v.innerHTML=html;paintNavBadges();paintPill();if(R.page==='timer')paintTimer();
   if(R.page==='sess'&&SES&&!SES.answered&&SES.items[SES.i]&&SES.items[SES.i].type==='fill'){const f=v.querySelector('.fill-in');if(f)try{f.focus({preventScroll:true});}catch(e){}}}
@@ -570,7 +570,9 @@ function weeklyReport(){const t=todayStr(),cs=deck();const L=[`[기술사 6개�
 
 /* ════════ 17. 화면: 더보기와 하위 화면 ════════ */
 function vMore(){const s=S.sync||{};const rp=repoPlanState();
-  return`<div class="ltitle"><div><h1>더보기</h1><p class="lsub">기술사 6개월 v${APP_VER}</p></div></div>
+  const me=PE_IO.member();
+  return`<div class="ltitle"><div><h1>더보기</h1><p class="lsub">기술사 6개월 v${APP_VER}${me?', 아이디 '+esc(me.id):''}</p></div></div>
+  ${me&&me.admin?sec('관리','',`<div class="group">${row({ic:'check',tone:'ok',t:'승인 관리',d:'승인 요청, 회원, 초대 코드',act:'go',data:{h:'admin'}})}</div>`):''}
   ${sec('시험 일정','',`<div class="group">${row({ic:'flag',tone:rp==='diff'?'red':'',t:'준비 시작일·목표 회차',d:`${esc(korDate(S.settings.start))} 시작 → 제${PLAN.target.r}회 ${esc(PLAN.target.d)}${esc(estTag(PLAN.target))}, ${PLAN.E}주${rp==='diff'?'<br><b style="color:var(--red)">예약 작업 일정과 달라요</b>':''}`,act:'go',data:{h:'schedule'}})}</div>`)}
   ${sec('공부 도구','',`<div class="group">${row({ic:'cal',t:PLAN.E+'주 로드맵',d:'단계·주차별 목표와 학원 대체표',act:'go',data:{h:'plan'}})}${row({ic:'pen',t:'논술 답안 작성 요령',d:'모범 답안으로 보는 답안지 쓰는 법',act:'go',data:{h:'guide'}})}${row({ic:'timer',t:'교시 타이머',d:'100분, 문제 경계마다 알림',act:'go',data:{h:'timer'}})}${row({ic:'chat',t:'Claude 프롬프트',d:'첨삭·카드 생성·주간 리포트 등 10개',act:'go',data:{h:'prompts'}})}</div>`)}
   ${sec('데이터','',`<div class="group">${row({ic:'sync',t:'지금 받아 오기',d:syncing?'받아 오는 중…':s.last?(s.ok?'마지막 확인 '+hhmm(s.last):'마지막 시도 실패'):'아직 받아 오지 않았어요',act:'sync'})}${row({ic:'imp',t:'카드·목차 가져오기',d:'Claude가 만든 JSON 붙여넣기',act:'go',data:{h:'imp'}})}${row({ic:'save',t:'백업·복원',act:'go',data:{h:'backup'}})}</div>`)}
@@ -639,7 +641,10 @@ function vSettings(){const s=S.settings;
   <label class="f" for="sNew">하루 새 카드 수(암기 탭)</label><input class="in" type="number" inputmode="numeric" id="sNew" value="${s.newPerDay}">
   <details class="d" style="margin-top:16px"><summary>고급: 데이터 주소</summary><div class="in-d">
     <label class="f" for="sData">데이터 주소</label><input class="in" id="sData" value="${esc(s.dataUrl)}" placeholder="${esc(DATA_DEFAULT)}"><p class="note">비워 두면 기본 저장소(gisulsa-data)에서 받아 와요.</p></div></details>
-  <div class="btns" style="margin-top:16px"><button class="btn" data-act="save-settings">저장</button></div>${PE_IO.settingsHTML()}`;}
+  <div class="btns" style="margin-top:16px"><button class="btn" data-act="save-settings">저장</button></div>${PE_IO.settingsHTML()}${memberSettingsHTML()}`;}
+function memberSettingsHTML(){const me=PE_IO.member();if(!me)return'';
+  return sec('아이디','',`<div class="group">${row({ic:'flag',t:esc(me.id),d:me.admin?'이 휴대폰에 고정된 아이디, 관리자':'이 휴대폰에 고정된 아이디'})}</div>
+  <div class="btns"><button class="btn red" data-act="member-remove">아이디 지우기</button></div><p class="note">지우면 승인도 함께 없어지고 처음 화면으로 돌아가요. 학습 기록은 이 휴대폰에 그대로 남아요.</p>`);}
 function vBackup(){return topbar('백업')+`<h1 class="ptitle">백업·복원</h1><p class="lsub">학습 기록은 이 기기에만 있어요. 1~2주에 한 번 메모나 메일에 붙여 두세요.</p>
   <div class="btns" style="margin-top:14px"><button class="btn" data-act="backup-copy">백업 복사</button><button class="btn sec" data-act="backup-dl">파일로 저장</button></div>
   <label class="f">복원(백업 내용 붙여넣기)</label><textarea class="in" id="restoreText" placeholder='{"v":2,...}'></textarea>
@@ -678,6 +683,27 @@ function vGuide(){const G=window.PE_GUIDE;if(!G)return topbar('답안 작성 요
     <div class="btns"><button class="btn" data-act="copy-prompt" data-id="p1">논술 첨삭 요청 복사</button><button class="btn sec" data-act="copy-prompt" data-id="p2">단답 첨삭 요청 복사</button></div>`;
   return topbar('답안 작성 요령')+`<h1 class="ptitle">논술 답안 작성 요령</h1><p class="lsub">모범 답안(제2교시 25점형, 콘크리트 시공이음)으로 보는 답안지 생김새와 쓰는 법</p>
   <div class="seg" style="margin-top:14px">${tabs.map(t=>`<button class="${tab===t[0]?'on':''}" data-act="guide-tab" data-t="${t[0]}">${t[1]}</button>`).join('')}</div>${body}`;}
+
+/* ════════ 17-3. 승인 관리(관리자, 앱 전용) ════════ */
+let ADM=null;
+function admLoad(){ADM={loading:true};PE_IO.memberCall('list').then(v=>{ADM={members:v.members||[],codes:v.codes||[],me:v.me||''};if(R.page==='admin')render();},e=>{ADM={err:String(e&&e.message||e)};if(R.page==='admin')render();});}
+function admRun(p,msg){p.then(()=>{if(msg)toast(msg);admLoad();if(R.page==='admin')render();},e=>toast('하지 못했어요: '+(e&&e.message||e)));}
+function vAdmin(){const me=PE_IO.member();if(!me||!me.admin)return topbar('승인 관리')+'<div class="empty" style="margin-top:20px"><b>관리자만 볼 수 있어요</b></div>';
+  if(!ADM)admLoad();
+  const head=topbar('승인 관리')+`<h1 class="ptitle">승인 관리</h1><p class="lsub">승인한 휴대폰만 앱을 열 수 있어요. 아이디는 휴대폰마다 하나로 고정돼요.</p><div class="btns"><button class="btn sm sec" data-act="adm-reload">새로고침</button></div>`;
+  if(ADM.loading)return head+'<div class="empty" style="margin-top:14px"><b>불러오는 중</b></div>';
+  if(ADM.err)return head+`<div class="empty" style="margin-top:14px"><b>불러오지 못했어요</b>${esc(ADM.err)}</div>`;
+  const day=x=>esc(String(x||'').slice(0,10));
+  const who=m=>`<span class="tx"><span class="tt">${esc(m.id)}${m.uid===ADM.me?' (나)':''}</span><span class="ds">${day(m.createdAt)}${m.code?', 초대 코드로':''}</span></span>`;
+  const btn=(act,m,label,cls,s)=>`<button class="btn sm ${cls}" data-act="${act}" data-uid="${esc(m.uid)}" data-id="${esc(m.id)}"${s?` data-s="${s}"`:''}>${label}</button>`;
+  const by=st=>ADM.members.filter(m=>m.status===st);
+  const pend=by('pending'),ok=by('approved'),no=by('rejected');
+  return head+sec('승인 기다리는 사람',pend.length+'명',pend.length?`<div class="group">${pend.map(m=>`<div class="row noic">${who(m)}${btn('adm-set',m,'승인','','approved')}${btn('adm-set',m,'거절','ghost','rejected')}</div>`).join('')}</div>`:'<div class="empty">새 요청이 없어요</div>')
+    +sec('승인된 사람',ok.length+'명',ok.length?`<div class="group">${ok.map(m=>`<div class="row noic">${who(m)}${m.uid===ADM.me?'':btn('adm-set',m,'승인 취소','ghost','rejected')}</div>`).join('')}</div>`:'<div class="empty">아직 없어요</div>')
+    +(no.length?sec('거절한 사람',no.length+'명',`<div class="group">${no.map(m=>`<div class="row noic">${who(m)}${btn('adm-set',m,'승인','sec','approved')}${btn('adm-del',m,'지우기','ghost')}</div>`).join('')}</div><p class="note">지우면 그 아이디를 다른 휴대폰에서 다시 만들 수 있어요.</p>`):'')
+    +sec('초대 코드',ADM.codes.length+'개',`${ADM.codes.length?`<div class="group">${ADM.codes.map(c=>`<div class="row noic"><span class="tx"><span class="tt" style="font-family:ui-monospace,Menlo,monospace;letter-spacing:.08em">${esc(c.code)}</span><span class="ds">${day(c.createdAt)}</span></span><button class="btn sm sec" data-act="code-copy" data-code="${esc(c.code)}">복사</button><button class="btn sm ghost" data-act="code-del" data-code="${esc(c.code)}">지우기</button></div>`).join('')}</div>`:''}
+      <div class="btns"><button class="btn sec" data-act="code-add">초대 코드 만들기</button></div><p class="note">아이디를 만들 때 초대 코드를 넣으면 승인을 기다리지 않고 바로 열려요. 애플 심사용 코드도 여기서 만들어 심사 메모에 적고, 다 쓴 코드는 지우세요.</p>`)
+    +`<p class="note" style="margin-top:16px">내 기기 번호: ${esc(ADM.me)}</p>`;}
 
 /* ════════ 18. 타이머 ════════ */
 const TM={preset:'essay',total:6000,parts:4,endAt:0,remain:6000,running:false,iv:null,lastPart:-1,custom:100};
@@ -759,6 +785,14 @@ document.addEventListener('click',e=>{
   case'start-wrong':return startWrong();
   case'start-cloze':return startCloze();
   case'start-fill':return openModal(fillLvHTML(D.d||''));
+  /* 회원(앱 전용) */
+  case'member-remove':return PE_IO.ask('아이디를 지울까요? 승인도 함께 없어지고 처음 화면으로 돌아가요.',()=>{flush();PE_IO.memberCall('remove').catch(e=>toast('지우지 못했어요: '+(e&&e.message||e)));});
+  case'adm-reload':ADM=null;return render();
+  case'adm-set':return admRun(PE_IO.memberCall('set',{uid:D.uid,status:D.s}),D.s==='approved'?D.id+' 님을 승인했어요':D.id+' 님의 승인을 막았어요');
+  case'adm-del':return PE_IO.ask(`${D.id} 아이디를 지울까요? 그 휴대폰은 처음 화면으로 돌아가요.`,()=>admRun(PE_IO.memberCall('del',{uid:D.uid,id:D.id}),'지웠어요'));
+  case'code-add':return admRun(PE_IO.memberCall('code-add').then(code=>{copy(code,'초대 코드 '+code+'를 만들고 복사했어요');}),'');
+  case'code-del':return admRun(PE_IO.memberCall('code-del',{code:D.code}),'초대 코드를 지웠어요');
+  case'code-copy':return copy(D.code,'초대 코드를 복사했어요');
   case'fill-lv':closeModal();if(D.v!=='mix'){S.fillLv=D.v;save();}return startFill(D.v,D.d||'');
   case'fill-check':return fillCheck(false);
   case'fill-giveup':return fillCheck(true);

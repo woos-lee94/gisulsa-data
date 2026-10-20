@@ -3,7 +3,8 @@
 ## 목표
 
 `web/` 폴더의 웹앱(예전 Netlify PWA)을 화면·기능·데이터 그대로 아이폰 앱으로 만든다. Netlify 웹앱은 2026-10에 내렸고, 이제 `web/`은 아이폰 앱의 화면 원본이다.
-사용자 한 사람이 자기 휴대폰에서만 쓰는 앱이다. 서버, 로그인, 계정, 공유, 랭킹처럼 다른 사용자와 이어지는 기능은 넣지 않는다.
+학습 기록은 각자 휴대폰에만 둔다. 공유, 랭킹처럼 다른 사용자와 이어지는 기능은 넣지 않는다.
+예외 하나: 관리자가 승인한 휴대폰만 앱을 여는 회원 승인(비밀번호 없는 아이디, 휴대폰마다 하나 고정). 서버 코드 없이 Firebase(익명 Authentication + Firestore)를 REST로 부른다(`docs/firebase-setup.md`).
 
 ## 이 저장소에서 지킬 것
 
@@ -38,7 +39,7 @@
 1. 자료 저장소 주소와 JSON 형식. 예약 작업이 이 형식으로 계속 올리므로 앱이 거기에 맞춘다. 저장소(woos-lee94/gisulsa-data)는 공개로 두고, 앱은 인증 없이 raw 주소로 읽는다.
 2. 백업 JSON 형식 `{"state": S, "sets": SETS}`. 웹앱의 더보기 → 백업에서 복사한 기록을 앱의 복원에 붙여 넣으면 진도·오답·받은 세트가 그대로 이어져야 한다.
 3. 화면 구성·문구·계산: 간격반복 간격 [0,1,3,7,14,30,60]일, 세트 다시 보기 1·3·7·14·30일, 정기시험 날짜 규칙, 주차 지도, D-day.
-4. 서버를 두지 않는다. 원격 푸시도 서버가 필요하므로 쓰지 않는다.
+4. 서버를 두지 않는다. 원격 푸시도 서버가 필요하므로 쓰지 않는다. 회원 승인만 Firebase(관리형, 서버 코드 없음)를 쓰고 학습 기록은 보내지 않는다.
 
 ## 만드는 방식: Expo(EAS) + WebView
 
@@ -81,6 +82,7 @@
   eas build -p ios --profile production --auto-submit
   ```
 
+  - 회원 승인을 쓰므로 처음 한 번은 빌드 전에 EAS 환경 변수 두 개를 넣는다(`docs/firebase-setup.md` 2). 없이 빌드하면 앱이 "설정이 빠진 빌드" 화면에서 멈춘다.
   - 이미 받은 폴더가 있으면 `git clone`은 "already exists" 오류를 내고, 나머지 줄이 그 폴더를 최신으로 맞춘다.
   - `git stash`·`git stash pop`은 `eas init`·`eas build`가 PC의 `app.json`에 적은 EAS 프로젝트 번호(`owner`, `extra.eas`)를 지키려고 쓴다. 저장소의 `app.json`을 고칠 때 그 줄과 겹치지 않게 한다.
   - 앱 변경은 사용자가 `main`으로 받으므로 `main`에 올린다.
@@ -116,6 +118,13 @@
 - `scripts/build-web.js`: `web/`을 `native/webBundle.js`(자동 생성, git 제외)로 묶는다. 글꼴은 `styles.css`의 @font-face가 `assets/fonts/PretendardVariable.woff2`(OFL)를 읽고, 앱이 시작할 때 그 파일을 화면 파일 옆에 복사한다. `index.html`이 바깥 주소를 읽으면 묶기를 멈춘다(인터넷 없이 열려야 하므로). `npm install`(postinstall)과 `npm start` 때 돈다. `web/`을 고친 뒤 앱 빌드에는 따로 할 일이 없다.
 - `app.json`: Xcode 프로젝트 이름은 한글이 빠지면 "6"이 되므로 `name`은 `Gisulsa6`, 홈 화면 이름은 `ios.infoPlist.CFBundleDisplayName` "기술사 6개월". 원격 푸시를 쓰지 않으므로 `expo-notifications`의 `enableRemoteNotifications: false`(푸시 권한 없음).
 - `eas.json`: `production` 프로필(스토어 배포 → TestFlight), 빌드 번호는 EAS가 올린다(`appVersionSource: remote`).
-- 검사: `npm i -D jsdom && node tests/app.test.js`(웹), `node tests/native.test.js`(앱 묶음 + PE_NATIVE + host.js를 가짜 기기 기능으로). 둘 다 `npm test`.
-- 스토어 문구: `docs/app-store.md`(부제·프로모션·설명·키워드·카테고리·심사 메모). 지원·개인정보 처리방침 URL은 `docs/support.md`·`docs/privacy.md`의 GitHub 주소(저장소가 공개일 때만 열린다). 문구를 고치면 이 파일들도 함께 고친다.
+- 검사: `npm i -D jsdom && node tests/app.test.js`(웹), `node tests/native.test.js`(앱 묶음 + PE_NATIVE + host.js를 가짜 기기 기능으로). 둘 다 `npm test`. 회원 규칙은 `npm run test:firebase`.
+- 스토어 문구: `docs/app-store.md`(부제·프로모션·설명·키워드·카테고리·심사 메모·App Privacy). Firebase 설정·관리자 지정·심사용 초대 코드는 `docs/firebase-setup.md`. 지원·개인정보 처리방침 URL은 `docs/support.md`·`docs/privacy.md`의 GitHub 주소(저장소가 공개일 때만 열린다). 문구를 고치면 이 파일들도 함께 고친다.
+- 회원 승인(`native/member.js`, `native/Gate.js`, `firebase/firestore.rules`)
+  - 휴대폰 구분은 IP가 아니라 Firebase 익명 계정. 그 refresh token을 expo-secure-store 키체인(`AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY`)에 둔다. 토큰이 무효(400)일 때만 새 계정을 만든다.
+  - Firestore: `members/{uid}`(id·status·createdAt·code), `ids/{아이디}`(uid, 중복 방지), `codes/{코드}`(바로 승인), `admins/{uid}`(콘솔에서만 만든다). 아이디 만들기는 members·ids를 commit 한 번으로 만들고, 규칙이 `getAfter`로 둘을 묶는다. commit 본문의 문서 이름은 인코딩하지 않는다(한글 아이디).
+  - 승인 전에는 WebView 대신 `Gate` 화면만 띄운다. 승인된 상태는 키체인에 캐시해 인터넷 없이도 열고, 앱이 앞으로 올 때 다시 확인한다. 대기 중에는 15초마다 확인.
+  - 웹 쪽: `PE_NATIVE.member`({id, admin, uid}) → 더보기에 아이디, 관리자면 "승인 관리"(`#admin`, `vAdmin`), 설정에 "아이디 지우기"(애플 5.1.1(v) 앱 안 계정 삭제). 요청은 `PE_IO.memberCall(op)` → `host.js`의 `member`(list·set·del·code-add·code-del·remove만).
+  - Firebase 값은 EAS 환경 변수 `EXPO_PUBLIC_FIREBASE_API_KEY`·`EXPO_PUBLIC_FIREBASE_PROJECT_ID`(production)로만 넣는다. 없으면 "설정이 빠진 빌드" 화면.
+  - 검사: `npm run test:firebase`(Firebase 에뮬레이터, Java 21)가 실제 규칙으로 승인·거절·초대 코드·남의 아이디·스스로 승인 막기·지우기를 돈다. `tests/native.test.js`는 관리자 화면과 아이디 지우기를 가짜 회원 서버로 본다.
 - 실기기에서 아직 확인할 것: 위 "받아들이는 기준 2". 특히 무음 모드에서 타이머 알림음(웹 오디오는 무음 스위치를 따른다), 알림 권한 묻기, 공유 시트의 "파일에 저장".

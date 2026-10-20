@@ -17,9 +17,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // 가짜 기기
 const disk = {};               // Documents/store
-const dev = { clip: null, saved: null, asked: [], answers: [], awake: [], looks: [], notif: [], denyNotif: false, fetched: [] };
+const dev = { clip: null, saved: null, asked: [], answers: [], awake: [], looks: [], notif: [], denyNotif: false, fetched: [], member: [] };
+// 가짜 회원 서버(Firebase 자리): 관리자 화면이 부르는 요청을 기록한다
+const MEMBERS = [{ uid: 'U2', id: 'kim', status: 'pending', createdAt: '2026-10-20T01:00:00Z', code: '' }, { uid: 'U1', id: 'boss', status: 'approved', createdAt: '2026-10-19T01:00:00Z', code: '' }, { uid: 'U3', id: 'lee', status: 'rejected', createdAt: '2026-10-18T01:00:00Z', code: '' }];
+const CODES = [{ code: 'QWER23', createdAt: '2026-10-20T02:00:00Z' }];
 
-function open() {
+function open(opt = {}) {
   const errors = [], webFetch = [], lsUse = [];
   let w;
   const deps = {
@@ -38,6 +41,12 @@ function open() {
     },
     setNotif: async cfg => { dev.notif.push(cfg); if (dev.denyNotif) throw new Error('denied'); return cfg; },
     look: d => { dev.looks.push(d); },
+    member: async (op, a) => {
+      dev.member.push([op, a]);
+      if (op === 'list') return { members: MEMBERS, codes: CODES, me: 'U1' };
+      if (op === 'code-add') return 'ABCD23';
+      return true;
+    },
   };
   const handle = host.createHost(deps);
   const store = {}; for (const k of host.STORE_KEYS) store[k] = disk[k] == null ? null : disk[k];
@@ -45,7 +54,7 @@ function open() {
     runScripts: 'dangerously', pretendToBeVisual: true, url: 'file:///var/mobile/Containers/Data/Application/X/Library/Caches/web/' + bundle.hash + '/index.html#today',
     beforeParse(win) {
       w = win;
-      win.eval(host.bootScript({ store, notif: host.cleanNotif(disk.notif ? JSON.parse(disk.notif) : null), version: '2.2.0' }));
+      win.eval(host.bootScript({ store, notif: host.cleanNotif(disk.notif ? JSON.parse(disk.notif) : null), version: '2.2.0', member: opt.member }));
       win.ReactNativeWebView = { postMessage: data => setTimeout(() => handle(data), 0) };
       win.fetch = async url => { webFetch.push(url); throw new Error('웹 fetch를 쓰면 안 됨'); };
       Object.defineProperty(win, 'localStorage', { configurable: true, get() { lsUse.push(new Error().stack); throw new Error('localStorage를 쓰면 안 됨'); } });
@@ -184,6 +193,49 @@ function open() {
   ok(B.txt().includes('기술사 6개월 v' + appVer), '더보기 버전 = app.json 버전 ' + appVer);
   ok(B.errors.length === 0, '다시 연 화면 콘솔 오류 없음 ' + B.errors.slice(0, 3).join(' | '));
 
+  // 3) 회원: 아이디 없는 앱 묶음(검사용)에는 회원 칸이 없고, 관리자 휴대폰에만 승인 관리가 보인다
+  ok(!/승인 관리/.test(B.txt()) && !/아이디/.test(B.txt()), '회원 정보가 없으면 더보기에 아이디·승인 관리 없음');
+  const K = open({ member: { id: 'kim', admin: false, uid: 'U2' } });
+  await sleep(300);
+  await K.go('#more');
+  ok(/아이디 kim/.test(K.txt()) && !/승인 관리/.test(K.txt()), '일반 회원: 더보기에 아이디만, 승인 관리 없음');
+  await K.go('#admin');
+  ok(/관리자만 볼 수 있어요/.test(K.txt()) && !dev.member.length, '일반 회원이 #admin을 열어도 목록을 부르지 않음');
+  await K.go('#settings');
+  ok(/이 휴대폰에 고정된 아이디/.test(K.txt()) && K.d.querySelector('[data-act="member-remove"]'), '설정에 아이디·아이디 지우기');
+  dev.answers.push(false);
+  K.click('[data-act="member-remove"]'); await sleep(40);
+  ok(/아이디를 지울까요/.test(dev.asked[dev.asked.length - 1]) && !dev.member.length, '아이디 지우기 확인에서 취소 → 그대로');
+  dev.answers.push(true);
+  K.click('[data-act="member-remove"]'); await sleep(40);
+  ok(dev.member.length === 1 && dev.member[0][0] === 'remove', '아이디 지우기 확인 → 앱에 지우기 요청');
+  ok(K.errors.length === 0, '일반 회원 화면 콘솔 오류 없음 ' + K.errors.slice(0, 3).join(' | '));
+
+  dev.member.length = 0;
+  const M = open({ member: { id: 'boss', admin: true, uid: 'U1' } });
+  await sleep(300);
+  await M.go('#more');
+  ok(/아이디 boss/.test(M.txt()) && /승인 관리/.test(M.txt()), '관리자: 더보기에 승인 관리');
+  await M.go('#admin'); await sleep(40);
+  const at = M.txt();
+  ok(dev.member[0][0] === 'list' && /승인 기다리는 사람1명/.test(at) && /boss \(나\)/.test(at) && /거절한 사람1명/.test(at) && /QWER23/.test(at) && /내 기기 번호: U1/.test(at), '승인 관리: 대기·승인·거절·초대 코드·내 기기 번호');
+  ok(!M.d.querySelector('[data-act="adm-set"][data-uid="U1"]'), '내 아이디에는 승인 취소 버튼 없음');
+  M.click('[data-act="adm-set"][data-uid="U2"][data-s="approved"]'); await sleep(40);
+  ok(dev.member.some(x => x[0] === 'set' && x[1].uid === 'U2' && x[1].status === 'approved') && /kim 님을 승인했어요/.test(M.toast()), '승인 → 앱에 승인 요청 + 알림');
+  ok(dev.member[dev.member.length - 1][0] === 'list', '승인 뒤 목록 다시 불러옴');
+  M.click('[data-act="adm-set"][data-uid="U2"][data-s="rejected"]'); await sleep(40);
+  ok(dev.member.some(x => x[0] === 'set' && x[1].uid === 'U2' && x[1].status === 'rejected'), '거절 → 앱에 거절 요청');
+  dev.answers.push(true);
+  M.click('[data-act="adm-del"][data-uid="U3"]'); await sleep(40);
+  ok(/lee 아이디를 지울까요/.test(dev.asked[dev.asked.length - 1]) && dev.member.some(x => x[0] === 'del' && x[1].uid === 'U3' && x[1].id === 'lee'), '거절한 사람 지우기(확인 후)');
+  M.click('[data-act="code-add"]'); await sleep(40);
+  ok(dev.member.some(x => x[0] === 'code-add') && dev.clip === 'ABCD23' && /ABCD23/.test(M.toast()), '초대 코드 만들기 → 복사');
+  M.click('[data-act="code-copy"][data-code="QWER23"]'); await sleep(40);
+  ok(dev.clip === 'QWER23', '초대 코드 복사');
+  M.click('[data-act="code-del"][data-code="QWER23"]'); await sleep(40);
+  ok(dev.member.some(x => x[0] === 'code-del' && x[1].code === 'QWER23'), '초대 코드 지우기');
+  ok(M.errors.length === 0, '관리자 화면 콘솔 오류 없음 ' + M.errors.slice(0, 3).join(' | '));
+
   // 앱 쪽 규칙
   const bad = [];
   const H = host.createHost({ inject: c => bad.push(c), writeStore: () => bad.push('write') });
@@ -191,6 +243,10 @@ function open() {
   ok(/https 주소만/.test(bad[0]), 'https가 아닌 주소는 받지 않음');
   await H(JSON.stringify({ t: 'store', k: 'other', v: 'x' })); await H('not json');
   ok(bad.length === 1, '모르는 저장 키·깨진 메시지는 무시');
+  const H2 = host.createHost({ inject: c => bad.push(c), member: async () => { bad.push('called'); return true; } });
+  await H2(JSON.stringify({ t: 'member', id: 2, op: 'approve-me', args: {} }));
+  ok(/모르는 회원 요청/.test(bad[1]) && !bad.includes('called'), '모르는 회원 요청은 앱에 넘기지 않음');
+  ok(/"member":\{"id":"boss","admin":true/.test(host.bootScript({ store: {}, notif: null, version: '1', member: { id: 'boss', admin: true, uid: 'U1' } })) && /"member":null/.test(host.bootScript({ store: {}, notif: null, version: '1' })), 'bootScript: 회원 정보 주입');
 
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);

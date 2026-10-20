@@ -35,6 +35,12 @@
         }
       ],
       [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
+      [
         "expo-notifications",
         {
           "enableRemoteNotifications": false
