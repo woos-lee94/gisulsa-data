@@ -14,7 +14,7 @@ const INTERVALS=[0,1,3,7,14,30,60];
 const REVIEW_STEPS=[1,3,7,14,30];
 const KEY='pe_state_v1', SKEY='pe_sets_v1';
 const DATA_DEFAULT='https://raw.githubusercontent.com/woos-lee94/gisulsa-data/main/data/';
-const APP_VER='2.2.0';
+const APP_VER='2.3.0';
 const PLAN_START=(window.PE_EXAM&&PE_EXAM.defaults.start)||'2026-10-19';
 
 const IC={
@@ -88,7 +88,8 @@ function computePlan(start,target){const el=eligibleRounds(start);const tg=(targ
   return{start,target:tg,mock:mk,E,M,map:buildMap(E,M),auto:!target||target==='auto'};}
 let PLAN=null;
 function recalcPlan(){PLAN=computePlan(S.settings.start,S.settings.target);S.settings.exam=PLAN.target.d;S.settings.mock=PLAN.mock?PLAN.mock.d:'';}
-function fillT(x){return String(x==null?'':x).replace(/\{본시험\}/g,'제'+PLAN.target.r+'회').replace(/\{모의문장\}/g,PLAN.mock?', 제'+PLAN.mock.r+'회는 실전 모의 응시':'').replace(/\{모의\}/g,PLAN.mock?'제'+PLAN.mock.r+'회':'정기시험');}
+function guideText(){const G=window.PE_GUIDE;if(!G)return'';return`[답안 형식 점검표(모범 답안 기준)]\n${G.check.map((c,i)=>`${i+1}. ${c}`).join('\n')}\n[모범 답안 뼈대(제2교시 25점형 2번, 4면)]\n${G.skeleton.join('\n')}`;}
+function fillT(x){return String(x==null?'':x).replace(/\{답안형식\}/g,guideText).replace(/\{본시험\}/g,'제'+PLAN.target.r+'회').replace(/\{모의문장\}/g,PLAN.mock?', 제'+PLAN.mock.r+'회는 실전 모의 응시':'').replace(/\{모의\}/g,PLAN.mock?'제'+PLAN.mock.r+'회':'정기시험');}
 function estTag(x){return x&&x.est?'(예상)':x&&x.user?'(직접 입력)':'';}
 function milestones(){const P=PLAN,K=PE_SCHED,out=[{d:addDays(P.start,6),t:'준비 주 마무리, 진단 모의 응시',k:'prep'}];
   const add=(x,main)=>{out.push({d:addDays(x.d,-K.annBefore),t:`제${x.r}회 원서접수 무렵(시험 4~5주 전 4일간, 첫날 오전 10시)`,k:'apply'});
@@ -224,7 +225,7 @@ function syncLine(){const s=S.sync||{};const n=Object.keys(SETS.sets).length;
 function paintSyncBits(){document.querySelectorAll('[data-syncline]').forEach(el=>el.innerHTML=syncLine());}
 
 /* ════════ 10. 라우터 ════════ */
-const TAB_OF={set:'today',sess:'',kichul:'test',mock:'test',plan:'more',schedule:'more',timer:'more',prompts:'more',imp:'more',settings:'more',backup:'more',about:'more',archive:'review',wrong:'review',stats:'test'};
+const TAB_OF={set:'today',sess:'',kichul:'test',mock:'test',guide:'test',plan:'more',schedule:'more',timer:'more',prompts:'more',imp:'more',settings:'more',backup:'more',about:'more',archive:'review',wrong:'review',stats:'test'};
 const TABS=['today','review','study','test','more'];
 let R={tab:'today',page:null,a:null,b:null};
 function parseHash(){const h=decodeURIComponent((location.hash||'').replace(/^#\/?/,''));const p=h.split('/');const r={tab:'today',page:null,a:p[1]||null,b:p[2]||null};
@@ -237,7 +238,7 @@ function render(){R=parseHash();document.querySelectorAll('#nav button').forEach
   const v=$('#view');let html='';
   try{
     if(!R.page)html=({today:vToday,review:vReview,study:vStudy,test:vTest,more:vMore}[R.tab]||vToday)();
-    else html=({set:vSet,sess:vSess,kichul:vKichul,mock:vMock,plan:vPlan,schedule:vSchedule,timer:vTimer,prompts:vPrompts,imp:vImport,settings:vSettings,backup:vBackup,about:vAbout,archive:vArchive,wrong:vWrong,stats:vStats}[R.page]||vToday)();
+    else html=({set:vSet,sess:vSess,kichul:vKichul,mock:vMock,guide:vGuide,plan:vPlan,schedule:vSchedule,timer:vTimer,prompts:vPrompts,imp:vImport,settings:vSettings,backup:vBackup,about:vAbout,archive:vArchive,wrong:vWrong,stats:vStats}[R.page]||vToday)();
   }catch(e){html=`<div class="empty" style="margin-top:24px"><b>화면을 그리는 중 오류가 났어요</b>${esc(e.message)}</div>`;console.error(e);}
   v.innerHTML=html;paintNavBadges();paintPill();if(R.page==='timer')paintTimer();}
 function softRender(){if(R.page==='sess')return paintNavBadges();if(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return paintNavBadges();render();}
@@ -304,7 +305,8 @@ function vSet(){const d=R.a;const s=SETS.sets[d];
   else if(tab==='essay'){const e=s.essay;if(!e)body='<div class="empty">이 세트엔 논술 문제가 없어요</div>';else{const show=SV[d+':eo'];
     body=`<div class="qcard"><p class="qnum">${unitName(e.u)}${e.x?', 기출 '+esc([].concat(e.x).map(kLabelShort).join(', ')):''}</p><p class="qtext">${esc(e.t)}</p>
       ${show?`<ol style="margin:0 0 0 20px;padding:0;line-height:1.75">${(e.o||[]).map(o=>`<li>${esc(String(o).replace(/^\d+\.\s*/,''))}</li>`).join('')}</ol>${e.fig?`<p class="plus">그림·표: ${esc(e.fig)}</p>`:''}${e.p?`<p class="field">채점 포인트: ${esc(e.p)}</p>`:''}`:`<button class="btn sec" data-act="set-eo" data-d="${d}">목차 힌트 보기</button><p class="note">먼저 소제목 5~7개를 스스로 정한 뒤 열어 보세요.</p>`}</div>
-      <div class="btns"><button class="btn" data-act="timer-go" data-p="one2">25분 타이머</button><button class="btn sec" data-act="copy-essay" data-d="${d}">첨삭 요청 복사</button></div>
+      <div class="btns"><button class="btn ghost" data-act="go" data-h="guide">처음이라면: 답안지 쓰는 법·모범 답안</button></div>
+      <div class="btns" style="margin-top:4px"><button class="btn" data-act="timer-go" data-p="one2">25분 타이머</button><button class="btn sec" data-act="copy-essay" data-d="${d}">첨삭 요청 복사</button></div>
       <label class="check group" style="margin-top:12px;border-radius:14px"><input type="checkbox" data-act="set-essay-done" data-d="${d}" ${p.essay&&p.essay.done?'checked':''}><span>손글씨로 다 썼어요(사진을 찍어 Claude 프로젝트에 올리기)</span></label>`;}}
   else{body=`<div class="group">${(s.tasks||[]).map((t,i)=>`<label class="check ${p.tasks[i]?'done':''}"><input type="checkbox" data-act="set-task" data-d="${d}" data-i="${i}" ${p.tasks[i]?'checked':''}><span>${esc(t)}</span></label>`).join('')||'<div class="row noic"><span class="tx">과제가 없어요</span></div>'}</div>
     ${(s.check&&s.check.length)?sec('확인이 필요한 부분','',`<div class="group plain">${s.check.map(c=>`<div class="row noic"><span class="tx"><span class="tt" style="font-weight:500">${esc(c)}</span></span></div>`).join('')}</div><p class="note">세트를 만들 때 확신하지 못한 내용이에요. 교재로 한 번 확인하세요.</p>`):''}`;}
@@ -438,6 +440,7 @@ function vTest(){const rg=S.range||'week';const lm=latestMockDate();const rounds
     ${row({ic:'layers',t:'기출 회차 그대로 풀기',d:`제${rounds.length?rounds[rounds.length-1].r:''}~${rounds.length?rounds[0].r:''}회 ${rounds.length}회분, 실제 시험지 순서`,act:'go',data:{h:'kichul'}})}
     ${row({ic:'chart',t:'기출 단원별 보기',d:'단원마다 어떤 문제가 몇 번 나왔는지',act:'go',data:{h:'kichul/u'}})}
     ${row({ic:'wand',t:'앱이 모의고사 만들기',d:'기출·약점 가중으로 1~4교시 세트',act:'gen-mock'})}
+    ${row({ic:'pen',t:'논술 답안 작성 요령',d:'답안지 생김새, 번호 체계, 모범 답안, 형식 점검표',act:'go',data:{h:'guide'}})}
   </div>`)}
   ${sec('기록','',`<div class="group">${row({ic:'chart',tone:'gray',t:'통계와 주간 리포트',act:'go',data:{h:'stats'}})}</div>`)}`;}
 
@@ -480,7 +483,8 @@ function vMock(){const d=R.a;const m=d==='app'?appMockObj():SETS.mocks[d];
   ${parts.length?sec('다 쓴 뒤 열어보기','',reveal?`<div class="group plain">${parts.map(k=>m[k].map((q,i)=>{if(typeof q==='string')return'';if(k==='p1')return`<div class="row noic"><span class="tx"><span class="tt">${i+1}. ${esc(q.t)}</span><span class="ds">${esc((q.k||[]).join(', '))}</span></span></div>`;
       return`<div class="row noic" style="align-items:flex-start"><span class="tx"><span class="tt">${esc(lab[k].slice(0,3))} ${i+1}. ${esc(q.t)}</span><span class="ds">${esc((q.o||[]).join(' / '))}${q.fig?'<br>그림·표: '+esc(q.fig):''}</span></span></div>`;}).join('')).join('')}</div>`
     :`<button class="btn sec" data-act="mock-reveal" data-d="${d}">채점 전에는 보지 마세요 — 열기</button>`):''}
-  ${parts.length?`<div class="btns" style="margin-top:20px"><button class="btn" data-act="copy-mock" data-d="${d}">채점 요청 복사</button><button class="btn sec" data-act="copy-mock-q" data-d="${d}">문제만 복사</button></div>`:''}`;}
+  ${parts.length?`<div class="btns" style="margin-top:20px"><button class="btn" data-act="copy-mock" data-d="${d}">채점 요청 복사</button><button class="btn sec" data-act="copy-mock-q" data-d="${d}">문제만 복사</button></div>
+    <div class="btns" style="margin-top:4px"><button class="btn ghost" data-act="go" data-h="guide">답안 작성 요령·형식 점검표</button></div>`:''}`;}
 function appMockObj(){const m=S.lastMock;if(!m)return null;const toQ=(arr,isP1)=>(arr||[]).map(t=>{if(isP1){const c=deck().find(x=>x.t===t);return{t,k:c?(c.k||[]).slice(0,3):[]};}const e=essays().find(x=>x.t===t);return{t,o:e?e.o:[],fig:''};});
   return{title:'앱 모의고사, '+korDate(m.date),guide:['기출·별표·오답에 가중치를 둔 무작위 세트예요.'],p1:toQ(m.p1,true),p2:toQ(m.p2),p3:toQ(m.p3),p4:toQ(m.p4)};}
 function pickByUnit(items,n,wf){const byU={};items.forEach(it=>{(byU[it.u]=byU[it.u]||[]).push(it);});const out=[];let us=shuffle(Object.keys(byU));let g=0;
@@ -519,7 +523,7 @@ function weeklyReport(){const t=todayStr(),cs=deck();const L=[`[기술사 6개�
 function vMore(){const s=S.sync||{};const rp=repoPlanState();
   return`<div class="ltitle"><div><h1>더보기</h1><p class="lsub">기술사 6개월 v${APP_VER}</p></div></div>
   ${sec('시험 일정','',`<div class="group">${row({ic:'flag',tone:rp==='diff'?'red':'',t:'준비 시작일·목표 회차',d:`${esc(korDate(S.settings.start))} 시작 → 제${PLAN.target.r}회 ${esc(PLAN.target.d)}${esc(estTag(PLAN.target))}, ${PLAN.E}주${rp==='diff'?'<br><b style="color:var(--red)">예약 작업 일정과 달라요</b>':''}`,act:'go',data:{h:'schedule'}})}</div>`)}
-  ${sec('공부 도구','',`<div class="group">${row({ic:'cal',t:PLAN.E+'주 로드맵',d:'단계·주차별 목표와 학원 대체표',act:'go',data:{h:'plan'}})}${row({ic:'timer',t:'교시 타이머',d:'100분, 문제 경계마다 알림',act:'go',data:{h:'timer'}})}${row({ic:'chat',t:'Claude 프롬프트',d:'첨삭·카드 생성·주간 리포트 등 10개',act:'go',data:{h:'prompts'}})}</div>`)}
+  ${sec('공부 도구','',`<div class="group">${row({ic:'cal',t:PLAN.E+'주 로드맵',d:'단계·주차별 목표와 학원 대체표',act:'go',data:{h:'plan'}})}${row({ic:'pen',t:'논술 답안 작성 요령',d:'모범 답안으로 보는 답안지 쓰는 법',act:'go',data:{h:'guide'}})}${row({ic:'timer',t:'교시 타이머',d:'100분, 문제 경계마다 알림',act:'go',data:{h:'timer'}})}${row({ic:'chat',t:'Claude 프롬프트',d:'첨삭·카드 생성·주간 리포트 등 10개',act:'go',data:{h:'prompts'}})}</div>`)}
   ${sec('데이터','',`<div class="group">${row({ic:'sync',t:'지금 받아 오기',d:syncing?'받아 오는 중…':s.last?(s.ok?'마지막 확인 '+hhmm(s.last):'마지막 시도 실패'):'아직 받아 오지 않았어요',act:'sync'})}${row({ic:'imp',t:'카드·목차 가져오기',d:'Claude가 만든 JSON 붙여넣기',act:'go',data:{h:'imp'}})}${row({ic:'save',t:'백업·복원',act:'go',data:{h:'backup'}})}</div>`)}
   ${sec('앱','',`<div class="group">${row({ic:'gear',t:'설정',d:'하루 새 카드 수, 글자 크기, 테마',act:'go',data:{h:'settings'}})}${row({ic:'info',t:'콘텐츠 출처',d:'카드·기출·세트가 어디서 왔는지',act:'go',data:{h:'about'}})}</div>`)}
   <p class="note">홈 화면에 추가해 쓰세요: Safari 공유 버튼 → 홈 화면에 추가. 기록은 이 기기에만 저장돼요.</p>`;}
@@ -597,6 +601,35 @@ function vAbout(){const cs=deck();const n={base:0,kichul:0,set:0,user:0};cs.forE
   <div class="group" style="margin-top:14px">${PE_SOURCES.map(s=>`<div class="row noic" style="align-items:flex-start"><span class="tx"><span class="tt">${esc(s.t)}</span><span class="ds">${esc(s.d)}</span></span></div>`).join('')}</div>
   <p class="note">틀린 내용을 찾으면 그 카드에서 숨기기를 하고, Claude에 고친 카드를 만들어 달라고 해 가져오기로 넣으세요.</p>`;}
 
+/* ════════ 17-2. 답안 작성 요령(data_guide.js의 모범 답안) ════════ */
+const ulT=s=>esc(s).replace(/\[\[(.+?)\]\]/g,'<u>$1</u>');
+const ROWS=22;
+function aRow(n,no,lv,html){return`<div class="ar"><span class="ln">${n}</span><span class="no">${no}</span><span class="ac l${lv}">${html}</span></div>`;}
+function aFig(k){const f=PE_GUIDE.example.figs[k];return`<div class="afig">${f.parts.map(p=>`<figure>${p.svg}<figcaption>${esc(p.cap)}</figcaption></figure>`).join('')}</div><p class="acap">${esc(f.cap)}</p>`;}
+function aTable(t){return`<table class="at">${t.map((r,i)=>`<tr>${r.map(c=>i?`<td>${esc(c)}</td>`:`<th>${esc(c)}</th>`).join('')}</tr>`).join('')}</table>`;}
+function aSheet(rows,no,full){let n=0,h='';rows.forEach(r=>{if(Array.isArray(r)){n++;h+=aRow(n,n===1&&no?esc(no):'',r[0],ulT(r[1]));}
+    else{const a=n+1;n+=r.h;h+=`<div class="ar blk"><span class="ln">${a}<br>~<br>${n}</span><span class="no"></span><div class="ac">${r.table?aTable(r.table):aFig(r.fig)}</div></div>`;}});
+  if(full)while(n<ROWS){n++;h+=aRow(n,'',0,'');}
+  return`<div class="asheet"><div class="ah"><span>번호</span><span>답 안 란</span></div>${h}</div>`;}
+function vGuide(){const G=window.PE_GUIDE;if(!G)return topbar('답안 작성 요령')+'<div class="empty" style="margin-top:20px"><b>작성 요령을 불러오지 못했어요</b></div>';
+  const tab=SV.guide||'how',X=G.example;const tabs=[['how','쓰는 법'],['ex','모범 답안'],['chk','점검표']];let body='';
+  if(tab==='how')body=sec('답안지 생김새','',`<div class="group" style="padding:4px 8px"><table class="t">${G.cover.map(c=>`<tr><th style="width:34%">${esc(c[0])}</th><td>${esc(c[1])}</td></tr>`).join('')}</table></div>
+      <p class="note">${esc(G.sheet)}</p>${aSheet(X.pages[0].slice(0,8),X.no,false)}
+      <div class="group plain" style="margin-top:12px">${G.rules.map((r,i)=>`<div class="row noic"><span class="tx"><span class="tt" style="font-weight:500">${i+1}. ${esc(r)}</span></span></div>`).join('')}</div>`)
+    +sec('쓰는 순서','모범 답안 기준',`<div class="group">${G.steps.map((x,i)=>row({t:`${i+1}. ${esc(x.t)}`,d:esc(x.d)})).join('')}</div>`)
+    +sec('번호 체계','글머리 기호와 들여쓰기',`<div class="group">${G.levels.map(x=>row({t:`<b class="mk">${esc(x.m)}</b>${esc(x.n)}`,d:esc(x.d)})).join('')}</div><p class="note">모범 답안 1면 9~15줄:</p>${aSheet(X.pages[0].slice(8,15),'',false)}<p class="note">Ⅰ. → 1. → 1) → ① 순서로만 내려가고, 단계를 건너뛰거나 섞지 않아요. 개요·결론처럼 짧은 대제목은 1. 없이 바로 1)로 써요.</p>`)
+    +sec('기호와 밑줄','',`<div class="group">${G.marks.map(x=>row({t:`<b class="mk">${esc(x.m.trim())}</b>${esc(x.d)}`,d:ulT(x.ex)})).join('')}</div>`)
+    +sec('면 배분','25점형 4면',`<div class="group">${G.plan.map(x=>row({t:esc(x.p),d:esc(x.d)})).join('')}</div>`)
+    +sec('첨삭 받을 때','',`<p class="note" style="margin-top:0">세트·모의고사·기출의 "첨삭/채점 요청 복사"에 형식 점검표와 모범 답안 뼈대가 들어 있어, Claude가 글머리 기호·들여쓰기·밑줄·그림 번호·끝 표시까지 "○면 ○줄"로 짚어 줘요.</p><div class="btns"><button class="btn sec" data-act="copy-prompt" data-id="p1">논술 첨삭 요청 복사</button></div>`)
+    +`<p class="note" style="margin-top:16px">${esc(G.src)}</p>`;
+  else if(tab==='ex')body=`<div class="qcard" style="margin-top:14px"><p class="qnum">제2교시 25점형 ${esc(X.no)}</p><p class="qtext">${esc(X.q)}</p><p class="note" style="margin:6px 0 0">면마다 22줄. 밑줄·들여쓰기·기호·그림 번호를 그대로 따라 써 보세요.</p></div>`
+    +X.pages.map((pg,i)=>aSheet(pg,i===0?X.no:'',true)+`<p class="apg">- ${i+1} -</p>`).join('')+`<p class="note">${esc(G.src)}</p>`;
+  else body=`<p class="note" style="margin-top:14px">다 쓴 답안을 한 줄씩 짚어 보세요. 첨삭 요청을 복사하면 Claude도 이 번호로 형식을 짚어 줘요.</p>
+    <div class="group" style="margin-top:8px">${G.check.map((c,i)=>`<label class="check"><input type="checkbox"><span>${i+1}. ${esc(c)}</span></label>`).join('')}</div>
+    <div class="btns"><button class="btn" data-act="copy-prompt" data-id="p1">논술 첨삭 요청 복사</button><button class="btn sec" data-act="copy-prompt" data-id="p2">단답 첨삭 요청 복사</button></div>`;
+  return topbar('답안 작성 요령')+`<h1 class="ptitle">논술 답안 작성 요령</h1><p class="lsub">모범 답안(제2교시 25점형, 콘크리트 시공이음)으로 보는 답안지 생김새와 쓰는 법</p>
+  <div class="seg" style="margin-top:14px">${tabs.map(t=>`<button class="${tab===t[0]?'on':''}" data-act="guide-tab" data-t="${t[0]}">${t[1]}</button>`).join('')}</div>${body}`;}
+
 /* ════════ 18. 타이머 ════════ */
 const TM={preset:'essay',total:6000,parts:4,endAt:0,remain:6000,running:false,iv:null,lastPart:-1,custom:100};
 const PRESETS={p1:{n:'1교시 단답',total:100,parts:10},essay:{n:'논술 교시',total:100,parts:4},one1:{n:'단답 1문',total:10,parts:1},one2:{n:'논술 1문',total:25,parts:1},custom:{n:'직접',total:0,parts:1}};
@@ -641,7 +674,7 @@ function parseEssays(txt){const arr=parseArr(txt)||[];return arr.map(o=>{if(!o||
 let toastT=null;function toast(m){const el=$('#toast');if(!el)return;el.textContent=m;el.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('on'),2000);}
 function copy(text,msg){PE_IO.copy(text).then(()=>toast(msg||'복사했어요'),()=>toast('복사하지 못했어요'));}
 function applyLook(){const s=S.settings;if(!s.theme||s.theme==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',s.theme);if(!s.fs||s.fs==='m')document.documentElement.removeAttribute('data-fs');else document.documentElement.setAttribute('data-fs',s.fs);}
-function promptWith(id,from,to){const p=PE_PROMPTS.find(x=>x.id===id);return p?p.t.replace(from,to):'';}
+function promptWith(id,from,to){const p=PE_PROMPTS.find(x=>x.id===id);return p?fillT(p.t).replace(from,to):'';}
 
 /* ════════ 22. 이벤트 ════════ */
 document.addEventListener('click',e=>{
@@ -660,6 +693,7 @@ document.addEventListener('click',e=>{
   case'set-flash':{const s=SETS.sets[D.d];const ids=(s.cards||[]).map((_,i)=>setCardId(D.d,i)).filter(Boolean);const p=sp(D.d);(s.cards||[]).forEach((_,i)=>{p.read[i]=1;});save();return startSession({title:korDate(D.d)+' 세트 카드',items:cardItems(ids)});}
   case'set-quiz':{const d=D.d,i=Number(D.i),k=Number(D.k);const q=SETS.sets[d].quiz[i];const p=sp(d);if(p.quiz[i])return;const ok=k===q.a;p.quiz[i]={pick:k,ok};const key='Q:'+d+':'+i;const qp=S.qp[key]||(S.qp[key]={ok:0,ng:0});ok?qp.ok++:qp.ng++;qp.last=todayStr();if(!ok)markWrong(key,'quiz');touchDay();save();return render();}
   case'set-eo':SV[D.d+':eo']=1;return render();
+  case'guide-tab':SV.guide=D.t;window.scrollTo(0,0);return render();
   case'set-essay-done':{const p=sp(D.d);p.essay=p.essay||{};p.essay.done=b.checked;touchDay();save();return render();}
   case'set-task':{const p=sp(D.d);p.tasks[D.i]=b.checked;touchDay();save();return render();}
   case'copy-essay':{const e=SETS.sets[D.d].essay;return copy(promptWith('p1','(여기에 문제를 그대로 적는다)',e.t),'첨삭 요청을 복사했어요. 사진과 함께 Claude 프로젝트에 붙여 넣으세요');}

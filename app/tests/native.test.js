@@ -97,6 +97,14 @@ function open() {
   A.click('[data-act="backup-copy"]'); await sleep(30);
   ok(dev.clip && JSON.parse(dev.clip).state && JSON.parse(dev.clip).sets, '백업 복사 → 네이티브 클립보드');
   ok(/백업을 복사했어요/.test(A.toast()), '복사 알림 문구 그대로');
+  // 첨삭·채점 요청: 형식 점검표와 모범 답안 뼈대가 들어감
+  await A.go('#set/2026-10-19'); A.click('[data-act="set-tab"][data-t="essay"]'); await sleep(20);
+  A.click('[data-act="copy-essay"]'); await sleep(30);
+  ok(/제방 누수/.test(dev.clip) && /\[답안 형식 점검표/.test(dev.clip) && /이하 여백/.test(dev.clip) && /형식 첨삭/.test(dev.clip) && !/\{답안형식\}/.test(dev.clip), '논술 첨삭 요청에 문제 + 형식 점검표');
+  await A.go('#mock/2026-10-24'); A.click('[data-act="copy-mock"]'); await sleep(30);
+  ok(/■ 1교시/.test(dev.clip) && /\[모범 답안 뼈대/.test(dev.clip) && /형식 지적 1개/.test(dev.clip) && !/\{답안형식\}/.test(dev.clip), '모의고사 채점 요청에 문제 목록 + 형식 점검표');
+  await A.go('#backup');
+  A.click('[data-act="backup-copy"]'); await sleep(30);
   // 파일로 저장(expo-file-system + 공유 시트)
   A.click('[data-act="backup-dl"]'); await sleep(30);
   ok(dev.saved && /^gisulsa-backup-\d{4}-\d{2}-\d{2}\.json$/.test(dev.saved.name) && JSON.parse(dev.saved.text).state.cards['D20261019-1'], '백업 파일 → 네이티브 저장·공유');
@@ -172,7 +180,8 @@ function open() {
   await B.go('#settings');
   ok(B.d.querySelector('[data-nf="wd"]').checked && B.d.querySelector('[data-nt="wd"]').value === '06:45', '알림 설정도 남음');
   await B.go('#more');
-  ok(/기술사 6개월 v2\.2\.0/.test(B.txt()), '더보기 버전 표시');
+  const appVer = require('../app.json').expo.version;
+  ok(B.txt().includes('기술사 6개월 v' + appVer), '더보기 버전 = app.json 버전 ' + appVer);
   ok(B.errors.length === 0, '다시 연 화면 콘솔 오류 없음 ' + B.errors.slice(0, 3).join(' | '));
 
   // 앱 쪽 규칙

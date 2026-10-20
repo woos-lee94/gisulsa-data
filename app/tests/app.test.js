@@ -223,7 +223,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   click('[data-act="fs"][data-v="m"]'); click('[data-act="theme"][data-v="auto"]');
 
   // 출처·통계·로드맵
-  for (const h of ['#about', '#stats', '#plan', '#prompts', '#imp', '#backup', '#timer', '#archive', '#wrong', '#more', '#study', '#schedule']) {
+  for (const h of ['#about', '#stats', '#plan', '#prompts', '#imp', '#backup', '#timer', '#archive', '#wrong', '#more', '#study', '#schedule', '#guide']) {
     await go(h);
     ok(!/화면을 그리는 중 오류/.test(txt()) && txt().length > 50, '화면 ' + h);
   }
@@ -231,6 +231,23 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   ok(/기출 26회분/.test(txt()) || /기출 \d+회분/.test(txt()), '출처 화면 회차 수: ' + (txt().match(/기출 \d+회분 \d+문항/) || [''])[0]);
   await go('#study'); click('[data-act="start-study"]'); await sleep(40);
   ok(view().querySelector('.fc'), '오늘 학습 세션');
+
+  // 논술 답안 작성 요령(모범 답안)과 첨삭 프롬프트의 형식 점검표
+  await go('#set/2026-10-19'); click('[data-act="set-tab"][data-t="essay"]'); await sleep(20);
+  ok(view().querySelector('[data-act="go"][data-h="guide"]'), '세트 논술 탭 → 답안 작성 요령 링크');
+  await go('#guide');
+  ok(/논술 답안 작성 요령/.test(txt()) && /번호 체계/.test(txt()) && /이하 여백/.test(txt()) && view().querySelectorAll('.asheet').length === 2, '작성 요령: 쓰는 법');
+  click('[data-act="guide-tab"][data-t="ex"]'); await sleep(20);
+  const pg = [...view().querySelectorAll('.asheet')];
+  ok(pg.length === 4 && pg.every(p => { const l = p.querySelectorAll('.ar .ln'); return l.length && l[l.length - 1].textContent.endsWith('22'); }), '모범 답안 4면, 면마다 22줄');
+  ok(/Ⅴ\. 결론/.test(txt()) && /〈그림 1〉 시공이음 위치 선정/.test(txt()) && /〈그림 2〉 시공이음부 처리 상세/.test(txt()) && view().querySelectorAll('.afig svg').length === 4 && view().querySelectorAll('table.at tr').length === 5, '모범 답안: 대제목·그림 2개·비교표');
+  ok(view().querySelectorAll('.asheet u').length >= 15 && /끝/.test(pg[3].querySelector('.lR').textContent), '모범 답안: 밑줄·끝');
+  click('[data-act="guide-tab"][data-t="chk"]'); await sleep(20);
+  ok(view().querySelectorAll('.check input').length === w.PE_GUIDE.check.length, '형식 점검표 ' + w.PE_GUIDE.check.length + '항목');
+  await go('#prompts');
+  ok(/\[답안 형식 점검표/.test(txt()) && /\[모범 답안 뼈대/.test(txt()) && !/\{답안형식\}/.test(txt()), '프롬프트에 형식 점검표가 채워짐');
+  await go('#test'); ok(view().querySelector('[data-h="guide"]'), '테스트 탭 → 답안 작성 요령');
+  await go('#more'); ok(view().querySelector('[data-h="guide"]'), '더보기 → 답안 작성 요령');
 
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
