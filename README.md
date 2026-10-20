@@ -9,6 +9,7 @@
 - `data/sets/YYYY-MM-DD.json`: 평일 아침 세트(용어 카드, 퀴즈, 논술 1문제, 과제)
 - `data/mocks/YYYY-MM-DD.json`: 토요일 주간 모의고사
 - `data/kichul.json`: 앱에 내장된 기출(제116~140회) 이후에 추가되는 회차와 연결표
+- `app/`: 아이폰 앱 코드(웹앱 원본 `app/web/`, 이식 지시서 `app/CLAUDE.md`). 예약 작업과는 상관없다
 - `pipeline/`: 예약 작업이 쓰는 도구와 규칙
   - `RUNBOOK_DAILY.md`, `RUNBOOK_MOCK.md`: 예약 작업 순서
   - `spec_set.md`, `spec_mock.md`: 파일 형식과 문체 규칙
