@@ -5,7 +5,7 @@
 
 ## 구성
 
-- `data/index.json`: 올라간 세트·모의고사 목록. 앱이 열릴 때 이것부터 읽는다.
+- `data/index.json`: 올라간 세트·모의고사 목록과 지금 시험 일정(plan). 앱이 열릴 때 이것부터 읽는다.
 - `data/sets/YYYY-MM-DD.json`: 평일 아침 세트(용어 카드, 퀴즈, 논술 1문제, 과제)
 - `data/mocks/YYYY-MM-DD.json`: 토요일 주간 모의고사
 - `data/kichul.json`: 앱에 내장된 기출(제116~140회) 이후에 추가되는 회차와 연결표
@@ -13,7 +13,8 @@
   - `RUNBOOK_DAILY.md`, `RUNBOOK_MOCK.md`: 예약 작업 순서
   - `spec_set.md`, `spec_mock.md`: 파일 형식과 문체 규칙
   - `tool.py`: 브리프·검사·발행 도구(표준 라이브러리만 사용)
-  - `curriculum.json`: 주차별 단원과 세트 규칙(앱 data_plan.js와 같은 값)
+  - `curriculum.json`: 단원, 주차 틀 30개, 정기시험 규칙, 세트 규칙(앱 data_plan.js와 같은 값)
+  - `plan.json`: 준비 시작일과 목표 회차(앱 더보기 → 시험 일정과 같은 값). `tool.py set-plan`으로만 바꾼다
   - `kichul.json`: 기출 문제 요지 마스터(제116~140회 775문항)
   - `deck.json`, `essays.json`: 앱에 이미 있는 카드·모범 목차(중복 방지용)
   - `backlog.json`: 아직 카드·목차가 없는 기출(세트가 우선 다룸)

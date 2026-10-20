@@ -28,7 +28,7 @@
    - 마지막에 `git fetch origin main && git log --oneline -1 origin/main`으로 방금 커밋이 main 맨 위에 있는지 확인한다.
 
 4. 새 회차 기출 반영(해당될 때만)
-   실제 시험(제141회 2027-02-06 예상, 이후 회차 포함)이 끝나고 2주가 지났는데 `python3 pipeline/tool.py status`의 기출에 그 회차가 없으면:
+   실제 정기시험(회차와 날짜는 `python3 pipeline/tool.py status` 첫 줄의 일정, 그 밖의 회차 포함)이 끝나고 2주가 지났는데 `python3 pipeline/tool.py status`의 기출에 그 회차가 없으면:
    - 사당기술사학원 기출문제 게시판(https://www.sadangac.com/past/index.asp)이나 큐넷 기출문제(기술사) 자료실에서 토목시공기술사 해당 회차 문제지를 찾는다.
    - 문항마다 문제 요지(원문을 그대로 옮기지 않고 요지만), 단원 번호(1~16, `pipeline/curriculum.json`의 units)를 붙여 JSON 파일을 만들고 `python3 pipeline/tool.py add-round <파일>`로 넣는다.
    - 출력에 "비슷한 카드"가 나오면 같은 개념인지 보고 `python3 pipeline/tool.py link <기출id> <카드id>`로 잇는다.

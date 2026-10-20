@@ -10,9 +10,11 @@
   python3 pipeline/tool.py mock-brief [--date YYYY-MM-DD]   토요일 모의고사 브리프
   python3 pipeline/tool.py check-mock YYYY-MM-DD
   python3 pipeline/tool.py publish-mock YYYY-MM-DD
-  python3 pipeline/tool.py add-round FILE.json              새 회차 기출 추가(제141회부터)
+  python3 pipeline/tool.py add-round FILE.json              새 회차 기출 추가(제141회부터 실제 시행분)
   python3 pipeline/tool.py link 기출id 카드id|목차id        기존 카드·목차를 새 기출에 연결
-  python3 pipeline/tool.py status
+  python3 pipeline/tool.py status                           일정·주차·덱 현황
+  python3 pipeline/tool.py set-plan --start YYYY-MM-DD [--target auto|회차] [--round 회차=YYYY-MM-DD ...]
+                                                            앱에서 바꾼 시험 일정을 저장소에 넣기
   python3 pipeline/tool.py kds "KDS 11 80 05" [검색어 ...]       국가건설기준(KDS·KCS) 현행 원문
   python3 pipeline/tool.py law "건설기술 진흥법 시행령" [검색어 ...] 현행 법령 조문
   python3 pipeline/tool.py admrul "고시·훈령 이름" [검색어 ...]      현행 행정규칙(고시·훈령·지침)
@@ -86,39 +88,189 @@ def arg_date():
 
 
 CUR = load(p('pipeline', 'curriculum.json'))
-START = dt.date.fromisoformat(CUR['start'])
-EXAM = dt.date.fromisoformat(CUR['exam'])
-MOCK = dt.date.fromisoformat(CUR['mock'])
+SCHED = CUR['sched']
 UNITS = {u['id']: u for u in CUR['units']}
+TPL = {x['w']: x for x in CUR['weeks']}
 
 
 def uname(u):
     return UNITS.get(int(u), {}).get('n', '기타')
 
 
+# ───────────────────────── 시험 일정(앱 app.js와 같은 규칙) ─────────────────────────
+# 정기 기술사 필기: 2월 초(2/2 이후 첫 토요일, 설 연휴면 한 주 앞), 5월 셋째 토요일, 8월 넷째 토요일.
+# 목표 회차 = 준비 시작일에서 6개월 이상 남은 회차 중 가장 빠른 것(또는 plan.json에서 고른 회차).
+# 실전 모의 = 시작 12주 뒤부터 목표 전까지 열리는 정기시험 중 마지막 것.
+
+def _sat_on_or_after(d):
+    return d + dt.timedelta(days=(5 - d.weekday()) % 7)
+
+
+def _nth_sat(y, m, n):
+    return _sat_on_or_after(dt.date(y, m, 1)) + dt.timedelta(weeks=n - 1)
+
+
+def _feb_sat(y):
+    s = _sat_on_or_after(dt.date(y, 2, 2))
+    ln = SCHED.get('lunarNewYear', {}).get(str(y))
+    if ln:
+        L = dt.date.fromisoformat(ln)
+        if L - dt.timedelta(days=1) <= s <= L + dt.timedelta(days=2):
+            s -= dt.timedelta(days=7)
+    return s
+
+
+def add_months(d, n):
+    y, m = divmod(d.month - 1 + n, 12)
+    y += d.year
+    m += 1
+    last = (dt.date(y + (m == 12), m % 12 + 1, 1) - dt.timedelta(days=1)).day
+    return dt.date(y, m, min(d.day, last))
+
+
+def plan_conf():
+    return load(p('pipeline', 'plan.json'), {'start': '2026-10-19', 'target': 'auto', 'rounds': {}})
+
+
+def round_list(ov=None):
+    ov = plan_conf().get('rounds', {}) if ov is None else ov
+    y0 = SCHED['baseYear']
+    y1 = max(y0 + 3, dt.date.today().year + 3)
+    out = []
+    for y in range(y0, y1 + 1):
+        for i, d in enumerate([_feb_sat(y), _nth_sat(y, 5, 3), _nth_sat(y, 8, 4)]):
+            r = SCHED['baseRound'] + 3 * (y - y0) + i
+            c = SCHED['confirmed'].get(str(r))
+            u = ov.get(str(r))
+            out.append({'r': r, 'd': dt.date.fromisoformat(u or c) if (u or c) else d, 'est': not u and not c, 'user': bool(u),
+                        'note': '' if (u or c) else SCHED.get('notes', {}).get(str(r), '')})
+    return out
+
+
+def eligible(start, ov=None):
+    mn = add_months(start, SCHED['minMonths'])
+    return [x for x in round_list(ov) if x['d'] >= mn]
+
+
+def _jsround(x):
+    return int(x + 0.5) if x >= 0 else -int(-x + 0.5)
+
+
+def build_map(E, M):
+    mp = [None] * (E + 1)
+
+    def put(a, t, **x):
+        mp[a] = dict({'t': t, 'ph': TPL[t]['ph']}, **x)
+    put(0, 0)
+    for j in range(7):
+        put(E - 11 + j, 18 + j)
+    for i in range(1, 5):
+        put(E - 5 + i, 24 + i)
+    put(E, 29)
+    slots = [a for a in range(1, E - 11) if a != M]
+    L = list(range(1, 15)) + [16] + ([17] if len(slots) >= 16 else [])
+    if len(slots) >= len(L):
+        prev = -1
+        for i, a in enumerate(slots):
+            k = 0 if len(slots) == 1 else _jsround(i * (len(L) - 1) / (len(slots) - 1))
+            put(a, L[k], rep=(k == prev))
+            prev = k
+    else:
+        n = len(slots)
+        for i, a in enumerate(slots):
+            ts = L[i * len(L) // n:(i + 1) * len(L) // n]
+            if len(ts) > 1:
+                put(a, ts[0], ts=ts)
+            else:
+                put(a, ts[0])
+    if M is not None and 0 < M < E:
+        b = mp[M - 1] or {'t': 1}
+        mp[M] = {'t': 15, 'ph': (2 if b['t'] >= 11 else 1) if M <= E - 12 else mp[M]['ph'], 'mock': True}
+        if M > 1 and mp[M - 1]['t'] != 0:
+            mp[M - 1]['pre'] = True  # 실전 모의 앞 주: 토요일 전교시 리허설
+    return mp
+
+
+PRE_GOALS = ['토요일 전교시 리허설 1회(실제 시간표, 400분)', '시험장 준비물과 이동 동선 점검']
+
+
+def _pre(o, m):
+    if m.get('pre'):
+        o['title'] += ' + 전교시 리허설'
+        o['goals'] = (PRE_GOALS + [g for g in o['goals'] if not g.startswith('토요일')])[:5]
+        o['pre'] = True
+    return o
+
+
+def compute_plan(start=None, target=None, ov=None):
+    c = plan_conf()
+    start = start or dt.date.fromisoformat(c['start'])
+    target = c.get('target', 'auto') if target is None else target
+    ov = c.get('rounds', {}) if ov is None else ov
+    el = eligible(start, ov)
+    tg = next((x for x in el if target not in (None, 'auto') and x['r'] == int(target)), el[0])
+    mk = [x for x in round_list(ov) if x['d'] < tg['d'] and (x['d'] - start).days >= 7 * SCHED['mockMinWeeks']]
+    mk = mk[-1] if mk else None
+    E = (tg['d'] - start).days // 7
+    M = (mk['d'] - start).days // 7 if mk else None
+    return {'start': start, 'target': tg, 'mock': mk, 'E': E, 'M': M, 'map': build_map(E, M)}
+
+
+PLAN = compute_plan()
+START = PLAN['start']
+EXAM = PLAN['target']['d']
+MOCK = PLAN['mock']['d'] if PLAN['mock'] else None
+TR = PLAN['target']['r']
+MR = PLAN['mock']['r'] if PLAN['mock'] else None
+
+
+def est(x):
+    return '(예상)' if x and x['est'] else ''
+
+
+def fill(t):
+    t = str(t or '').replace('{본시험}', f'제{TR}회')
+    t = t.replace('{모의문장}', f', 제{MR}회는 실전 모의 응시' if MR else '')
+    return t.replace('{모의}', f'제{MR}회' if MR else '정기시험')
+
+
+def dday_line(d):
+    s = f'D-day: 제{TR}회 {EXAM}{est(PLAN["target"])}까지 {(EXAM - d).days}일'
+    if MOCK and MOCK >= d:
+        s += f', 실전 모의 제{MR}회 {MOCK}{est(PLAN["mock"])}까지 {(MOCK - d).days}일'
+    return s
+
+
+def plan_sig():
+    return {'start': START.isoformat(), 'target': TR, 'exam': EXAM.isoformat(), 'mock': MR, 'mockDate': MOCK.isoformat() if MOCK else None}
+
+
 def week_of(d):
     return (d - START).days // 7
+
+
+def _slot(w):
+    return PLAN['map'][max(0, min(PLAN['E'], w))]
 
 
 def phase_of(w):
     if w <= 0:
         return 0
-    if w <= 10:
-        return 1
-    if w <= 17:
-        return 2
-    if w <= 24:
-        return 3
-    if w <= 28:
-        return 4
-    return 5
+    if w >= PLAN['E']:
+        return 5
+    return _slot(w)['ph']
 
 
 def week_obj(w):
-    for x in CUR['weeks']:
-        if x['w'] == w:
-            return x
-    return None
+    m = _slot(w)
+    ts = [TPL[t] for t in m.get('ts', [m['t']])]
+    if len(ts) > 1:
+        return _pre({'w': w, 'title': ' + '.join(fill(x['title']) for x in ts) + ' (압축)',
+                     'u': list(dict.fromkeys(u for x in ts for u in x.get('u', []))),
+                     'goals': [fill(g) for x in ts for g in x.get('goals', [])[:2]], 'tpl': m['t']}, m)
+    T = ts[0]
+    return _pre({'w': w, 'title': fill(T['title']) + (' (이어서)' if m.get('rep') else ''), 'u': T.get('u', []),
+                 'goals': [fill(g) for g in T.get('goals', [])], 'tpl': m['t'], 'mock': bool(m.get('mock'))}, m)
 
 
 def kichul():
@@ -151,26 +303,41 @@ def weekdays_between(a, b):
     return n
 
 
+def rotation_start():
+    """단원 지정이 끝나고 전 범위 순환을 시작하는 주(틀 17 이후 첫 주)."""
+    for a, m in enumerate(PLAN['map']):
+        if a > 0 and m['t'] >= 17 and not m.get('mock'):
+            return a
+    return max(1, PLAN['E'] - 11)
+
+
 def units_for(d):
     w = week_of(d)
     wk = week_obj(w)
-    if wk and wk.get('u'):
+    if w > 0 and wk.get('u'):
         return wk['u'], '이번 주 단원'
-    if w >= 17:
+    rs = rotation_start()
+    if w >= rs:
         order = unit_order()
-        n = weekdays_between(START + dt.timedelta(weeks=17), d)
+        n = weekdays_between(START + dt.timedelta(weeks=rs), d)
         return [order[(2 * n) % len(order)], order[(2 * n + 1) % len(order)]], '전 범위 순환(하루 2단원, 기출 많은 단원부터)'
     return None, '전 범위(여러 번 출제된 용어 우선)'
 
 
 def studied_units(w):
-    if w <= 0 or w >= 11:
+    """1회독 중이면 지금까지 공부한 단원, 2회독부터는 None(전 단원)."""
+    if w <= 0:
         return None
     us = set()
-    for x in CUR['weeks']:
-        if 1 <= x['w'] <= w:
-            us.update(x.get('u', []))
-    return sorted(us)
+    for a in range(1, min(w, PLAN['E']) + 1):
+        m = PLAN['map'][a]
+        if m.get('mock'):
+            continue
+        for t in m.get('ts', [m['t']]):
+            if t >= 11:
+                return None
+            us.update(TPL[t].get('u', []))
+    return sorted(us) or None
 
 
 def rule(w):
@@ -220,7 +387,10 @@ def cmd_today():
     d = arg_date()
     force = '--force' in sys.argv
     if d > EXAM:
-        print(f'SKIP: 제142회 시험({EXAM})이 끝났습니다. 예약 작업을 꺼도 된다고 보고하세요.')
+        print(f'SKIP: 목표 시험(제{TR}회 {EXAM})이 지났습니다. 다음 목표로 이어 가려면 앱 더보기 → 시험 일정에서 새 일정을 정하고 set-plan을 실행하라고 보고하세요.')
+        return 3
+    if d < START:
+        print(f'SKIP: 준비 시작일({START}) 전입니다. 시작일부터 세트를 만듭니다.')
         return 3
     if d.weekday() >= 5 and not force:
         print(f'SKIP: {d}는 주말입니다. 평일에만 세트를 만듭니다.')
@@ -233,16 +403,16 @@ def cmd_today():
     ph = phase_of(w)
     fresh, total = rule(w)
     units, why = units_for(d)
-    wk = week_obj(w) or {}
+    wk = week_obj(w)
     st = state()
     items = kichul()
     print(f'=== {d} ({DAYK[d.weekday()]}) 세트 브리프 ===')
-    print(f'주차 {w} ({wk.get("title", "")}), 단계 {ph}')
+    print(f'주차 {w}/{PLAN["E"]} ({wk.get("title", "")}), 단계 {ph}')
     print(f'단원: {", ".join(f"{u} {uname(u)}" for u in units) if units else "전 단원"} — {why}')
     if wk.get('goals'):
         print('이번 주 목표: ' + ' / '.join(wk['goals'][:4]))
     print(f'규칙: 카드 {total}개 = 새 용어 {fresh}개 + 기존 카드 다시 짚기(ref) {total - fresh}개, 퀴즈 5문, 논술 1문제, 과제 3~4개')
-    print(f'D-day: 제142회 {(EXAM - d).days}일, 제141회 {(MOCK - d).days}일')
+    print(dday_line(d))
 
     bl = load(p('pipeline', 'backlog.json'))
     inu = (lambda u: True) if not units else (lambda u: int(u) in units)
@@ -483,6 +653,7 @@ def cmd_publish_set(ds):
     idx = index()
     rev = bump(idx['sets'], ds, {'t': o['title'], 'u': o['units']})
     idx['updated'] = now_iso()
+    idx['plan'] = plan_sig()
     save(p('data', 'index.json'), idx)
 
     dkf = load(p('pipeline', 'deck.json'))
@@ -524,24 +695,28 @@ def cmd_publish_set(ds):
 # ───────────────────────── 모의고사 ─────────────────────────
 
 def mock_format(d):
-    if d == MOCK:
-        return {}, '제141회 실제 시험일입니다. 모의 대신 실전 응시'
+    if MOCK and d == MOCK:
+        return {}, f'제{MR}회 실제 시험일입니다. 모의 대신 실전 응시'
     if d == EXAM:
-        return {}, '제142회 시험일입니다'
+        return {}, f'제{TR}회 시험일입니다'
     w = week_of(d)
     if w <= 0:
         return {'p1': 13}, '진단 모의: 1교시 단답 13문 중 10문, 100분'
-    if w <= 10:
+    if w >= PLAN['E']:
+        return {}, '시험 주: 모의 없음'
+    m = _slot(w)
+    t = m['t']  # 실제 주차에 대응하는 주차 틀 번호(0~29)
+    if m.get('pre'):
+        return dict(FULL), f'전교시 리허설: 다음 주 제{MR}회 실전 대비, 실제 시간표 400분'
+    if t <= 10:
         return {'p1': 13, 'p2': 2}, '1교시 13문 + 논술 2문(문제당 25분)'
-    if w in (11, 12, 16, 25):
+    if t in (11, 12, 16, 25):
         return {'p2': 6}, '논술 한 교시: 6문 중 4문, 100분'
-    if w in (13, 15, 17, 26):
+    if t in (13, 14, 15, 17, 26):
         return {'p1': 13, 'p2': 6}, '반쪽 모의: 1·2교시'
-    if w == 14:
-        return dict(FULL), '전교시 리허설: 실제 시간표 400분'
-    if 18 <= w <= 24 or w == 27:
+    if 18 <= t <= 24 or t == 27:
         return dict(FULL), '전교시 모의: 토요일 1·2교시, 일요일 3·4교시'
-    if w == 28:
+    if t == 28:
         return {'p1': 13}, '마무리 주: 1교시 기출 재출제형만(새 내용 없음)'
     return {}, '시험 주: 모의 없음'
 
@@ -550,7 +725,10 @@ def cmd_mock_brief():
     d = arg_date()
     force = '--force' in sys.argv
     if d > EXAM:
-        print(f'SKIP: 제142회 시험({EXAM})이 끝났습니다. 예약 작업을 꺼도 된다고 보고하세요.')
+        print(f'SKIP: 목표 시험(제{TR}회 {EXAM})이 지났습니다. 다음 목표로 이어 가려면 앱 더보기 → 시험 일정에서 새 일정을 정하고 set-plan을 실행하라고 보고하세요.')
+        return 3
+    if d < START:
+        print(f'SKIP: 준비 시작일({START}) 전입니다.')
         return 3
     if d.weekday() != 5 and not force:
         print(f'SKIP: {d}는 토요일이 아닙니다.')
@@ -565,10 +743,10 @@ def cmd_mock_brief():
     su = studied_units(w)
     inu = (lambda u: True) if su is None else (lambda u: int(u) in su)
     print(f'=== {d} (토) 주간 모의고사 브리프 ===')
-    print(f'주차 {w}, 단계 {phase_of(w)} — {desc}')
+    print(f'주차 {w}/{PLAN["E"]} ({week_obj(w)["title"]}), 단계 {phase_of(w)} — {desc}')
     print('형식: ' + (', '.join(f'{k} {v}문' for k, v in fmt.items()) if fmt else '문제 없음(notice만)'))
     print(f'범위: {"전 단원" if su is None else ", ".join(f"{u} {uname(u)}" for u in su)} (지금까지 공부한 단원)')
-    print(f'D-day: 제142회 {(EXAM - d).days}일, 제141회 {(MOCK - d).days}일')
+    print(dday_line(d))
 
     def used_recent(kid, weeks=10):
         f = st.get('mock_used', {}).get(kid)
@@ -667,6 +845,7 @@ def cmd_publish_mock(ds):
     idx = index()
     rev = bump(idx['mocks'], ds, {'t': o['title']})
     idx['updated'] = now_iso()
+    idx['plan'] = plan_sig()
     save(p('data', 'index.json'), idx)
     st = state()
     used, ecov = set(), set()
@@ -697,7 +876,7 @@ def cmd_add_round(fp):
     r = load(fp)
     rn, rd, qs = r.get('r'), r.get('d'), r.get('q')
     if not isinstance(rn, int) or not DATE_RE.match(rd or '') or not isinstance(qs, list):
-        sys.exit('형식: {"r":141,"d":"2027-02-06","q":[{"p":1,"n":1,"t":"문제 요지","u":14}, ...]}')
+        sys.exit('형식: {"r":141,"d":"YYYY-MM-DD(실제 시행일)","q":[{"p":1,"n":1,"t":"문제 요지","u":14}, ...]}')
     need = {1: 13, 2: 6, 3: 6, 4: 6}
     for pp, n in need.items():
         got = sorted(q['n'] for q in qs if q.get('p') == pp)
@@ -774,14 +953,75 @@ def cmd_link(kid, target):
     return 0
 
 
+def print_plan():
+    t, m = PLAN['target'], PLAN['mock']
+    print(f'일정: {START} 시작 → 제{t["r"]}회 필기 {t["d"]}{est(t)}, {PLAN["E"]}주(약 {PLAN["E"] / 4.345:.1f}개월)'
+          + (f', 실전 모의 제{m["r"]}회 {m["d"]}{est(m)} = {PLAN["M"]}주차' if m else ', 실전 모의 없음(주말 모의로 대신)'))
+    for x in (m, t):
+        if x and x['note']:
+            print(f'  제{x["r"]}회: {x["note"]}')
+    rp = index().get('plan')
+    if rp != plan_sig():
+        print('  ※ data/index.json의 plan이 이 일정과 다릅니다. python3 pipeline/tool.py set-plan --start ' + START.isoformat() + ' 로 맞추세요.')
+
+
 def cmd_status():
     idx = index()
     bl = load(p('pipeline', 'backlog.json'))
     dk = deck()
     d = today()
-    print(f'오늘 {d} ({DAYK[d.weekday()]}), 주차 {week_of(d)}, 단계 {phase_of(week_of(d))}')
+    print_plan()
+    print(f'오늘 {d} ({DAYK[d.weekday()]}), 주차 {week_of(d)}/{PLAN["E"]}, 단계 {phase_of(week_of(d))}')
     print(f'세트 {len(idx["sets"])}개(마지막 {idx["sets"][-1]["d"] if idx["sets"] else "-"}), 모의 {len(idx["mocks"])}개, 기출 rev {idx.get("kichul", {}).get("rev")}')
     print(f'덱 {len(dk)}장, 백로그 1교시 {len(bl["p1"])}개, 논술 {len(bl["essay"])}개')
+    return 0
+
+
+def cmd_set_plan(a):
+    """앱에서 바꾼 시험 일정을 저장소에 넣는다: --start YYYY-MM-DD [--target auto|회차] [--round 회차=YYYY-MM-DD ...] [--clear-rounds]"""
+    global PLAN, START, EXAM, MOCK, TR, MR
+    c = plan_conf()
+    rounds = {} if '--clear-rounds' in a else dict(c.get('rounds', {}))
+    start, target = c.get('start'), c.get('target', 'auto')
+    i = 0
+    while i < len(a):
+        if a[i] == '--start' and i + 1 < len(a):
+            start = a[i + 1]; i += 2; continue
+        if a[i] == '--target' and i + 1 < len(a):
+            target = a[i + 1]; i += 2; continue
+        if a[i] == '--round' and i + 1 < len(a):
+            r, _, d = a[i + 1].partition('=')
+            if not (r.isdigit() and DATE_RE.match(d)):
+                sys.exit(f'--round 형식: 141=2027-01-30 (받은 값 {a[i + 1]})')
+            rounds[r] = d; i += 2; continue
+        i += 1
+    if not DATE_RE.match(start or ''):
+        sys.exit('--start YYYY-MM-DD 가 필요합니다')
+    if target != 'auto':
+        if not str(target).isdigit():
+            sys.exit('--target 은 auto 또는 회차 번호')
+        target = int(target)
+    sd = dt.date.fromisoformat(start)
+    el = [x['r'] for x in eligible(sd, rounds)]
+    if target != 'auto' and target not in el:
+        sys.exit(f'제{target}회는 {start} 시작에서 {SCHED["minMonths"]}개월이 안 됩니다. 고를 수 있는 회차: {el[:6]}')
+    save(p('pipeline', 'plan.json'), {'note': '앱 더보기 → 시험 일정과 같은 값. set-plan 명령으로만 바꾼다.', 'start': start, 'target': target, 'rounds': rounds})
+    PLAN = compute_plan()
+    START, EXAM = PLAN['start'], PLAN['target']['d']
+    MOCK = PLAN['mock']['d'] if PLAN['mock'] else None
+    TR = PLAN['target']['r']
+    MR = PLAN['mock']['r'] if PLAN['mock'] else None
+    idx = index()
+    idx['plan'] = plan_sig()
+    idx['updated'] = now_iso()
+    save(p('data', 'index.json'), idx)
+    print_plan()
+    print('\n주차 지도(실제 주차 → 내용):')
+    for a2 in range(PLAN['E'] + 1):
+        wk = week_obj(a2)
+        r0 = START + dt.timedelta(weeks=a2)
+        print(f'  {a2:>2}주차 {r0.month}/{r0.day} 단계{phase_of(a2)} {wk["title"]}' + (f' [{",".join(map(str, wk["u"]))}]' if wk.get('u') else ''))
+    print('\n다음: git add -A && git commit -m "일정: ' + start + f' 시작, 제{TR}회 목표" && git fetch origin main && git rebase origin/main && git push origin HEAD:main')
     return 0
 
 
@@ -937,6 +1177,8 @@ def main():
         return cmd_link(a[1], a[2])
     if c == 'status':
         return cmd_status()
+    if c == 'set-plan':
+        return cmd_set_plan(a[1:])
     if c == 'kds' and len(a) > 1:
         return cmd_kds(a[1], a[2:])
     if c == 'law' and len(a) > 1:
