@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "Gisulsa6",
+    "slug": "gisulsa-6",
+    "version": "2.2.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon-1024.png",
+    "userInterfaceStyle": "automatic",
+    "platforms": [
+      "ios"
+    ],
+    "ios": {
+      "bundleIdentifier": "io.github.wooslee94.gisulsa",
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "CFBundleDisplayName": "기술사 6개월",
+        "CFBundleDevelopmentRegion": "ko",
+        "CFBundleAllowMixedLocalizations": true
+      }
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icon-1024.png",
+          "imageWidth": 120,
+          "backgroundColor": "#EEF1F4",
+          "dark": {
+            "image": "./assets/icon-1024.png",
+            "backgroundColor": "#0E1319"
+          }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "enableRemoteNotifications": false
+        }
+      ]
+    ]
+  }
+}

@@ -7,3 +7,17 @@ android/
 *.ipa
 *.apk
 .env*
+# 자동 생성(scripts/build-web.js)
+native/webBundle.js
+# Metro·디버그
+.metro-health-check*
+npm-debug.*
+expo-env.d.ts
+# 인증서·키(올리지 않는다)
+*.p8
+*.p12
+*.key
+*.pem
+*.jks
+*.mobileprovision
+credentials.json

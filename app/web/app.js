@@ -1,5 +1,5 @@
 /* 기술사 6개월 v2 — 토목시공기술사 독학 앱
-   서버 없음: 학습 기록은 이 기기(localStorage)에만 저장하고,
+   서버 없음: 학습 기록은 이 기기(웹은 localStorage, 아이폰 앱은 네이티브 저장소 — bridge.js의 PE_IO)에만 저장하고,
    매일 세트·주간 모의고사는 GitHub 저장소의 정적 JSON을 받아 온다. */
 (function(){
 'use strict';
@@ -14,7 +14,7 @@ const INTERVALS=[0,1,3,7,14,30,60];
 const REVIEW_STEPS=[1,3,7,14,30];
 const KEY='pe_state_v1', SKEY='pe_sets_v1';
 const DATA_DEFAULT='https://raw.githubusercontent.com/woos-lee94/gisulsa-data/main/data/';
-const APP_VER='2.1.0';
+const APP_VER='2.2.0';
 const PLAN_START=(window.PE_EXAM&&PE_EXAM.defaults.start)||'2026-10-19';
 
 const IC={
@@ -48,14 +48,14 @@ const icon=(n)=>`<svg viewBox="0 0 24 24" aria-hidden="true">${IC[n]||''}</svg>`
 function fresh(){return{v:2,settings:{start:PLAN_START,target:'auto',roundDates:{},exam:'',mock:'',newPerDay:10,theme:'auto',fs:'m',dataUrl:''},
   cards:{},userCards:[],userEssays:[],essayStat:{},checks:{},log:[],hidden:{},daily:{},lastMock:null,created:todayStr(),
   sp:{},qp:{},wrong:{},sync:{},mockp:{}};}
-function load(){try{const r=localStorage.getItem(KEY);if(r){const s=JSON.parse(r);const f=fresh();for(const k in f){if(s[k]===undefined||s[k]===null&&k!=='lastMock')s[k]=f[k];}s.settings=Object.assign({},f.settings,s.settings||{});if(!s.settings.roundDates||typeof s.settings.roundDates!=='object')s.settings.roundDates={};if(!s.settings.target)s.settings.target='auto';s.v=2;return s;}}catch(e){}return fresh();}
-function loadSets(){try{const r=localStorage.getItem(SKEY);if(r){const o=JSON.parse(r);return Object.assign({sets:{},mocks:{},kichul:null,index:null,plan:null},o);}}catch(e){}return{sets:{},mocks:{},kichul:null,index:null,plan:null};}
+function load(){try{const r=PE_IO.get(KEY);if(r){const s=JSON.parse(r);const f=fresh();for(const k in f){if(s[k]===undefined||s[k]===null&&k!=='lastMock')s[k]=f[k];}s.settings=Object.assign({},f.settings,s.settings||{});if(!s.settings.roundDates||typeof s.settings.roundDates!=='object')s.settings.roundDates={};if(!s.settings.target)s.settings.target='auto';s.v=2;return s;}}catch(e){}return fresh();}
+function loadSets(){try{const r=PE_IO.get(SKEY);if(r){const o=JSON.parse(r);return Object.assign({sets:{},mocks:{},kichul:null,index:null,plan:null},o);}}catch(e){}return{sets:{},mocks:{},kichul:null,index:null,plan:null};}
 let S=load(); let SETS=loadSets();
 let saveT=null,saveT2=null;
-function save(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){toast('저장 공간이 부족해요. 더보기 → 백업에서 정리하세요');}},60);}
-function saveSets(){clearTimeout(saveT2);saveT2=setTimeout(()=>{try{localStorage.setItem(SKEY,JSON.stringify(SETS));}catch(e){toast('세트 저장 공간이 부족해요');}},60);}
-function flush(){try{localStorage.setItem(KEY,JSON.stringify(S));localStorage.setItem(SKEY,JSON.stringify(SETS));}catch(e){}}
-window.addEventListener('pagehide',flush);
+function save(){clearTimeout(saveT);saveT=setTimeout(()=>{try{PE_IO.set(KEY,JSON.stringify(S));}catch(e){toast('저장 공간이 부족해요. 더보기 → 백업에서 정리하세요');}},60);}
+function saveSets(){clearTimeout(saveT2);saveT2=setTimeout(()=>{try{PE_IO.set(SKEY,JSON.stringify(SETS));}catch(e){toast('세트 저장 공간이 부족해요');}},60);}
+function flush(){clearTimeout(saveT);clearTimeout(saveT2);try{PE_IO.set(KEY,JSON.stringify(S));PE_IO.set(SKEY,JSON.stringify(SETS));}catch(e){}}
+PE_IO.onHide(flush);
 
 /* ════════ 2. 날짜 ════════ */
 function fmt(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -200,7 +200,7 @@ function latestMockDate(){const ks=Object.keys(SETS.mocks).sort();return ks.leng
 /* ════════ 9. 동기화 ════════ */
 let syncing=false;
 function dataBase(){let u=(S.settings.dataUrl||'').trim()||DATA_DEFAULT;if(!/\/$/.test(u))u+='/';return u;}
-async function getJSON(url){const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}
+function getJSON(url){return PE_IO.fetchJSON(url);}
 async function sync(force){
   if(syncing)return;const now=Date.now();if(!force&&S.sync&&S.sync.last&&now-S.sync.last<8*60*1000)return;
   syncing=true;paintSyncBits();const got={sets:0,mocks:0,k:0};
@@ -586,7 +586,7 @@ function vSettings(){const s=S.settings;
   <label class="f" for="sNew">하루 새 카드 수(암기 탭)</label><input class="in" type="number" inputmode="numeric" id="sNew" value="${s.newPerDay}">
   <details class="d" style="margin-top:16px"><summary>고급: 데이터 주소</summary><div class="in-d">
     <label class="f" for="sData">데이터 주소</label><input class="in" id="sData" value="${esc(s.dataUrl)}" placeholder="${esc(DATA_DEFAULT)}"><p class="note">비워 두면 기본 저장소(gisulsa-data)에서 받아 와요.</p></div></details>
-  <div class="btns" style="margin-top:16px"><button class="btn" data-act="save-settings">저장</button></div>`;}
+  <div class="btns" style="margin-top:16px"><button class="btn" data-act="save-settings">저장</button></div>${PE_IO.settingsHTML()}`;}
 function vBackup(){return topbar('백업')+`<h1 class="ptitle">백업·복원</h1><p class="lsub">학습 기록은 이 기기에만 있어요. 1~2주에 한 번 메모나 메일에 붙여 두세요.</p>
   <div class="btns" style="margin-top:14px"><button class="btn" data-act="backup-copy">백업 복사</button><button class="btn sec" data-act="backup-dl">파일로 저장</button></div>
   <label class="f">복원(백업 내용 붙여넣기)</label><textarea class="in" id="restoreText" placeholder='{"v":2,...}'></textarea>
@@ -598,17 +598,17 @@ function vAbout(){const cs=deck();const n={base:0,kichul:0,set:0,user:0};cs.forE
   <p class="note">틀린 내용을 찾으면 그 카드에서 숨기기를 하고, Claude에 고친 카드를 만들어 달라고 해 가져오기로 넣으세요.</p>`;}
 
 /* ════════ 18. 타이머 ════════ */
-const TM={preset:'essay',total:6000,parts:4,endAt:0,remain:6000,running:false,iv:null,lastPart:-1,lock:null,custom:100};
+const TM={preset:'essay',total:6000,parts:4,endAt:0,remain:6000,running:false,iv:null,lastPart:-1,custom:100};
 const PRESETS={p1:{n:'1교시 단답',total:100,parts:10},essay:{n:'논술 교시',total:100,parts:4},one1:{n:'단답 1문',total:10,parts:1},one2:{n:'논술 1문',total:25,parts:1},custom:{n:'직접',total:0,parts:1}};
-function setPreset(k){TM.preset=k;const p=PRESETS[k];TM.total=(k==='custom'?TM.custom:p.total)*60;TM.parts=p.parts;TM.remain=TM.total;TM.running=false;TM.lastPart=-1;clearInterval(TM.iv);}
-function beep(long){try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;TM.ac=TM.ac||new A();const o=TM.ac.createOscillator(),g=TM.ac.createGain();o.connect(g);g.connect(TM.ac.destination);o.frequency.value=long?660:880;g.gain.value=.15;o.start();o.stop(TM.ac.currentTime+(long?.9:.25));}catch(e){}}
+function setPreset(k){TM.preset=k;const p=PRESETS[k];TM.total=(k==='custom'?TM.custom:p.total)*60;TM.parts=p.parts;TM.remain=TM.total;TM.running=false;TM.lastPart=-1;clearInterval(TM.iv);PE_IO.keepAwake(false);}
+function beep(long){try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;TM.ac=TM.ac||new A();if(TM.ac.state!=='running'&&TM.ac.resume)TM.ac.resume().catch(()=>{});const o=TM.ac.createOscillator(),g=TM.ac.createGain();o.connect(g);g.connect(TM.ac.destination);o.frequency.value=long?660:880;g.gain.value=.15;o.start();o.stop(TM.ac.currentTime+(long?.9:.25));}catch(e){}}
 function partIdx(){const per=TM.total/TM.parts;return Math.min(TM.parts,Math.floor((TM.total-TM.remain)/per)+1);}
 function tStart(){if(TM.running)return;if(TM.remain<=0)TM.remain=TM.total;TM.endAt=Date.now()+TM.remain*1000;TM.running=true;beep(false);
-  if(navigator.wakeLock&&navigator.wakeLock.request)navigator.wakeLock.request('screen').then(l=>TM.lock=l).catch(()=>{});
+  PE_IO.keepAwake(true);
   TM.iv=setInterval(()=>{TM.remain=Math.max(0,Math.round((TM.endAt-Date.now())/1000));const part=partIdx();if(TM.lastPart>=0&&part!==TM.lastPart&&TM.remain>0){beep(false);toast(part+'번째 문제 시간');}TM.lastPart=part;
-    if(TM.remain<=0){clearInterval(TM.iv);TM.running=false;beep(true);toast('시간 종료');if(TM.lock){TM.lock.release().catch(()=>{});TM.lock=null;}}paintTimer();paintPill();},250);paintTimer();paintPill();}
-function tPause(){if(!TM.running)return;clearInterval(TM.iv);TM.running=false;TM.remain=Math.max(0,Math.round((TM.endAt-Date.now())/1000));if(TM.lock){TM.lock.release().catch(()=>{});TM.lock=null;}paintTimer();paintPill();}
-function tReset(){clearInterval(TM.iv);TM.running=false;TM.remain=TM.total;TM.lastPart=-1;paintTimer();paintPill();}
+    if(TM.remain<=0){clearInterval(TM.iv);TM.running=false;beep(true);toast('시간 종료');PE_IO.keepAwake(false);}paintTimer();paintPill();},250);paintTimer();paintPill();}
+function tPause(){if(!TM.running)return;clearInterval(TM.iv);TM.running=false;TM.remain=Math.max(0,Math.round((TM.endAt-Date.now())/1000));PE_IO.keepAwake(false);paintTimer();paintPill();}
+function tReset(){clearInterval(TM.iv);TM.running=false;PE_IO.keepAwake(false);TM.remain=TM.total;TM.lastPart=-1;paintTimer();paintPill();}
 const mmss=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
 function paintTimer(){const el=$('#timerBox');if(!el)return;const per=TM.total/TM.parts,part=partIdx(),partLeft=Math.max(0,Math.round(per*part-(TM.total-TM.remain)));
   el.className='timer'+(TM.remain<=180&&TM.remain>0?' urgent':'');el.innerHTML=`<div class="big">${mmss(TM.remain)}</div><div class="part">${TM.parts>1?`문제 <b>${part}/${TM.parts}</b>, 이 문제 남은 시간 <b>${mmss(partLeft)}</b>`:`${esc(PRESETS[TM.preset].n)} ${Math.round(TM.total/60)}분`}</div>`;
@@ -639,8 +639,7 @@ function parseEssays(txt){const arr=parseArr(txt)||[];return arr.map(o=>{if(!o||
 
 /* ════════ 21. 공통 동작 ════════ */
 let toastT=null;function toast(m){const el=$('#toast');if(!el)return;el.textContent=m;el.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('on'),2000);}
-function copy(text,msg){const done=()=>toast(msg||'복사했어요');if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done,fallback);}else fallback();
-  function fallback(){const ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done();}catch(e){toast('복사하지 못했어요');}ta.remove();}}
+function copy(text,msg){PE_IO.copy(text).then(()=>toast(msg||'복사했어요'),()=>toast('복사하지 못했어요'));}
 function applyLook(){const s=S.settings;if(!s.theme||s.theme==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',s.theme);if(!s.fs||s.fs==='m')document.documentElement.removeAttribute('data-fs');else document.documentElement.setAttribute('data-fs',s.fs);}
 function promptWith(id,from,to){const p=PE_PROMPTS.find(x=>x.id===id);return p?p.t.replace(from,to):'';}
 
@@ -666,7 +665,7 @@ document.addEventListener('click',e=>{
   case'copy-essay':{const e=SETS.sets[D.d].essay;return copy(promptWith('p1','(여기에 문제를 그대로 적는다)',e.t),'첨삭 요청을 복사했어요. 사진과 함께 Claude 프로젝트에 붙여 넣으세요');}
   case'star':{const p=prog(D.id);p.star=!p.star;save();if($('#modal-wrap').innerHTML){const c=card(D.id);if(c)openModal(cardModal(c));}return R.page==='sess'?render():render();}
   case'introduce':{introduce(D.id);toast('내일 카드 복습에 나와요');closeModal();return render();}
-  case'hide-card':{if(!confirm('이 카드를 숨길까요? 가져오기 화면에서 되돌릴 수 있어요.'))return;S.hidden[D.id]=true;save();invalidate();closeModal();return render();}
+  case'hide-card':return PE_IO.ask('이 카드를 숨길까요? 가져오기 화면에서 되돌릴 수 있어요.',()=>{S.hidden[D.id]=true;save();invalidate();closeModal();render();});
   /* 세션 */
   case'start-due':return startDueAll();
   case'start-study':return startStudy();
@@ -715,7 +714,7 @@ document.addEventListener('click',e=>{
   case'copy-prompt':{const p=PE_PROMPTS.find(x=>x.id===D.id);return copy(fillT(p.t),'프롬프트를 복사했어요');}
   case'imp-cards':{const arr=parseCards($('#impText').value);if(!arr.length)return toast('읽을 수 있는 카드가 없어요');const names=new Set(deck().map(c=>normTerm(c.t)));let n=0,sk=0;arr.forEach(c=>{const k=normTerm(c.t);if(names.has(k)){sk++;return;}S.userCards.push(c);names.add(k);n++;});save();invalidate();toast(`${n}장 추가${sk?`, 중복 ${sk}장 건너뜀`:''}`);return render();}
   case'imp-essays':{const arr=parseEssays($('#impText').value);if(!arr.length)return toast('논술 목차 JSON이 아니에요');const names=new Set(essays().map(x=>x.t));let n=0;arr.forEach(x=>{if(names.has(x.t))return;S.userEssays.push(x);n++;});save();invalidate();toast(`논술 목차 ${n}개 추가`);return render();}
-  case'del-card':if(!confirm('삭제할까요?'))return;S.userCards=S.userCards.filter(c=>c.id!==D.id);save();invalidate();return render();
+  case'del-card':return PE_IO.ask('삭제할까요?',()=>{S.userCards=S.userCards.filter(c=>c.id!==D.id);save();invalidate();render();});
   case'unhide':S.hidden={};save();invalidate();toast('되돌렸어요');return render();
   case'fs':S.settings.fs=D.v;applyLook();save();return render();
   case'theme':S.settings.theme=D.v;applyLook();save();return render();
@@ -727,9 +726,10 @@ document.addEventListener('click',e=>{
   case'sch-round-set':{const r=Number($('#schRound').value),d=$('#schRoundDate').value;if(!r||!/^\d{4}-\d{2}-\d{2}$/.test(d))return toast('회차와 날짜를 고르세요');S.settings.roundDates[r]=d;recalcPlan();save();toast(`제${r}회를 ${d}로 고쳤어요`);return render();}
   case'sch-round-reset':{const r=Number($('#schRound').value);if(!r)return;delete S.settings.roundDates[r];recalcPlan();save();toast(`제${r}회를 예상일로 되돌렸어요`);return render();}
   case'backup-copy':return copy(JSON.stringify({state:S,sets:SETS}),'백업을 복사했어요. 메모 앱에 붙여 두세요');
-  case'backup-dl':{const blob=new Blob([JSON.stringify({state:S,sets:SETS})],{type:'application/json'});const u=URL.createObjectURL(blob);const x=document.createElement('a');x.href=u;x.download='gisulsa-backup-'+todayStr()+'.json';document.body.appendChild(x);x.click();setTimeout(()=>{URL.revokeObjectURL(u);x.remove();},500);return;}
-  case'restore':{try{let j=JSON.parse($('#restoreText').value);let st=j.state||j;if(!st.settings||!st.cards)throw 0;if(!confirm('지금 기록을 덮어씁니다. 계속할까요?'))return;S=Object.assign(fresh(),st);S.settings=Object.assign(fresh().settings,st.settings||{});if(!S.settings.roundDates)S.settings.roundDates={};S.v=2;if(j.sets)SETS=Object.assign({sets:{},mocks:{},kichul:null,index:null,plan:null},j.sets);recalcPlan();flush();invalidate();applyLook();toast('복원했어요');return nav('today');}catch(err){return toast('백업 형식이 아니에요');}}
-  case'reset':{if(!confirm('모든 학습 기록과 내 카드를 지웁니다. 초기화할까요?'))return;if(!confirm('마지막 확인: 백업을 복사해 두었나요?'))return;S=fresh();SETS={sets:{},mocks:{},kichul:null,index:null,plan:null};recalcPlan();flush();invalidate();applyLook();nav('today');toast('초기화했어요');return sync(true);}
+  case'backup-dl':{PE_IO.saveFile('gisulsa-backup-'+todayStr()+'.json',JSON.stringify({state:S,sets:SETS})).catch(()=>toast('파일로 저장하지 못했어요'));return;}
+  case'restore':{let j,st;try{j=JSON.parse($('#restoreText').value);st=j.state||j;if(!st.settings||!st.cards)throw 0;}catch(err){return toast('백업 형식이 아니에요');}
+    return PE_IO.ask('지금 기록을 덮어씁니다. 계속할까요?',()=>{try{S=Object.assign(fresh(),st);S.settings=Object.assign(fresh().settings,st.settings||{});if(!S.settings.roundDates)S.settings.roundDates={};S.v=2;if(j.sets)SETS=Object.assign({sets:{},mocks:{},kichul:null,index:null,plan:null},j.sets);recalcPlan();flush();invalidate();applyLook();toast('복원했어요');nav('today');}catch(err){toast('백업 형식이 아니에요');}});}
+  case'reset':return PE_IO.ask('모든 학습 기록과 내 카드를 지웁니다. 초기화할까요?',()=>PE_IO.ask('마지막 확인: 백업을 복사해 두었나요?',()=>{S=fresh();SETS={sets:{},mocks:{},kichul:null,index:null,plan:null};recalcPlan();flush();invalidate();applyLook();nav('today');toast('초기화했어요');sync(true);}));
   }
 });
 document.addEventListener('change',e=>{if(e.target.id==='rangeSel'){S.range=e.target.value;save();render();}
@@ -741,7 +741,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){sync(fals
 window.addEventListener('online',()=>sync(true));
 
 /* ════════ 23. 시작 ════════ */
-recalcPlan();applyLook();setPreset('essay');R=parseHash();
+PE_IO.init({toast});recalcPlan();applyLook();setPreset('essay');R=parseHash();
 if(!location.hash)history.replaceState(null,'','#today');
 render();sync(true);
 window.__pe={S:()=>S,SETS:()=>SETS,PLAN:()=>PLAN,computePlan,roundList,sync,deck,essays,kq,clozeTokens,render,invalidate,startSession};

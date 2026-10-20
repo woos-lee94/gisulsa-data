@@ -81,7 +81,20 @@
 
 ## 앱 폴더
 
-- `web/`: 지금 배포 중인 웹앱 원본(v2.1.0)
+- `web/`: 웹앱 원본(v2.2.0, 네이티브 다리 포함). Netlify에도 이 폴더를 그대로 올린다
 - `tests/`: jsdom 회귀 검사와 가짜 저장소(`tests/fake/data`)
 - `assets/icon-1024.png`: iOS 앱 아이콘
 - 자료 형식은 `../pipeline/spec_set.md`, `../pipeline/spec_mock.md`, 실제 자료는 `../data/`
+
+## 지금 구현(Expo SDK 58, react-native-webview)
+
+- `web/bridge.js`: 네이티브 다리 `PE_IO`. `app.js`는 저장(`get`·`set`·`onHide`)·복사·파일 저장·확인 창(`ask`)·화면 켜 두기·받아 오기를 모두 이것으로 부른다. `window.PE_NATIVE`가 없으면 예전 브라우저 동작 그대로다.
+  - 확인 창: react-native-webview의 기본 `confirm()` 창은 제목 없이 "Ok/Cancel"(영문)로 떠서, 앱에서는 네이티브 Alert(취소·확인)로 잇는다.
+  - 설정 화면 맨 아래 "알림" 칸은 앱에서만 보인다(`PE_IO.settingsHTML()`). 알림 설정은 백업 JSON에 넣지 않고 앱 저장소에 따로 둔다.
+- `App.js`: WebView를 화면 전체로 띄우고 `native/host.js`로 메시지를 처리한다. 바깥 주소는 사파리로 열고, 웹뷰 프로세스가 꺼지면 최신 기록을 넣어 다시 띄운다.
+- `native/host.js`: 페이지와 주고받는 규칙(순수 JS, Node 검사에서도 쓴다). `native/files.js`: 웹 파일 풀기·학습 기록 저장(Documents/store/*.json)·백업 내보내기. `native/notify.js`: 로컬 알림.
+- `scripts/build-web.js`: `web/`을 `native/webBundle.js`(자동 생성, git 제외)로 묶고 Pretendard CDN 링크를 앱에 넣은 `assets/fonts/PretendardVariable.woff2`(OFL)로 바꾼다. `npm install`(postinstall)과 `npm start` 때 돈다. `web/`을 고친 뒤 앱 빌드에는 따로 할 일이 없다.
+- `app.json`: Xcode 프로젝트 이름은 한글이 빠지면 "6"이 되므로 `name`은 `Gisulsa6`, 홈 화면 이름은 `ios.infoPlist.CFBundleDisplayName` "기술사 6개월". 원격 푸시를 쓰지 않으므로 `expo-notifications`의 `enableRemoteNotifications: false`(푸시 권한 없음).
+- `eas.json`: `production` 프로필(스토어 배포 → TestFlight), 빌드 번호는 EAS가 올린다(`appVersionSource: remote`).
+- 검사: `npm i -D jsdom && node tests/app.test.js`(웹), `node tests/native.test.js`(앱 묶음 + PE_NATIVE + host.js를 가짜 기기 기능으로). 둘 다 `npm test`.
+- 실기기에서 아직 확인할 것: 위 "받아들이는 기준 2". 특히 무음 모드에서 타이머 알림음(웹 오디오는 무음 스위치를 따른다), 알림 권한 묻기, 공유 시트의 "파일에 저장".

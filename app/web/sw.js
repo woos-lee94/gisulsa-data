@@ -1,9 +1,9 @@
 /* 기술사 6개월 — 오프라인용 서비스 워커. 파일을 고쳐 올릴 때 VERSION과 ?v= 값을 함께 올린다. */
-const VERSION = 'v4-2026-10-20';
+const VERSION = 'v5-2026-10-20';
 const CACHE = 'gisulsa-' + VERSION;
 const FONT_CACHE = 'gisulsa-font-v1';
-const ASSETS = ['./', './index.html', './styles.css?v=4', './app.js?v=4', './data_cards.js?v=4', './data_cards_k.js?v=4',
-  './data_essays.js?v=4', './data_kichul.js?v=4', './data_plan.js?v=4', './manifest.webmanifest',
+const ASSETS = ['./', './index.html', './styles.css?v=5', './bridge.js?v=5', './app.js?v=5', './data_cards.js?v=5', './data_cards_k.js?v=5',
+  './data_essays.js?v=5', './data_kichul.js?v=5', './data_plan.js?v=5', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
