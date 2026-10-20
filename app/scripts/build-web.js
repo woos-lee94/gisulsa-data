@@ -1,5 +1,5 @@
-// web/ 웹앱을 아이폰 앱에 넣을 모듈(native/webBundle.js)로 묶는다. npm install(postinstall)과 npm start 때 자동으로 돈다.
-// index.html이 읽는 스크립트·스타일을 그대로 담고, 앱 안에서는 Pretendard 웹폰트를 CDN 대신 앱에 넣은 파일로 읽게 바꾼다.
+// web/ 화면 파일을 아이폰 앱에 넣을 모듈(native/webBundle.js)로 묶는다. npm install(postinstall)과 npm start 때 자동으로 돈다.
+// index.html이 읽는 스크립트·스타일을 그대로 담는다. 글꼴(PretendardVariable.woff2)은 앱이 시작할 때 이 파일들 옆에 복사한다.
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -19,14 +19,8 @@ function build() {
   });
   if (!files['app.js'] || !files['bridge.js']) throw new Error('index.html에서 app.js·bridge.js를 찾지 못했어요');
 
-  // 웹폰트: CDN → 앱에 넣은 PretendardVariable.woff2(앱이 시작할 때 이 파일들 옆에 복사한다)
-  const cdn = /<link rel="stylesheet" href="https:\/\/cdn\.jsdelivr\.net\/gh\/orioncactus\/pretendard[^"]*">/;
-  if (!cdn.test(html)) throw new Error('index.html에서 Pretendard CDN 링크를 찾지 못했어요');
-  html = html.replace(cdn, '<style>@font-face{font-family:"Pretendard Variable";font-weight:45 920;font-style:normal;font-display:swap;src:url(PretendardVariable.woff2) format("woff2-variations"),url(PretendardVariable.woff2) format("woff2")}</style>');
-  // 앱 안에서 쓰지 않는 것: CDN 미리 연결, PWA 설치용 매니페스트·아이콘
-  html = html
-    .replace(/<link rel="preconnect" href="https:\/\/cdn\.jsdelivr\.net"[^>]*>\n?/, '')
-    .replace(/<link rel="(manifest|apple-touch-icon|icon)" [^>]*>\n?/g, '');
+  if (!/url\(PretendardVariable\.woff2\)/.test(files['styles.css'] || '')) throw new Error('styles.css에 Pretendard @font-face가 없어요');
+  if (/https?:\/\//.test(html.replace(/<!--[\s\S]*?-->/g, ''))) throw new Error('index.html이 바깥 주소를 읽어요. 앱은 인터넷 없이 열려야 해요');
   files['index.html'] = html;
 
   const h = crypto.createHash('sha256');

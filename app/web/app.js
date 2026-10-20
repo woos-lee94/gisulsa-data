@@ -1,5 +1,5 @@
 /* 기술사 6개월 v2 — 토목시공기술사 독학 앱
-   서버 없음: 학습 기록은 이 기기(웹은 localStorage, 아이폰 앱은 네이티브 저장소 — bridge.js의 PE_IO)에만 저장하고,
+   서버 없음: 학습 기록은 이 휴대폰(앱의 네이티브 저장소, 브라우저로 열 때는 localStorage — bridge.js의 PE_IO)에만 저장하고,
    매일 세트·주간 모의고사는 GitHub 저장소의 정적 JSON을 받아 온다. */
 (function(){
 'use strict';
@@ -526,7 +526,7 @@ function vMore(){const s=S.sync||{};const rp=repoPlanState();
   ${sec('공부 도구','',`<div class="group">${row({ic:'cal',t:PLAN.E+'주 로드맵',d:'단계·주차별 목표와 학원 대체표',act:'go',data:{h:'plan'}})}${row({ic:'pen',t:'논술 답안 작성 요령',d:'모범 답안으로 보는 답안지 쓰는 법',act:'go',data:{h:'guide'}})}${row({ic:'timer',t:'교시 타이머',d:'100분, 문제 경계마다 알림',act:'go',data:{h:'timer'}})}${row({ic:'chat',t:'Claude 프롬프트',d:'첨삭·카드 생성·주간 리포트 등 10개',act:'go',data:{h:'prompts'}})}</div>`)}
   ${sec('데이터','',`<div class="group">${row({ic:'sync',t:'지금 받아 오기',d:syncing?'받아 오는 중…':s.last?(s.ok?'마지막 확인 '+hhmm(s.last):'마지막 시도 실패'):'아직 받아 오지 않았어요',act:'sync'})}${row({ic:'imp',t:'카드·목차 가져오기',d:'Claude가 만든 JSON 붙여넣기',act:'go',data:{h:'imp'}})}${row({ic:'save',t:'백업·복원',act:'go',data:{h:'backup'}})}</div>`)}
   ${sec('앱','',`<div class="group">${row({ic:'gear',t:'설정',d:'하루 새 카드 수, 글자 크기, 테마',act:'go',data:{h:'settings'}})}${row({ic:'info',t:'콘텐츠 출처',d:'카드·기출·세트가 어디서 왔는지',act:'go',data:{h:'about'}})}</div>`)}
-  <p class="note">홈 화면에 추가해 쓰세요: Safari 공유 버튼 → 홈 화면에 추가. 기록은 이 기기에만 저장돼요.</p>`;}
+  <p class="note">기록은 이 휴대폰에만 저장돼요. 1~2주에 한 번 백업해 두세요.</p>`;}
 function vPlan(){const t=todayStr(),cw=weekIndex(),E=PLAN.E,ms=milestones();
   const groups=PE_PHASES.map(p=>({p,ws:[]}));for(let a=0;a<=E;a++){const o=weekObj(a);const g=groups.find(x=>x.p.id===o.ph)||groups[1];g.ws.push(o);}
   return topbar('로드맵')+`<h1 class="ptitle">${E}주 로드맵</h1><p class="lsub">${esc(korDate(PLAN.start))} 시작 → 제${PLAN.target.r}회 필기 ${esc(PLAN.target.d)}${esc(estTag(PLAN.target))}${PLAN.mock?`, 실전 모의 제${PLAN.mock.r}회`:''}. 1단계 단원 순서는 최근 기출 13회분(제128~140회) 출제 비중을 따라 짰어요.</p>

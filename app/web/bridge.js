@@ -1,6 +1,6 @@
 /* 기술사 6개월 — 네이티브 다리(PE_IO)
-   아이폰 앱(Expo WebView)은 페이지보다 먼저 window.PE_NATIVE를 넣어 준다. 있으면 앱 기능을, 없으면(웹앱·PWA) 지금까지 쓰던 브라우저 기능을 쓴다.
-   app.js는 저장·복사·파일 저장·확인 창·화면 켜 두기·받아 오기를 모두 여기로 부른다. 같은 web/ 코드가 Netlify와 아이폰 앱 양쪽에서 돈다. */
+   아이폰 앱(Expo WebView)은 페이지보다 먼저 window.PE_NATIVE를 넣어 준다. 있으면 앱 기능을 쓰고, 없으면(브라우저로 열 때·jsdom 검사) 브라우저 기능을 쓴다.
+   app.js는 저장·복사·파일 저장·확인 창·화면 켜 두기·받아 오기를 모두 여기로 부른다. */
 (function(){
 'use strict';
 const N=window.PE_NATIVE||null;

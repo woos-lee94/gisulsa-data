@@ -1,5 +1,7 @@
 /* 기술사 6개월 v2 — 가독성 중심 디자인
    색 원칙: 청색=행동, 형광=외울 것(키워드·수치), 빨강=오답, 초록=정답. 그 밖의 색은 쓰지 않는다. */
+/* 글꼴: 앱이 시작할 때 assets/fonts/PretendardVariable.woff2(OFL)를 이 파일 옆에 복사한다(인터넷 없이). 브라우저로 web/을 바로 열면 기본 글꼴로 보인다. */
+@font-face{font-family:"Pretendard Variable";font-weight:45 920;font-style:normal;font-display:swap;src:url(PretendardVariable.woff2) format("woff2-variations"),url(PretendardVariable.woff2) format("woff2")}
 :root{
   --paper:#EEF1F4; --sheet:#FFFFFF; --ink:#172231; --ink2:#4D5B6E; --ink3:#7A8798;
   --rule:#D9DFE7; --rule2:#E9EDF2;
