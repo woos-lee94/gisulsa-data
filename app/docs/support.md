@@ -33,7 +33,7 @@ iPhone이 무음 모드이면 알림음이 나지 않을 수 있습니다. 무�
 
 ## 문의
 
-[GitHub 이슈](https://github.com/woos-lea94/gisulsa-data/issues)에 남겨 주세요(GitHub 계정이 필요합니다).
+[GitHub 이슈](https://github.com/woos-lee94/gisulsa-data/issues)에 남겨 주세요(GitHub 계정이 필요합니다).
 
 ## 개인정보
 

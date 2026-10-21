@@ -73,11 +73,11 @@
 ## 지원 URL · 개인정보 처리방침 URL
 
 ```
-https://github.com/woos-lea94/gisulsa-data/blob/main/app/docs/support.md
+https://github.com/woos-lee94/gisulsa-data/blob/main/app/docs/support.md
 ```
 
 ```
-https://github.com/woos-lea94/gisulsa-data/blob/main/app/docs/privacy.md
+https://github.com/woos-lee94/gisulsa-data/blob/main/app/docs/privacy.md
 ```
 
 저장소가 공개일 때만 열린다(앱의 매일 세트 받아 오기도 저장소가 공개여야 된다). 마케팅 URL은 비워 둔다.

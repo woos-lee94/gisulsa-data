@@ -37,7 +37,7 @@ eas env:list production
 새 네이티브 모듈(expo-secure-store)이 들어가서 새로 빌드해야 한다. 평소 순서 그대로(`npm ci`가 새 모듈을 받는다).
 
 ```powershell
-git clone https://github.com/woos-lea94/gisulsa-data.git
+git clone https://github.com/woos-lee94/gisulsa-data.git
 cd gisulsa-data
 git stash
 git checkout main
