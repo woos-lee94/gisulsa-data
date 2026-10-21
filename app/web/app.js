@@ -252,6 +252,35 @@ function glHTML(text,selfId){const s=String(text||'');if(S.settings.gloss==='off
   for(const h of hits){out+=esc(s.slice(p,h.i))+`<span class="gl${glKnown(h.id)?' k':''}" data-gl="${esc(h.id)}">${esc(s.substr(h.i,h.len))}</span>`;p=h.i+h.len;}
   return out+esc(s.slice(p));}
 
+/* 내장 용어 사전(data_gloss.js의 PE_GLOSS): 카드에 없는 낱말의 짧은 풀이(AI 작성). 꾹 누른 낱말은 카드 → 사전 → 바깥 사전 찾기 순서 */
+const GLOSS=(window.PE_GLOSS&&window.PE_GLOSS.w)||{};
+const GL_JOSA=['으로부터','에서부터','으로써','으로서','에서는','에서도','에서의','으로의','으로는','으로도','이므로','하므로','에서','에는','에도','으로','이며','이고','이나','이다','에게','처럼','보다','까지','부터','마다','과의','와의','만큼','이란','란','은','는','을','를','의','에','로','와','과','이','가','도','만'];
+const GL_END=['시킨다','시키는','시켜','한다','하는','하여','하고','하며','하면','해야','해서','했다','하지','하기','되는','된다','되어','되고','되며','되면','될','된','할','함','됨','하다','되다','적인','적으로','적'];
+/* 사전 낱말을 만들 때와 같은 방식으로 조사·어미를 뗀다 */
+function glStem(w){w=String(w||'');if(!/^[가-힣]+$/.test(w))return w;
+  for(let r=0;r<2;r++){for(const j of GL_JOSA)if(w.length-j.length>=2&&w.endsWith(j)){w=w.slice(0,-j.length);break;}for(const e of GL_END)if(w.length-e.length>=2&&w.endsWith(e)){w=w.slice(0,-e.length);break;}}return w;}
+/* 낱말 → {t:'card',id} | {t:'gloss',w,d} | {t:'none',w}. 그대로·조사 뗀 꼴, 다음엔 붙여 쓴 말의 가장 긴 조각(흙막이벽체 → 흙막이) */
+/* 조사·어미를 하나씩 떼며 나온 꼴(긴 것부터): 가물막이를 → 가물막이 → 가물막 */
+function glForms(w){const out=[w];if(!/^[가-힣]+$/.test(w))return out;let x=w;
+  for(let r=0;r<4;r++){let y=x;for(const j of GL_JOSA)if(y.length-j.length>=2&&y.endsWith(j)){y=y.slice(0,-j.length);break;}
+    if(y===x)for(const e of GL_END)if(y.length-e.length>=2&&y.endsWith(e)){y=y.slice(0,-e.length);break;}if(y===x)break;out.push(y);x=y;}return out;}
+/* 사전 값은 "풀이" 또는 ["표제어","풀이"](키가 조사 떼기로 줄어든 꼴일 때, 예: 가물막 → 가물막이) */
+function glossEntry(k){const v=GLOSS[k];return Array.isArray(v)?{w:v[0],d:v[1]}:{w:k,d:v};}
+function glLookup(raw){const w=String(raw||'').trim();if(!w)return null;const m=glIdx().m;
+  const tryW=x=>m.has(x)?{t:'card',id:m.get(x)}:Object.prototype.hasOwnProperty.call(GLOSS,x)?Object.assign({t:'gloss'},glossEntry(x)):null;
+  const st=glStem(w);let r=null;for(const x of glForms(w).concat(st,/^[a-z]/i.test(w)?[w.toUpperCase()]:[])){r=tryW(x);if(r)return r;}
+  /* 붙여 쓴 말: 앞·뒤 조각 중 가장 긴 것(카드 이름은 2자, 사전 낱말은 3자 이상) */
+  if(/^[가-힣]+$/.test(st))for(let n=st.length-1;n>=2;n--)for(const x of[st.slice(0,n),st.slice(st.length-n)]){r=tryW(x);if(r&&(r.t==='card'||n>=3))return r;}
+  return{t:'none',w:st||w};}
+/* 화면 좌표의 낱말(꾹 누른 자리). WebKit의 caretRangeFromPoint로 글자 위치를 찾는다 */
+function glWordAt(x,y){const r=document.caretRangeFromPoint?document.caretRangeFromPoint(x,y):null;const n=r&&r.startContainer;if(!n||n.nodeType!==3)return'';
+  const t=n.data,isW=ch=>/[가-힣A-Za-z0-9]/.test(ch||'');let a=r.startOffset;if(!isW(t[a])&&isW(t[a-1]))a--;if(!isW(t[a]))return'';
+  let b=a;while(a>0&&isW(t[a-1]))a--;while(b<t.length&&isW(t[b]))b++;const w=t.slice(a,b);return/^[0-9]+$/.test(w)?'':w;}
+function glossSheet(w,d){const q=encodeURIComponent(w);
+  return`<div class="sheet" style="margin-top:4px"><p class="sheet-k">${d?'용어 풀이':'앱 사전에 없는 낱말'}</p><h3>${esc(w)}</h3>${d?`<p class="defn ruled" style="margin-top:10px">${glHTML(d,'')}</p><p class="note">앱에 넣어 둔 짧은 풀이예요(AI 작성). 시험 전에 교재로 한 번 더 확인하세요.</p>`:`<p class="note" style="margin-top:8px">카드와 앱 사전에 없는 낱말이에요. 아래에서 찾아볼 수 있어요(인터넷 필요).</p>`}</div>
+  <div class="btns"><a class="btn sec" target="_blank" rel="noopener" href="https://ko.dict.naver.com/#/search?query=${q}">국어사전</a><a class="btn sec" target="_blank" rel="noopener" href="https://terms.naver.com/search.naver?query=${q}">지식백과</a></div>`;}
+function glOpen(raw){const r=glLookup(raw);if(!r)return false;if(r.t==='card'){const c=card(r.id);if(!c)return false;openModal(cardModal(c));return true;}openModal(glossSheet(r.w,r.t==='gloss'?r.d:''));return true;}
+
 /* ════════ 8. 세트 진행·다시 보기 ════════ */
 function sp(d){return S.sp[d]||(S.sp[d]={read:{},quiz:{},tasks:{},essay:{},rev:{}});}
 function spGet(d){return S.sp[d]||{read:{},quiz:{},tasks:{},essay:{},rev:{}};}
@@ -366,7 +395,7 @@ function vSet(){const d=R.a;const s=SETS.sets[d];
         ${sc.plus?`<p class="plus">${esc(sc.plus)}</p>`:''}${(sc.field||(c&&c.field))?`<p class="field">현장: ${esc(sc.field||c.field)}</p>`:''}
         ${c&&c.x&&c.x.length?`<p class="xref">기출 <b>${c.x.length}회</b> 출제: ${c.x.map(kLabelShort).join(', ')}</p>`:''}${(sc.basis||(c&&c.basis))?`<p class="xref">근거: ${esc(sc.basis||c.basis)}</p>`:''}
         ${c?`<div class="btns"><button class="btn sm sec" data-act="star" data-id="${c.id}">${pget(c.id).star?'★ 별표 해제':'☆ 별표'}</button><span class="note" style="margin:auto 0">${unitName(c.u)}</span></div>`:''}</div>`:''}</div>`;}).join('')
-      +`<div class="btns"><button class="btn sec" data-act="set-flash" data-d="${d}">카드로 넘겨 보며 외우기</button><button class="btn sec" data-act="start-fill" data-d="${d}">빈칸 쓰기</button></div><p class="note">펼쳐 읽은 용어는 내일 카드 복습으로 다시 나와요.${S.settings.gloss==='off'?'':' 설명 속 형광펜 낱말은 꾹 누르면 그 용어 설명이 나와요.'}</p>`;}
+      +`<div class="btns"><button class="btn sec" data-act="set-flash" data-d="${d}">카드로 넘겨 보며 외우기</button><button class="btn sec" data-act="start-fill" data-d="${d}">빈칸 쓰기</button></div><p class="note">펼쳐 읽은 용어는 내일 카드 복습으로 다시 나와요. 모르는 낱말은 꾹 누르면 풀이가 나와요.</p>`;}
   else if(tab==='quiz'){body=(s.quiz||[]).map((q,i)=>quizBlock(d,i,q,p.quiz[i])).join('')||'<div class="empty">이 세트엔 퀴즈가 없어요</div>';
     if(st.qa)body+=`<p class="note">${st.qok}/${st.nq} 정답. 틀린 문제는 오답 노트로 갔어요.</p>`;}
   else if(tab==='essay'){const e=s.essay;if(!e)body='<div class="empty">이 세트엔 논술 문제가 없어요</div>';else{const show=SV[d+':eo'];
@@ -664,7 +693,7 @@ function vSettings(){const s=S.settings;
   <div class="group" style="margin-top:12px">${row({ic:'flag',t:'시험 일정',d:`${esc(korDate(s.start))} 시작 → 제${PLAN.target.r}회 ${esc(PLAN.target.d)}${esc(estTag(PLAN.target))}`,act:'go',data:{h:'schedule'}})}</div>
   <label class="f">글자 크기</label><div class="seg">${[['m','보통'],['l','크게'],['xl','아주 크게']].map(x=>`<button class="${(s.fs||'m')===x[0]?'on':''}" data-act="fs" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>
   <label class="f">화면</label><div class="seg">${[['auto','기기 설정 따라'],['light','밝게'],['dark','어둡게']].map(x=>`<button class="${(s.theme||'auto')===x[0]?'on':''}" data-act="theme" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>
-  <label class="f">어려운 낱말 형광펜</label><div class="seg">${[['on','켜기'],['off','끄기']].map(x=>`<button class="${(s.gloss||'on')===x[0]?'on':''}" data-act="gloss" data-v="${x[0]}">${x[1]}</button>`).join('')}</div><p class="note">용어 설명 속 다른 카드 용어에 아직 모르는 것은 형광펜, 아는 것은 점선을 그어요. 꾹 누르면 그 용어 설명이 나와요.</p>
+  <label class="f">어려운 낱말 형광펜</label><div class="seg">${[['on','켜기'],['off','끄기']].map(x=>`<button class="${(s.gloss||'on')===x[0]?'on':''}" data-act="gloss" data-v="${x[0]}">${x[1]}</button>`).join('')}</div><p class="note">용어 설명 속 다른 카드 용어에 아직 모르는 것은 형광펜, 아는 것은 점선을 그어요. 형광펜과 상관없이 모르는 낱말은 꾹 누르면 카드나 앱 사전의 풀이가 나와요.</p>
   <label class="f" for="sNew">하루 새 카드 수(암기 탭)</label><input class="in" type="number" inputmode="numeric" id="sNew" value="${s.newPerDay}">
   <details class="d" style="margin-top:16px"><summary>고급: 데이터 주소</summary><div class="in-d">
     <label class="f" for="sData">데이터 주소</label><input class="in" id="sData" value="${esc(s.dataUrl)}" placeholder="${esc(DATA_DEFAULT)}"><p class="note">비워 두면 기본 저장소(gisulsa-data)에서 받아 와요.</p></div></details>
@@ -779,16 +808,21 @@ function applyLook(){const s=S.settings;if(!s.theme||s.theme==='auto')document.d
 function promptWith(id,from,to){const p=PE_PROMPTS.find(x=>x.id===id);return p?fillT(p.t).replace(from,to):'';}
 
 /* ════════ 22. 이벤트 ════════ */
-/* 형광펜 낱말: 꾹 누르면(0.45초) 그 카드 설명. 데스크톱은 오른쪽 클릭. 누른 뒤 손을 뗄 때 생기는 클릭은 버린다(카드 뒤집기·창 닫기 방지) */
+/* 꾹 누르기(0.45초): 형광펜 낱말은 그 카드, 다른 낱말은 카드 → 앱 사전 → 바깥 사전 찾기. 데스크톱은 오른쪽 클릭.
+   손을 움직이면(스크롤) 취소하고, 누른 뒤 손을 뗄 때 생기는 클릭은 버린다(카드 뒤집기·답 고르기·창 닫기 방지). 입력 칸·버튼·탭은 빼고 */
+const GL_SKIP='input,textarea,select,.btn,nav,.topbar,.seg,label.check';
 let glT=null,glXY=null,glEl=null,glFired=0;
-function glShow(el,touch){const c=card(el.dataset.gl);if(!c)return;if(touch)glFired=Date.now();openModal(cardModal(c));}
+function glAt(target,x,y){if(!target||!target.closest||target.closest(GL_SKIP)||!target.closest('#view,#modal-wrap'))return false;
+  const g=target.closest('.gl');if(g){const c=card(g.dataset.gl);if(c){openModal(cardModal(c));return true;}}
+  const w=glWordAt(x,y);return w?glOpen(w):false;}
 function glCancel(){clearTimeout(glT);glT=null;if(glEl){glEl.classList.remove('press');glEl=null;}}
-document.addEventListener('touchstart',e=>{glCancel();glFired=0;const el=e.target.closest&&e.target.closest('.gl');if(!el||!e.touches||!e.touches[0])return;
-  glEl=el;el.classList.add('press');glXY=[e.touches[0].clientX,e.touches[0].clientY];glT=setTimeout(()=>{const x=glEl;glCancel();if(x)glShow(x,true);},450);},{passive:true});
+document.addEventListener('touchstart',e=>{glCancel();glFired=0;const tg=e.target,t0=e.touches&&e.touches[0];if(!t0||!tg||!tg.closest||tg.closest(GL_SKIP)||!tg.closest('#view,#modal-wrap'))return;
+  const g=tg.closest('.gl');if(g){glEl=g;g.classList.add('press');}glXY=[t0.clientX,t0.clientY];
+  glT=setTimeout(()=>{glCancel();if(glAt(tg,glXY[0],glXY[1]))glFired=Date.now();},450);},{passive:true});
 document.addEventListener('touchmove',e=>{if(!glT||!e.touches||!e.touches[0])return;if(Math.abs(e.touches[0].clientX-glXY[0])+Math.abs(e.touches[0].clientY-glXY[1])>10)glCancel();},{passive:true});
 document.addEventListener('touchend',e=>{glCancel();if(glFired&&e.cancelable)e.preventDefault();},{passive:false});
 document.addEventListener('touchcancel',glCancel);
-document.addEventListener('contextmenu',e=>{const el=e.target.closest&&e.target.closest('.gl');if(!el)return;e.preventDefault();glShow(el,false);});
+document.addEventListener('contextmenu',e=>{if(glAt(e.target,e.clientX,e.clientY))e.preventDefault();});
 document.addEventListener('click',e=>{if(glFired&&Date.now()-glFired<1500){glFired=0;e.preventDefault();e.stopPropagation();}},true);
 document.addEventListener('click',e=>{
   const m=e.target.closest('[data-stop]');const b=e.target.closest('[data-act]');
@@ -908,5 +942,5 @@ window.addEventListener('online',()=>sync(true));
 PE_IO.init({toast});recalcPlan();applyLook();setPreset('essay');R=parseHash();
 if(!location.hash)history.replaceState(null,'','#today');
 render();sync(true);
-window.__pe={S:()=>S,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,render,invalidate,startSession};
+window.__pe={S:()=>S,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glLookup,glOpen,render,invalidate,startSession};
 })();

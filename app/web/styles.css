@@ -119,6 +119,9 @@ button.row:active,a.row:active{background:var(--rule2)}
 .gl{background:linear-gradient(transparent 56%,var(--marker) 56%);padding:0 .08em;border-radius:2px;cursor:help;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .gl.k{background:none;padding:0;border-bottom:1.5px dotted var(--ink3)}
 .gl.press{background:var(--marker)}
+/* 읽는 글은 꾹 누르면 앱이 풀이를 띄우므로 iOS 글자 선택·말풍선을 끈다(입력 칸은 그대로) */
+#view,#modal-wrap{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+#view input,#view textarea,#modal-wrap input,#modal-wrap textarea{-webkit-touch-callout:default;-webkit-user-select:text;user-select:text}
 
 /* ── 버튼 ── */
 .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:52px;padding:10px 16px;border-radius:var(--r-md);
@@ -128,6 +131,7 @@ button.row:active,a.row:active{background:var(--rule2)}
 .btn.sec{background:var(--sheet);color:var(--ink);border-color:var(--rule);margin-top:0}
 .btn.ghost{background:transparent;color:var(--blue);border-color:transparent;min-height:44px}
 .btn.red{background:var(--red);color:#fff} .btn.ok{background:var(--ok);color:#fff}
+a.btn{text-decoration:none}
 .btn.sm{min-height:40px;width:auto;padding:6px 14px;font-size:.92rem;border-radius:12px}
 .btn:disabled{opacity:.4}
 .btn:active{transform:scale(.985)}

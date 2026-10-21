@@ -342,6 +342,39 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     await go('#settings'); click('[data-act="gloss"][data-v="on"]'); await sleep(20);
   }
 
+  // 꾹 누른 낱말 풀이(카드에 없는 낱말도): 카드 → 앱 사전(data_gloss.js) → 바깥 사전 찾기
+  {
+    const G = (w.PE_GLOSS && w.PE_GLOSS.w) || {}, keys = Object.keys(G), cm = pe.glIdx().m;
+    ok(keys.length >= 500, `앱 사전 ${keys.length}낱말`);
+    ok(keys.every(k => typeof G[k] === 'string' && G[k].length >= 10 && G[k].length <= 140 && !/[<>\n]/.test(G[k])), '사전 풀이 형식(10~140자, 꺾쇠·줄바꿈 없음)');
+    const k = keys.find(x => /^[가-힣]{3,}$/.test(x) && !cm.has(x) && pe.glStem(x + '를') === x);
+    const r1 = k && pe.glLookup(k + '를');
+    ok(r1 && r1.t === 'gloss' && r1.w === k, `조사 붙은 낱말도 사전에서: ${k}를 → ${k}`);
+    const r2 = pe.glLookup('숏크리트층에');
+    ok(r2 && r2.t === 'card' && r2.id === cm.get('숏크리트'), '붙여 쓴 말은 가장 긴 조각: 숏크리트층에 → 숏크리트 카드');
+    const r4 = pe.glLookup('흙막이벽체에');
+    ok(r4 && r4.t === 'gloss' && r4.w === '흙막이벽', '더 긴 조각이 사전에 있으면 그것: 흙막이벽체에 → 흙막이벽');
+    ok(pe.glLookup('압축강도는').w === '압축강도' && pe.glLookup('가물막이를').t === 'card', '조사 떼기로 줄어들던 낱말도 바탕꼴로: 압축강도는, 가물막이를');
+    const r3 = pe.glLookup('뭉게구름이');
+    ok(r3 && r3.t === 'none' && r3.w === '뭉게구름', '카드·사전에 없는 낱말은 바깥 사전 찾기');
+    // 화면: 아무 낱말을 꾹 누르면(jsdom엔 caretRangeFromPoint가 없어 누른 글자 위치를 흉내)
+    const touch = (type, el) => { const ev = new w.Event(type, { bubbles: true }); ev.touches = [{ clientX: 5, clientY: 5 }]; el.dispatchEvent(ev); };
+    const pressWord = async (el, word) => { const tn = [...el.childNodes].find(n => n.nodeType === 3 && n.data.includes(word)); d.caretRangeFromPoint = () => ({ startContainer: tn, startOffset: tn.data.indexOf(word) + 1 }); touch('touchstart', el); await sleep(520); touch('touchend', d.body); };
+    await go('#set/2026-10-19'); click('[data-act="set-tab"][data-t="cards"]'); await sleep(20);
+    const p0 = d.createElement('p'); p0.className = 'defn'; p0.textContent = `앞에서 ${k}를 쓰고 뭉게구름이 떴다`; d.querySelector('#view').appendChild(p0);
+    await pressWord(p0, k);
+    ok(d.querySelector('#modal-wrap h3') && d.querySelector('#modal-wrap h3').textContent === k && d.querySelector('#modal-wrap').textContent.includes(G[k].slice(0, 10)) && /AI 작성/.test(d.querySelector('#modal-wrap').textContent), '설명 글의 낱말을 꾹 → 앱 사전 풀이');
+    touch('touchstart', d.body); click('#modal-wrap .modal'); await sleep(20);
+    await pressWord(p0, '뭉게구름');
+    const links = [...d.querySelectorAll('#modal-wrap a.btn')].map(a => a.getAttribute('href'));
+    ok(/앱 사전에 없는/.test(d.querySelector('#modal-wrap').textContent) && links.length === 2 && links.every(h => h.startsWith('https://') && h.endsWith(encodeURIComponent('뭉게구름'))), '없는 낱말 → 국어사전·지식백과 찾기 링크');
+    touch('touchstart', d.body); click('#modal-wrap .modal'); await sleep(20);
+    const b0 = d.createElement('button'); b0.className = 'btn'; b0.textContent = '뭉게구름'; d.querySelector('#view').appendChild(b0);
+    await pressWord(b0, '뭉게구름');
+    ok(!d.querySelector('#modal-wrap h3'), '버튼은 꾹 눌러도 풀이를 띄우지 않음');
+    p0.remove(); b0.remove(); delete d.caretRangeFromPoint;
+  }
+
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);
