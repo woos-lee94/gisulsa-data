@@ -15,8 +15,8 @@ const dom = new JSDOM(html, {
   beforeParse(w) {
     w.fetch = async (url) => {
       fetchLog.push(url);
-      const m = String(url).match(/gisulsa-data\/main\/data\/([^?]+)/);
-      const f = m && path.join(FAKE, 'data', m[1]);
+      const m = String(url).match(/gisulsa-data\/main\/((?:data|app\/gloss)\/[^?]+)/);
+      const f = m && path.join(FAKE, m[1]);
       if (f && fs.existsSync(f)) { const txt = fs.readFileSync(f, 'utf8'); return { ok: true, status: 200, json: async () => JSON.parse(txt) }; }
       return { ok: false, status: 404, json: async () => ({}) };
     };
@@ -344,6 +344,9 @@ const go = async h => { w.location.hash = h; await sleep(30); };
 
   // 꾹 누른 낱말 풀이(카드에 없는 낱말도): 카드 → 앱 사전(data_gloss.js) → 바깥 사전 찾기
   {
+    ok(fetchLog.some(u => /app\/gloss\/daily\.json/.test(u)) && pe.SETS().gloss && pe.SETS().gloss.w['가상낱말'], '받아 오기 때 매일 용어 사전(app/gloss/daily.json)도 받음');
+    const rd = pe.glLookup('가상낱말을');
+    ok(rd && rd.t === 'gloss' && rd.w === '가상낱말' && /검사용/.test(rd.d), '매일 받은 낱말도 꾹 누르기에서 찾음');
     const G = (w.PE_GLOSS && w.PE_GLOSS.w) || {}, keys = Object.keys(G), cm = pe.glIdx().m;
     ok(keys.length >= 500, `앱 사전 ${keys.length}낱말`);
     ok(keys.every(k => typeof G[k] === 'string' && G[k].length >= 10 && G[k].length <= 140 && !/[<>\n]/.test(G[k])), '사전 풀이 형식(10~140자, 꺾쇠·줄바꿈 없음)');

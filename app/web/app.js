@@ -252,7 +252,7 @@ function glHTML(text,selfId){const s=String(text||'');if(S.settings.gloss==='off
   for(const h of hits){out+=esc(s.slice(p,h.i))+`<span class="gl${glKnown(h.id)?' k':''}" data-gl="${esc(h.id)}">${esc(s.substr(h.i,h.len))}</span>`;p=h.i+h.len;}
   return out+esc(s.slice(p));}
 
-/* 내장 용어 사전(data_gloss.js의 PE_GLOSS): 카드에 없는 낱말의 짧은 풀이(AI 작성). 꾹 누른 낱말은 카드 → 사전 → 바깥 사전 찾기 순서 */
+/* 내장 용어 사전(data_gloss.js의 PE_GLOSS) + 매일 받은 새 세트 낱말 풀이(SETS.gloss): 카드에 없는 낱말의 짧은 풀이(AI 작성). 꾹 누른 낱말은 카드 → 사전 → 바깥 사전 찾기 순서 */
 const GLOSS=(window.PE_GLOSS&&window.PE_GLOSS.w)||{};
 const GL_JOSA=['으로부터','에서부터','으로써','으로서','에서는','에서도','에서의','으로의','으로는','으로도','이므로','하므로','에서','에는','에도','으로','이며','이고','이나','이다','에게','처럼','보다','까지','부터','마다','과의','와의','만큼','이란','란','은','는','을','를','의','에','로','와','과','이','가','도','만'];
 const GL_END=['시킨다','시키는','시켜','한다','하는','하여','하고','하며','하면','해야','해서','했다','하지','하기','되는','된다','되어','되고','되며','되면','될','된','할','함','됨','하다','되다','적인','적으로','적'];
@@ -265,9 +265,10 @@ function glForms(w){const out=[w];if(!/^[가-힣]+$/.test(w))return out;let x=w;
   for(let r=0;r<4;r++){let y=x;for(const j of GL_JOSA)if(y.length-j.length>=2&&y.endsWith(j)){y=y.slice(0,-j.length);break;}
     if(y===x)for(const e of GL_END)if(y.length-e.length>=2&&y.endsWith(e)){y=y.slice(0,-e.length);break;}if(y===x)break;out.push(y);x=y;}return out;}
 /* 사전 값은 "풀이" 또는 ["표제어","풀이"](키가 조사 떼기로 줄어든 꼴일 때, 예: 가물막 → 가물막이) */
-function glossEntry(k){const v=GLOSS[k];return Array.isArray(v)?{w:v[0],d:v[1]}:{w:k,d:v};}
+function glossGet(k){const own=(o,x)=>!!o&&Object.prototype.hasOwnProperty.call(o,x);if(own(GLOSS,k))return GLOSS[k];const g=SETS.gloss&&SETS.gloss.w;return own(g,k)&&typeof g[k]==='string'?g[k]:null;}
+function glossEntry(k){const v=glossGet(k);return Array.isArray(v)?{w:v[0],d:v[1]}:{w:k,d:v};}
 function glLookup(raw){const w=String(raw||'').trim();if(!w)return null;const m=glIdx().m;
-  const tryW=x=>m.has(x)?{t:'card',id:m.get(x)}:Object.prototype.hasOwnProperty.call(GLOSS,x)?Object.assign({t:'gloss'},glossEntry(x)):null;
+  const tryW=x=>m.has(x)?{t:'card',id:m.get(x)}:glossGet(x)!=null?Object.assign({t:'gloss'},glossEntry(x)):null;
   const st=glStem(w);let r=null;for(const x of glForms(w).concat(st,/^[a-z]/i.test(w)?[w.toUpperCase()]:[])){r=tryW(x);if(r)return r;}
   /* 붙여 쓴 말: 앞·뒤 조각 중 가장 긴 것(카드 이름은 2자, 사전 낱말은 3자 이상) */
   if(/^[가-힣]+$/.test(st))for(let n=st.length-1;n>=2;n--)for(const x of[st.slice(0,n),st.slice(st.length-n)]){r=tryW(x);if(r&&(r.t==='card'||n>=3))return r;}
@@ -297,6 +298,7 @@ function latestMockDate(){const ks=Object.keys(SETS.mocks).sort();return ks.leng
 let syncing=false;
 function dataBase(){let u=(S.settings.dataUrl||'').trim()||DATA_DEFAULT;if(!/\/$/.test(u))u+='/';return u;}
 function getJSON(url){return PE_IO.fetchJSON(url);}
+function glossUrl(){const b=dataBase();return/\/data\/$/.test(b)?b.replace(/\/data\/$/,'/app/gloss/daily.json'):'';}
 async function sync(force){
   if(syncing)return;const now=Date.now();if(!force&&S.sync&&S.sync.last&&now-S.sync.last<8*60*1000)return;
   syncing=true;paintSyncBits();const got={sets:0,mocks:0,k:0};
@@ -306,6 +308,8 @@ async function sync(force){
     for(const it of(idx.mocks||[])){const cur=SETS.mocks[it.d];if(cur&&(cur._rev||1)>=(it.rev||1))continue;
       try{const o=await getJSON(base+'mocks/'+it.d+'.json?r='+(it.rev||1)+'&t='+now);if(o&&o.date===it.d){o._rev=it.rev||1;SETS.mocks[it.d]=o;got.mocks++;}}catch(e){}}
     if(idx.kichul&&(!SETS.kichul||(SETS.kichul.rev||0)<idx.kichul.rev)){try{const k=await getJSON(base+'kichul.json?r='+idx.kichul.rev);if(k&&Array.isArray(k.rounds)){k.rev=idx.kichul.rev;SETS.kichul=k;got.k=1;}}catch(e){}}
+    /* 새 세트 낱말 풀이(예약 작업이 app/gloss/daily.json에 올린다): 새 세트를 받았거나 2시간이 지났으면 */
+    const gu=glossUrl();if(gu&&(got.sets||got.mocks||!SETS.gloss||now-(SETS.gloss.at||0)>2*3600*1000)){try{const g=await getJSON(gu+'?t='+now);if(g&&g.w&&typeof g.w==='object'){const w={};for(const k of Object.keys(g.w)){const v=g.w[k];if(typeof v==='string'&&k.length<=30&&v.length<=200)w[k]=v;}SETS.gloss={at:now,updated:String(g.updated||''),w};}}catch(e){}}
     SETS.index={updated:idx.updated||'',sets:(idx.sets||[]).length,mocks:(idx.mocks||[]).length};SETS.plan=idx.plan||null;saveSets();
     S.sync={last:now,ok:true,updated:idx.updated||''};
   }catch(e){S.sync={last:now,ok:false,err:String(e&&e.message||e),updated:(S.sync&&S.sync.updated)||''};}
@@ -942,5 +946,5 @@ window.addEventListener('online',()=>sync(true));
 PE_IO.init({toast});recalcPlan();applyLook();setPreset('essay');R=parseHash();
 if(!location.hash)history.replaceState(null,'','#today');
 render();sync(true);
-window.__pe={S:()=>S,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glLookup,glOpen,render,invalidate,startSession};
+window.__pe={S:()=>S,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,render,invalidate,startSession};
 })();

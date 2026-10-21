@@ -34,8 +34,8 @@ function open(opt = {}) {
     keepAwake: on => { dev.awake.push(on); },
     fetchText: async url => {
       dev.fetched.push(url);
-      const m = String(url).match(/gisulsa-data\/main\/data\/([^?]+)/);
-      const f = m && path.join(FAKE, 'data', m[1]);
+      const m = String(url).match(/gisulsa-data\/main\/((?:data|app\/gloss)\/[^?]+)/);
+      const f = m && path.join(FAKE, m[1]);
       if (f && fs.existsSync(f)) return { ok: true, status: 200, text: fs.readFileSync(f, 'utf8') };
       return { ok: false, status: 404, text: '' };
     },
