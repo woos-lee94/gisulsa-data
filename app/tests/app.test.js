@@ -298,6 +298,50 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   await go('#test'); ok(view().querySelector('[data-h="guide"]'), '테스트 탭 → 답안 작성 요령');
   await go('#more'); ok(view().querySelector('[data-h="guide"]'), '더보기 → 답안 작성 요령');
 
+  // 어려운 낱말 형광펜: 설명 속 다른 카드 용어, 꾹 누르면 그 카드
+  {
+    const nm = pe.glNames('평탄성 (PrI·IRI)');
+    ok(nm.includes('평탄성') && nm.includes('IRI') && !nm.includes('PrI'), '형광펜 이름: 본 이름 + 괄호 속 영문 약어');
+    ok(!pe.glNames('시설물안전법상 중대한 결함 (교량)').includes('교량') && !pe.glNames('지보 패턴 설계·변경').includes('변경') && pe.glNames('OSC·모듈러·프리캐스트').includes('프리캐스트'), '괄호 속 한글·짧은 조각은 이름이 아님, 긴 조각은 이름');
+    const all = pe.deck(), gm = pe.glIdx().m;
+    const linked = all.filter(c => /data-gl=/.test(pe.glHTML(c.d, c.id)));
+    ok(linked.length >= 100, `형광펜이 붙는 설명 ${linked.length}개`);
+    ok(all.every(c => !pe.glHTML(c.d, c.id).includes(`data-gl="${c.id}"`)), '자기 카드에는 형광펜 없음');
+    const sh = gm.get('숏크리트'), ab = gm.get('압밀');
+    ok(sh && pe.glHTML('전면에 숏크리트를 친다', '').includes(`data-gl="${sh}"`) && !pe.glHTML('가숏크리트', '').includes('data-gl'), '낱말 앞이 끊긴 곳에서만(조사는 뒤에 붙어도 됨)');
+    ok(ab && pe.glHTML('압밀이 끝나면', '').includes(`data-gl="${ab}"`) && !pe.glHTML('압밀침하', '').includes('data-gl'), '두 글자 용어는 뒤에 조사·띄어쓰기일 때만');
+    ok(pe.glHTML('<b>숏크리트</b>', '').startsWith('&lt;b&gt;'), '형광펜 글도 HTML 이스케이프');
+    // 화면: 세트 용어를 펼쳐 형광펜 낱말을 꾹 누르면 그 카드 설명
+    await go('#set/2026-10-19'); click('[data-act="set-tab"][data-t="cards"]'); await sleep(20);
+    let gl = null;
+    for (let i = 0; i < 10 && !gl; i++) { const b = d.querySelector(`[data-act="set-open"][data-i="${i}"]`); if (!b) break; if (!b.closest('.acc').classList.contains('open')) { b.dispatchEvent(new w.MouseEvent('click', { bubbles: true })); await sleep(20); } gl = d.querySelector('#view .acc.open .gl'); }
+    ok(gl, '세트 용어 설명에 형광펜 낱말');
+    if (gl) {
+      const id = gl.dataset.gl, title = pe.deck().find(c => c.id === id).t;
+      const touch = (type, el, x = 5, y = 5) => { const ev = new w.Event(type, { bubbles: true }); ev.touches = [{ clientX: x, clientY: y }]; el.dispatchEvent(ev); };
+      touch('touchstart', gl); await sleep(100); touch('touchmove', d.querySelector('#view .acc.open .gl'), 60, 60); await sleep(450);
+      ok(!d.querySelector('#modal-wrap').textContent, '누르다 손가락을 움직이면(스크롤) 열지 않음');
+      touch('touchend', d.body);
+      const g2 = d.querySelector(`#view .gl[data-gl="${id}"]`);
+      touch('touchstart', g2); await sleep(520);
+      ok(d.querySelector('#modal-wrap h3') && d.querySelector('#modal-wrap h3').textContent === title, '꾹 누르면 그 용어 카드 설명: ' + title);
+      touch('touchend', d.body);
+      click('#modal-wrap .modal'); await sleep(20);
+      ok(d.querySelector('#modal-wrap h3'), '손을 뗄 때 생긴 클릭으로 창이 바로 닫히지 않음');
+      touch('touchstart', d.body); click('#modal-wrap .modal'); await sleep(20);
+      ok(!d.querySelector('#modal-wrap h3'), '다음 탭으로는 창이 닫힘');
+      d.querySelector(`#view .gl[data-gl="${id}"]`).dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, cancelable: true })); await sleep(20);
+      ok(d.querySelector('#modal-wrap h3') && d.querySelector('#modal-wrap h3').textContent === title, '오른쪽 클릭(데스크톱)으로도 열림');
+      click('#modal-wrap .modal'); await sleep(20);
+      ok(!d.querySelector('#modal-wrap h3'), '오른쪽 클릭으로 연 창은 다음 클릭에 닫힘');
+    }
+    await go('#settings'); click('[data-act="gloss"][data-v="off"]'); await sleep(20);
+    ok(pe.S().settings.gloss === 'off' && !/data-gl=/.test(pe.glHTML('전면에 숏크리트를 친다', '')), '설정에서 형광펜 끄기');
+    await go('#set/2026-10-19'); await sleep(20);
+    ok(!d.querySelector('#view .gl'), '끄면 세트 용어에도 형광펜 없음');
+    await go('#settings'); click('[data-act="gloss"][data-v="on"]'); await sleep(20);
+  }
+
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);

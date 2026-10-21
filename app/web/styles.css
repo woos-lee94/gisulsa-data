@@ -115,6 +115,10 @@ button.row:active,a.row:active{background:var(--rule2)}
 .kws{display:flex;flex-wrap:wrap;gap:4px 14px;margin:10px 0 0;padding:0;list-style:none}
 .kws li{font-weight:600;font-size:.95rem}
 .kws li span{background:linear-gradient(transparent 56%,var(--marker) 56%);padding:0 .1em}
+/* 어려운 낱말 형광펜(설명 속 다른 카드 용어): 아직 모르는 것은 형광펜, 아는 것은 점선. 꾹 누르면 그 카드(글자 선택·말풍선은 막는다) */
+.gl{background:linear-gradient(transparent 56%,var(--marker) 56%);padding:0 .08em;border-radius:2px;cursor:help;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.gl.k{background:none;padding:0;border-bottom:1.5px dotted var(--ink3)}
+.gl.press{background:var(--marker)}
 
 /* ── 버튼 ── */
 .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:52px;padding:10px 16px;border-radius:var(--r-md);

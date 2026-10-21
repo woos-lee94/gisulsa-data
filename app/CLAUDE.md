@@ -115,6 +115,7 @@
 - 논술 답안 작성 요령(`#guide`, `web/data_guide.js`): 학습용 모범 답안(제2교시 25점형 "콘크리트 시공이음", 4면 × 22줄)을 답안지 모양으로 옮긴 것. 쓰는 법(답안지 생김새·쓰는 순서·번호 체계 Ⅰ.→1.→1)→①·기호·면 배분), 모범 답안, 형식 점검표 세 탭. 세트 논술 탭·테스트 탭·모의고사·더보기에서 들어간다.
   - 같은 파일의 `check`(형식 점검표)와 `skeleton`(모범 답안 뼈대)이 프롬프트의 `{답안형식}` 자리에 들어가, 프로젝트 지침(p0)·논술 첨삭(p1)·모의/기출 채점(p9)이 글머리 기호·들여쓰기·밑줄·그림 번호·끝/이하 여백까지 "○면 ○줄"로 첨삭한다. 단답 첨삭(p2)은 형식 한 줄과 형식 지적 2개.
 - 용어 빈칸 쓰기(테스트 탭, 세트 용어 탭): 덱 전체 용어·키워드에서 만든 낱말 사전과 수치(`clozeTokens`)로 정의 속 빈칸을 무작위로 고른다(`fillCands`·`fillBlanks`). 하 1칸 첫소리 힌트, 중 2~3칸 글자 수 힌트, 상 4~6칸 힌트 없음. 입력은 `fillJudge`가 띄어쓰기·가운뎃점·대소문자를 무시하고 수치·단위는 정확히, 긴 낱말은 오타 1자까지 맞게 본다. 틀리면 오답 노트 `F:카드id`.
+- 어려운 낱말 형광펜(`glNames`·`glIdx`·`glHTML`): 카드 설명 속 다른 카드 용어(제목 본 이름, ·로 나뉜 3자 이상 한 낱말, 괄호 속 영문 약어)에 아직 모르는 것은 형광펜, 아는 것(본 적 있고 3일 이상 간격, 오답 아님)은 점선. 꾹 누르면(0.45초, 데스크톱은 오른쪽 클릭) 그 카드 모달. 세트 용어 탭·카드 뒷면·카드 모달에만 쓰고 퀴즈·빈칸 문제에는 쓰지 않는다. 설정에서 끈다(`S.settings.gloss`).
 - `scripts/build-web.js`: `web/`을 `native/webBundle.js`(자동 생성, git 제외)로 묶는다. 글꼴은 `styles.css`의 @font-face가 `assets/fonts/PretendardVariable.woff2`(OFL)를 읽고, 앱이 시작할 때 그 파일을 화면 파일 옆에 복사한다. `index.html`이 바깥 주소를 읽으면 묶기를 멈춘다(인터넷 없이 열려야 하므로). `npm install`(postinstall)과 `npm start` 때 돈다. `web/`을 고친 뒤 앱 빌드에는 따로 할 일이 없다.
 - `app.json`: Xcode 프로젝트 이름은 한글이 빠지면 "6"이 되므로 `name`은 `Gisulsa6`, 홈 화면 이름은 `ios.infoPlist.CFBundleDisplayName` "기술사 6개월". 원격 푸시를 쓰지 않으므로 `expo-notifications`의 `enableRemoteNotifications: false`(푸시 권한 없음).
 - `eas.json`: `production` 프로필(스토어 배포 → TestFlight), 빌드 번호는 EAS가 올린다(`appVersionSource: remote`).

@@ -120,8 +120,8 @@ function kLabelShort(id){const a=String(id).split('-');return a.length===3?a[0]+
 
 /* ════════ 4. 덱(카드)·논술 ════════ */
 const normTerm=t=>String(t||'').replace(/\([^)]*\)/g,'').replace(/[\s·・,.\-–—_/()（）\[\]'"“”‘’:;]/g,'').toLowerCase();
-let _deck=null,_byId=null,_byNorm=null,_kxRev=null,_essays=null,_lex=null;
-function invalidate(){_deck=_byId=_byNorm=_kxRev=_essays=null;_kq=null;_lex=null;}
+let _deck=null,_byId=null,_byNorm=null,_kxRev=null,_essays=null,_lex=null,_gl=null;
+function invalidate(){_deck=_byId=_byNorm=_kxRev=_essays=null;_kq=null;_lex=null;_gl=null;}
 function buildDeck(){
   const patch=window.PE_PATCH||{},kx=window.PE_KX||{},kx2=(SETS.kichul&&SETS.kichul.kx)||{};const list=[];_byId={};_byNorm={};
   const add=c=>{if(_byId[c.id])return;_byId[c.id]=c;const n=normTerm(c.t);if(n&&!_byNorm[n])_byNorm[n]=c.id;list.push(c);};
@@ -225,6 +225,32 @@ function fillCheck(giveup){const it=SES&&SES.items[SES.i];if(!it||it.type!=='fil
   const res=it.b.map((bk,k)=>fillJudge(vals[k],c.d.substr(bk.i,bk.len)));const all=res.every(r=>r.ok);const key='F:'+c.id;const prev=S.wrong[key]?Object.assign({},S.wrong[key]):null;const p=prog(c.id);
   if(all){SES.stats.ok++;p.ok++;rightOnWrong(key);}else{SES.stats.no++;p.ng++;markWrong(key,'fill');}
   SES.answered={vals,res,all,prev};touchDay();save();render();}
+
+/* ════════ 7-3. 어려운 낱말 형광펜(설명 속 다른 카드 용어, 꾹 누르면 그 카드) ════════ */
+/* 용어 이름: 괄호를 뺀 본 이름, ·/, 로 나뉜 한 낱말(3자 이상), 괄호 속 영문. 흔한 말(FILL_STOP·GL_STOP)과 너무 짧거나 긴 이름은 뺀다 */
+const GL_STOP=new Set(['유지관리']);
+function glNames(t){const s=String(t||''),out=[];const main=s.replace(/\s*[(（][^)）]*[)）]\s*/g,' ').trim();const par=(s.match(/[(（]([^)）]+)[)）]/)||[])[1]||'';
+  const add=(n,part)=>{n=n.trim();if(!n||out.includes(n)||n.length>24||FILL_STOP.has(n)||GL_STOP.has(n))return;
+    if(/[가-힣]/.test(n)?(n.length<2||part&&(n.length<3||/\s/.test(n))):!(/^[A-Z][A-Z0-9]+$/.test(n)||(/^[A-Za-z][A-Za-z -]+$/.test(n)&&n.length>=4)))return;out.push(n);};
+  add(main,false);const parts=main.split(/\s*[·\/,]\s*/);if(parts.length>1)parts.forEach(x=>add(x,true));
+  /* 괄호 속은 영문 이름·약어만(한글은 "(교량)"처럼 범위를 좁히는 말이라 뺀다) */
+  if(par)par.split(/\s*[·\/,]\s*/).forEach(x=>{if(!/[가-힣]/.test(x))add(x,true);});return out;}
+/* 같은 이름이면 제목 전체가 그 이름인 카드가 먼저(조각으로 나온 이름보다) */
+function glIdx(){if(_gl)return _gl;const m=new Map(),all=deck().map(c=>[c.id,glNames(c.t)]);all.forEach(([id,ns])=>{if(ns[0]&&!m.has(ns[0]))m.set(ns[0],id);});all.forEach(([id,ns])=>ns.forEach(n=>{if(!m.has(n))m.set(n,id);}));_gl={m,names:Array.from(m.keys()).sort((a,b)=>b.length-a.length)};return _gl;}
+const GL_AFTER=/^(?:[^가-힣]|$|은|는|이|가|을|를|의|에|로|와|과|도|만|으로|에서|이나|보다|처럼|까지|부터)/;
+function glKnown(id){const p=pget(id);return p.seen>0&&p.box>=2&&!S.wrong['C:'+id]&&!S.wrong['F:'+id];}
+/* 설명 글을 HTML로: 다른 카드 용어에 형광펜(아직 모르는 것) 또는 점선(아는 것). 자기 카드는 빼고, 카드마다 한 번, 한 설명에 8개까지 */
+function glHTML(text,selfId){const s=String(text||'');if(S.settings.gloss==='off')return esc(s);
+  const {m,names}=glIdx(),used=new Uint8Array(s.length),hits=[],seen=new Set();
+  for(const n of names){if(hits.length>=8)break;const id=m.get(n);if(id===selfId||seen.has(id))continue;
+    for(let i=s.indexOf(n);i>=0;i=s.indexOf(n,i+1)){
+      if(i&&/[가-힣A-Za-z0-9]/.test(s[i-1]))continue;
+      const z=s.slice(i+n.length);if(/[가-힣]/.test(n)?(n.length<3&&!GL_AFTER.test(z)):/^[A-Za-z0-9]/.test(z))continue;
+      let free=true;for(let k=i;k<i+n.length;k++)if(used[k]){free=false;break;}if(!free)continue;
+      for(let k=i;k<i+n.length;k++)used[k]=1;hits.push({i,len:n.length,id});seen.add(id);break;}}
+  hits.sort((a,b)=>a.i-b.i);let out='',p=0;
+  for(const h of hits){out+=esc(s.slice(p,h.i))+`<span class="gl${glKnown(h.id)?' k':''}" data-gl="${esc(h.id)}">${esc(s.substr(h.i,h.len))}</span>`;p=h.i+h.len;}
+  return out+esc(s.slice(p));}
 
 /* ════════ 8. 세트 진행·다시 보기 ════════ */
 function sp(d){return S.sp[d]||(S.sp[d]={read:{},quiz:{},tasks:{},essay:{},rev:{}});}
@@ -336,11 +362,11 @@ function vSet(){const d=R.a;const s=SETS.sets[d];
   let body='';
   if(tab==='cards'){body=(s.cards||[]).map((sc,i)=>{const id=setCardId(d,i);const c=id?card(id):null;const t=c?c.t:sc.t;const open=SV[d+':o']===i;const read=!!p.read[i];
       return`<div class="acc ${open?'open':''} ${read?'read':''}"><button data-act="set-open" data-d="${d}" data-i="${i}"><span class="no">${i+1}</span><span class="tt">${esc(t||'(내용 없음)')}${sc.ref?'':' <span class="tag-new">새 용어</span>'}</span><span class="open-ic"></span></button>
-      ${open?`<div class="body">${c?`<p class="defn">${esc(c.d)}</p><ul class="kws">${(c.k||[]).map(k=>`<li><span>${esc(k)}</span></li>`).join('')}</ul>`:`<p class="defn">${esc(sc.d||'')}</p>`}
+      ${open?`<div class="body">${c?`<p class="defn">${glHTML(c.d,c.id)}</p><ul class="kws">${(c.k||[]).map(k=>`<li><span>${esc(k)}</span></li>`).join('')}</ul>`:`<p class="defn">${glHTML(sc.d||'','')}</p>`}
         ${sc.plus?`<p class="plus">${esc(sc.plus)}</p>`:''}${(sc.field||(c&&c.field))?`<p class="field">현장: ${esc(sc.field||c.field)}</p>`:''}
         ${c&&c.x&&c.x.length?`<p class="xref">기출 <b>${c.x.length}회</b> 출제: ${c.x.map(kLabelShort).join(', ')}</p>`:''}${(sc.basis||(c&&c.basis))?`<p class="xref">근거: ${esc(sc.basis||c.basis)}</p>`:''}
         ${c?`<div class="btns"><button class="btn sm sec" data-act="star" data-id="${c.id}">${pget(c.id).star?'★ 별표 해제':'☆ 별표'}</button><span class="note" style="margin:auto 0">${unitName(c.u)}</span></div>`:''}</div>`:''}</div>`;}).join('')
-      +`<div class="btns"><button class="btn sec" data-act="set-flash" data-d="${d}">카드로 넘겨 보며 외우기</button><button class="btn sec" data-act="start-fill" data-d="${d}">빈칸 쓰기</button></div><p class="note">펼쳐 읽은 용어는 내일 카드 복습으로 다시 나와요.</p>`;}
+      +`<div class="btns"><button class="btn sec" data-act="set-flash" data-d="${d}">카드로 넘겨 보며 외우기</button><button class="btn sec" data-act="start-fill" data-d="${d}">빈칸 쓰기</button></div><p class="note">펼쳐 읽은 용어는 내일 카드 복습으로 다시 나와요.${S.settings.gloss==='off'?'':' 설명 속 형광펜 낱말은 꾹 누르면 그 용어 설명이 나와요.'}</p>`;}
   else if(tab==='quiz'){body=(s.quiz||[]).map((q,i)=>quizBlock(d,i,q,p.quiz[i])).join('')||'<div class="empty">이 세트엔 퀴즈가 없어요</div>';
     if(st.qa)body+=`<p class="note">${st.qok}/${st.nq} 정답. 틀린 문제는 오답 노트로 갔어요.</p>`;}
   else if(tab==='essay'){const e=s.essay;if(!e)body='<div class="empty">이 세트엔 논술 문제가 없어요</div>';else{const show=SV[d+':eo'];
@@ -410,7 +436,7 @@ function vSess(){if(!SES)return topbar('학습')+`<div class="empty" style="marg
   const head=`${topbar(SES.title||'학습')}<div class="prog"><div class="bar"><i style="width:${Math.round(SES.i/n*100)}%"></i></div><span>${SES.i+1} / ${n}</span></div>`;
   if(it.type==='card'){const c=card(it.id);if(!c)return head+skipBtn();const p=pget(c.id);
     return head+`<div class="fc ${SES.back?'back':''}" data-act="sess-flip"><div class="meta"><span>${esc(unitName(c.u))}${c.x&&c.x.length?`, 기출 ${c.x.length}회`:''}${p.seen?'':', 처음 보는 카드'}</span><button class="star ${p.star?'on':''}" data-act="star" data-id="${c.id}" aria-label="별표">★</button></div>
-      ${SES.back?`<div class="term">${esc(c.t)}</div><p class="defn ruled">${esc(c.d)}</p><ul class="kws">${(c.k||[]).map(k=>`<li><span>${esc(k)}</span></li>`).join('')}</ul>${c.x&&c.x.length?`<p class="xref">기출: ${c.x.map(kLabelShort).join(', ')}</p>`:''}`
+      ${SES.back?`<div class="term">${esc(c.t)}</div><p class="defn ruled">${glHTML(c.d,c.id)}</p><ul class="kws">${(c.k||[]).map(k=>`<li><span>${esc(k)}</span></li>`).join('')}</ul>${c.x&&c.x.length?`<p class="xref">기출: ${c.x.map(kLabelShort).join(', ')}</p>`:''}`
       :`<div class="term">${esc(c.t)}</div><p class="hint">정의, 원리, 특징, 유의사항을 30초 안에 말해 보고 탭하세요</p>`}</div>
     ${SES.back?`<div class="grade3"><button class="g0" data-act="sess-grade" data-g="0">모름<small>${nextLabel(c.id,0)}</small></button><button class="g1" data-act="sess-grade" data-g="1">애매<small>${nextLabel(c.id,1)}</small></button><button class="g2" data-act="sess-grade" data-g="2">앎<small>${nextLabel(c.id,2)}</small></button></div>`
       :`<div class="btns"><button class="btn" data-act="sess-flip">뒷면 보기</button></div>`}`;}
@@ -638,6 +664,7 @@ function vSettings(){const s=S.settings;
   <div class="group" style="margin-top:12px">${row({ic:'flag',t:'시험 일정',d:`${esc(korDate(s.start))} 시작 → 제${PLAN.target.r}회 ${esc(PLAN.target.d)}${esc(estTag(PLAN.target))}`,act:'go',data:{h:'schedule'}})}</div>
   <label class="f">글자 크기</label><div class="seg">${[['m','보통'],['l','크게'],['xl','아주 크게']].map(x=>`<button class="${(s.fs||'m')===x[0]?'on':''}" data-act="fs" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>
   <label class="f">화면</label><div class="seg">${[['auto','기기 설정 따라'],['light','밝게'],['dark','어둡게']].map(x=>`<button class="${(s.theme||'auto')===x[0]?'on':''}" data-act="theme" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>
+  <label class="f">어려운 낱말 형광펜</label><div class="seg">${[['on','켜기'],['off','끄기']].map(x=>`<button class="${(s.gloss||'on')===x[0]?'on':''}" data-act="gloss" data-v="${x[0]}">${x[1]}</button>`).join('')}</div><p class="note">용어 설명 속 다른 카드 용어에 아직 모르는 것은 형광펜, 아는 것은 점선을 그어요. 꾹 누르면 그 용어 설명이 나와요.</p>
   <label class="f" for="sNew">하루 새 카드 수(암기 탭)</label><input class="in" type="number" inputmode="numeric" id="sNew" value="${s.newPerDay}">
   <details class="d" style="margin-top:16px"><summary>고급: 데이터 주소</summary><div class="in-d">
     <label class="f" for="sData">데이터 주소</label><input class="in" id="sData" value="${esc(s.dataUrl)}" placeholder="${esc(DATA_DEFAULT)}"><p class="note">비워 두면 기본 저장소(gisulsa-data)에서 받아 와요.</p></div></details>
@@ -731,7 +758,7 @@ function vTimer(){return topbar('타이머')+`<h1 class="ptitle">교시 타이�
 /* ════════ 19. 모달(카드·목차 보기) ════════ */
 function openModal(html){$('#modal-wrap').innerHTML=`<div class="modal" data-act="modal-close"><div class="msheet" data-stop="1"><div class="grab"></div>${html}</div></div>`;}
 function closeModal(){$('#modal-wrap').innerHTML='';}
-function cardModal(c){const p=pget(c.id);return`<div class="sheet" style="margin-top:4px"><p class="sheet-k">${esc(unitName(c.u))}${p.seen?`, 다음 복습 ${esc(p.due||'—')}`:', 아직 학습 전'}</p><h3>${esc(c.t)}</h3><p class="defn ruled" style="margin-top:10px">${esc(c.d)}</p><ul class="kws">${(c.k||[]).map(k=>`<li><span>${esc(k)}</span></li>`).join('')}</ul>${c.x&&c.x.length?`<p class="xref">기출: ${c.x.map(kLabelShort).join(', ')}</p>`:''}${c.basis?`<p class="xref">근거: ${esc(c.basis)}</p>`:''}</div>
+function cardModal(c){const p=pget(c.id);return`<div class="sheet" style="margin-top:4px"><p class="sheet-k">${esc(unitName(c.u))}${p.seen?`, 다음 복습 ${esc(p.due||'—')}`:', 아직 학습 전'}</p><h3>${esc(c.t)}</h3><p class="defn ruled" style="margin-top:10px">${glHTML(c.d,c.id)}</p><ul class="kws">${(c.k||[]).map(k=>`<li><span>${esc(k)}</span></li>`).join('')}</ul>${c.x&&c.x.length?`<p class="xref">기출: ${c.x.map(kLabelShort).join(', ')}</p>`:''}${c.basis?`<p class="xref">근거: ${esc(c.basis)}</p>`:''}</div>
   <div class="btns"><button class="btn sec" data-act="star" data-id="${c.id}">${p.star?'★ 별표 해제':'☆ 별표'}</button>${p.seen?'':`<button class="btn" data-act="introduce" data-id="${c.id}">암기에 넣기</button>`}</div><div class="btns"><button class="btn ghost" data-act="hide-card" data-id="${c.id}">이 카드 숨기기</button></div>`;}
 function kqModal(id){const q=kq()[id];if(!q)return;let html=`<p class="qnum">제${q.r}회 ${q.p}교시 ${q.n}번, ${esc(unitName(q.u))}</p><p class="qtext">${esc(q.t)}</p>`;
   if(q.p===1){const cs=cardsForK(id);html+=cs.length?cs.map(cardModal).join(''):`<div class="empty"><b>아직 카드가 없어요</b>매일 세트가 기출 미수록 용어를 우선 다뤄요. 지금 필요하면 프롬프트 3으로 만들어 가져오기 하세요.</div>`;}
@@ -752,6 +779,17 @@ function applyLook(){const s=S.settings;if(!s.theme||s.theme==='auto')document.d
 function promptWith(id,from,to){const p=PE_PROMPTS.find(x=>x.id===id);return p?fillT(p.t).replace(from,to):'';}
 
 /* ════════ 22. 이벤트 ════════ */
+/* 형광펜 낱말: 꾹 누르면(0.45초) 그 카드 설명. 데스크톱은 오른쪽 클릭. 누른 뒤 손을 뗄 때 생기는 클릭은 버린다(카드 뒤집기·창 닫기 방지) */
+let glT=null,glXY=null,glEl=null,glFired=0;
+function glShow(el,touch){const c=card(el.dataset.gl);if(!c)return;if(touch)glFired=Date.now();openModal(cardModal(c));}
+function glCancel(){clearTimeout(glT);glT=null;if(glEl){glEl.classList.remove('press');glEl=null;}}
+document.addEventListener('touchstart',e=>{glCancel();glFired=0;const el=e.target.closest&&e.target.closest('.gl');if(!el||!e.touches||!e.touches[0])return;
+  glEl=el;el.classList.add('press');glXY=[e.touches[0].clientX,e.touches[0].clientY];glT=setTimeout(()=>{const x=glEl;glCancel();if(x)glShow(x,true);},450);},{passive:true});
+document.addEventListener('touchmove',e=>{if(!glT||!e.touches||!e.touches[0])return;if(Math.abs(e.touches[0].clientX-glXY[0])+Math.abs(e.touches[0].clientY-glXY[1])>10)glCancel();},{passive:true});
+document.addEventListener('touchend',e=>{glCancel();if(glFired&&e.cancelable)e.preventDefault();},{passive:false});
+document.addEventListener('touchcancel',glCancel);
+document.addEventListener('contextmenu',e=>{const el=e.target.closest&&e.target.closest('.gl');if(!el)return;e.preventDefault();glShow(el,false);});
+document.addEventListener('click',e=>{if(glFired&&Date.now()-glFired<1500){glFired=0;e.preventDefault();e.stopPropagation();}},true);
 document.addEventListener('click',e=>{
   const m=e.target.closest('[data-stop]');const b=e.target.closest('[data-act]');
   if(b&&b.dataset.act==='modal-close'&&m)return;
@@ -841,6 +879,7 @@ document.addEventListener('click',e=>{
   case'unhide':S.hidden={};save();invalidate();toast('되돌렸어요');return render();
   case'fs':S.settings.fs=D.v;applyLook();save();return render();
   case'theme':S.settings.theme=D.v;applyLook();save();return render();
+  case'gloss':S.settings.gloss=D.v==='off'?'off':'on';save();return render();
   case'save-settings':{const np=Number($('#sNew').value),du=($('#sData')||{}).value;S.settings.newPerDay=Math.min(60,Math.max(1,np||10));if(du!==undefined)S.settings.dataUrl=du.trim();save();toast('저장했어요');return render();}
   /* 시험 일정 */
   case'sch-save':{if(!SCH)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(SCH.start||''))return toast('준비 시작일을 확인하세요');S.settings.start=SCH.start;S.settings.target=SCH.target||'auto';SCH=null;recalcPlan();save();toast(repoPlanState()==='diff'?'시험 일정을 바꿨어요. 예약 작업에도 알려 주세요':'시험 일정을 바꿨어요');return render();}
@@ -869,5 +908,5 @@ window.addEventListener('online',()=>sync(true));
 PE_IO.init({toast});recalcPlan();applyLook();setPreset('essay');R=parseHash();
 if(!location.hash)history.replaceState(null,'','#today');
 render();sync(true);
-window.__pe={S:()=>S,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,render,invalidate,startSession};
+window.__pe={S:()=>S,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,render,invalidate,startSession};
 })();
