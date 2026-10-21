@@ -199,6 +199,9 @@ textarea.in{min-height:120px;font-size:.88rem;line-height:1.5;font-family:ui-mon
 .grade3 .g1{border-color:color-mix(in srgb,var(--amber) 45%,transparent);color:var(--amber)}
 .grade3 .g2{background:var(--ok);border-color:var(--ok);color:#fff}
 .grade3 .g2 small{color:rgba(255,255,255,.85)}
+.grade3 button.on{outline:3px solid var(--blue);outline-offset:2px}
+.sessnav{margin-top:10px}
+.sessnav .btn{min-height:44px}
 .prog{display:flex;align-items:center;gap:10px;margin:12px 2px}
 .prog .bar{flex:1}
 .prog span{color:var(--ink2);font-size:.86rem;font-weight:600;font-variant-numeric:tabular-nums}

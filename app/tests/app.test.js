@@ -97,11 +97,38 @@ const go = async h => { w.location.hash = h; await sleep(30); };
 
   // 카드로 넘겨 보기 세션
   await go('#set/2026-10-19'); click('[data-act="set-tab"][data-t="cards"]'); await sleep(20);
+  const rd = () => Object.keys((S().sp['2026-10-19'] || {}).read || {}).map(Number).sort((x, y) => x - y).join();
+  const read0 = rd();
   click('[data-act="set-flash"]'); await sleep(40);
   ok(view().querySelector('.fc'), '세트 카드 세션 시작');
+  ok(rd() === read0, '넘겨 보기를 시작만 해서는 읽음으로 치지 않음');
+  const it0 = pe.SES().items[0];
+  ok(view().querySelector('[data-act="sess-prev"]').disabled && view().querySelector('[data-act="sess-skip"]'), '첫 카드: 이전 꺼짐, 다음 있음');
+  click('[data-act="sess-skip"]'); await sleep(20);
+  ok(pe.SES().i === 1 && rd() === read0, '다음: 뒷면을 안 본 카드는 읽음 아님');
+  click('[data-act="sess-prev"]'); await sleep(20);
+  ok(pe.SES().i === 0 && !pe.SES().back, '이전: 첫 카드 앞면으로');
   click('[data-act="sess-flip"]'); await sleep(20);
+  ok(rd().split(',').includes(String(it0.si)) && rd().split(',').filter(Boolean).length === read0.split(',').filter(Boolean).length + (read0.split(',').includes(String(it0.si)) ? 0 : 1), '뒷면을 본 카드만 읽음');
   click('[data-act="sess-grade"][data-g="0"]'); await sleep(20);
   ok(Object.keys(S().wrong).some(k => k.startsWith('C:')), '모름 → 오답 노트(카드)');
+  // 이전으로 돌아와 다시 고르기: 처음 고르기 전 상태로 되돌린 뒤 다시 매김
+  click('[data-act="sess-prev"]'); await sleep(20);
+  ok(pe.SES().i === 0 && pe.SES().back && view().querySelector('.grade3 .g0.on') && /다시 고르면 바꿔요/.test(txt()), '이전으로 오면 뒷면과 고른 것 표시');
+  click('[data-act="sess-grade"][data-g="2"]'); await sleep(20);
+  ok(pe.SES().stats.no === 0 && pe.SES().stats.ok === 1 && !S().wrong['C:' + it0.id] && S().cards[it0.id].box >= 1, '다시 고르면 바뀜: 모름 → 앎(오답 노트에서 빠지고 점수도 바뀜)');
+  click('[data-act="sess-prev"]'); await sleep(20);
+  click('[data-act="sess-grade"][data-g="0"]'); await sleep(20);
+  ok(pe.SES().stats.no === 1 && pe.SES().stats.ok === 0 && S().wrong['C:' + it0.id] && S().cards[it0.id].box === 0 && S().wrong['C:' + it0.id].n === 1, '한 번 더 바꿔도 두 번 세지 않음(오답 1회)');
+  // 카드를 옆으로 밀어 넘기기
+  const swipe = async dx => { const fc = view().querySelector('.fc'); const a = new w.Event('touchstart', { bubbles: true }); a.touches = [{ clientX: 200, clientY: 300 }]; fc.dispatchEvent(a); const b = new w.Event('touchend', { bubbles: true }); b.changedTouches = [{ clientX: 200 + dx, clientY: 305 }]; fc.dispatchEvent(b); await sleep(20); };
+  const i1 = pe.SES().i; await swipe(-120);
+  ok(pe.SES().i === i1 + 1, '왼쪽으로 밀면 다음 카드');
+  await swipe(120);
+  ok(pe.SES().i === i1, '오른쪽으로 밀면 이전 카드');
+  ok(view().querySelector('.topbar [data-act="back"]'), '세션 위쪽 뒤로 버튼');
+  await go('#set/2026-10-19');
+  ok(rd().split(',').includes(String(it0.si)) && rd().split(',').filter(Boolean).length <= read0.split(',').filter(Boolean).length + 1, '중간에 나가도 본 카드만 읽음(나머지는 그대로)');
 
   // 복습 탭
   await go('#review');

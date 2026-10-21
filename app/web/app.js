@@ -467,12 +467,13 @@ function startSession(o){SES=Object.assign({i:0,back:false,answered:null,stats:{
 function vSess(){if(!SES)return topbar('학습')+`<div class="empty" style="margin-top:20px"><b>진행 중인 학습이 없어요</b><div class="btns"><button class="btn" data-act="go" data-h="study">암기 탭으로</button></div></div>`;
   const it=SES.items[SES.i];if(!it)return sessDone();const n=SES.items.length;
   const head=`${topbar(SES.title||'학습')}<div class="prog"><div class="bar"><i style="width:${Math.round(SES.i/n*100)}%"></i></div><span>${SES.i+1} / ${n}</span></div>`;
-  if(it.type==='card'){const c=card(it.id);if(!c)return head+skipBtn();const p=pget(c.id);
+  if(it.type==='card'){const c=card(it.id);if(!c)return head+skipBtn();const p=pget(c.id);const gotG=SES.graded?SES.graded[SES.i]:null;
     return head+`<div class="fc ${SES.back?'back':''}" data-act="sess-flip"><div class="meta"><span>${esc(unitName(c.u))}${c.x&&c.x.length?`, 기출 ${c.x.length}회`:''}${p.seen?'':', 처음 보는 카드'}</span><button class="star ${p.star?'on':''}" data-act="star" data-id="${c.id}" aria-label="별표">★</button></div>
       ${SES.back?`<div class="term">${esc(c.t)}</div><p class="defn ruled">${glHTML(c.d,c.id)}</p><ul class="kws">${(c.k||[]).map(k=>`<li><span>${esc(k)}</span></li>`).join('')}</ul>${c.x&&c.x.length?`<p class="xref">기출: ${c.x.map(kLabelShort).join(', ')}</p>`:''}`
       :`<div class="term">${esc(c.t)}</div><p class="hint">정의, 원리, 특징, 유의사항을 30초 안에 말해 보고 탭하세요</p>`}</div>
-    ${SES.back?`<div class="grade3"><button class="g0" data-act="sess-grade" data-g="0">모름<small>${nextLabel(c.id,0)}</small></button><button class="g1" data-act="sess-grade" data-g="1">애매<small>${nextLabel(c.id,1)}</small></button><button class="g2" data-act="sess-grade" data-g="2">앎<small>${nextLabel(c.id,2)}</small></button></div>`
-      :`<div class="btns"><button class="btn" data-act="sess-flip">뒷면 보기</button></div>`}`;}
+    ${SES.back?`<div class="grade3">${[[0,'모름'],[1,'애매'],[2,'앎']].map(([g,l])=>`<button class="g${g}${gotG===g?' on':''}" data-act="sess-grade" data-g="${g}">${l}<small>${gotG===g?'고른 것':nextLabel(c.id,g)}</small></button>`).join('')}</div>${gotG!=null?'<p class="note" style="text-align:center">다시 고르면 바꿔요</p>':''}`
+      :`<div class="btns"><button class="btn" data-act="sess-flip">뒷면 보기</button></div>`}
+    <div class="btns sessnav"><button class="btn sec" data-act="sess-prev" ${SES.i?'':'disabled'}>‹ 이전</button><button class="btn sec" data-act="sess-skip">${SES.i+1<n?'다음 ›':'끝내기'}</button></div>`;}
   if(it.type==='mcq'){const c=card(it.id);const ans=SES.answered;
     return head+`<div class="qcard"><p class="qnum">이 설명에 맞는 용어는?${c.x&&c.x.length?' (기출 '+c.x.length+'회)':''}</p><p class="qtext" style="font-weight:500">${esc(c.d)}</p>
       ${it.opts.map((oid,k)=>{const o=card(oid);let cls='';if(ans!=null){if(oid===c.id)cls='right';else if(ans===k)cls='wrong';}return`<button class="opt ${cls}" data-act="sess-pick" data-k="${k}" ${ans!=null?'disabled':''}><span class="ab">${'①②③④'.charAt(k)}</span><span>${esc(o?o.t:'')}</span></button>`;}).join('')}
@@ -506,6 +507,16 @@ function sessDone(){const s=SES.stats,n=s.ok+s.mid+s.no;
   <p class="ds" style="margin:6px 0 12px">${n&&s.no?'틀린 것은 오답 노트에 모였어요. 두 번 연속 맞히면 빠집니다.':'좋아요. 간격이 벌어진 만큼 다음 복습 날짜가 뒤로 갔어요.'}</p>
   <button class="btn" data-act="sess-close">돌아가기</button></div>`;}
 function sessAdvance(){SES.i++;SES.back=false;SES.answered=null;render();window.scrollTo(0,0);}
+/* 카드 넘겨 보기: 이전 카드로(이미 매긴 카드는 뒷면부터), 세트 카드는 뒷면을 본 것만 읽음 */
+function sessPrev(){if(!SES||SES.i<=0)return;SES.i--;SES.back=!!(SES.graded&&SES.graded[SES.i]!=null);SES.answered=null;render();window.scrollTo(0,0);}
+function sessMarkRead(it){if(!SES||!SES.setD||!it||it.si==null)return;const p=sp(SES.setD);if(!p.read[it.si]){p.read[it.si]=1;introduce(it.id);touchDay();save();}}
+const gradeKey=g=>g===2?'ok':g===1?'mid':'no';
+/* 다시 고를 때: 처음 고르기 전의 카드 진도·오답을 되돌리고 오늘 기록·세션 점수에서 뺀다 */
+function sessSnap(it){const ks=uniq(['C:'+it.id].concat(it.wrongKey?[it.wrongKey]:[]));return JSON.stringify({c:S.cards[it.id]||null,w:ks.map(k=>[k,S.wrong[k]||null])});}
+function sessUngrade(it,snap,prev){const o=JSON.parse(snap);if(o.c)S.cards[it.id]=o.c;else delete S.cards[it.id];o.w.forEach(([k,v])=>{if(v)S.wrong[k]=v;else delete S.wrong[k];});
+  const d=S.daily[todayStr()];if(d){d.graded=Math.max(0,(d.graded||0)-1);if(!o.c||!o.c.seen)d.newSeen=Math.max(0,(d.newSeen||0)-1);}
+  SES.stats[gradeKey(prev)]=Math.max(0,SES.stats[gradeKey(prev)]-1);
+  if(prev===0&&SES.requeue){for(let j=SES.items.length-1;j>SES.i;j--)if(SES.items[j].id===it.id&&!(SES.graded&&SES.graded[j]!=null)){SES.items.splice(j,1);break;}}}
 function logTest(type,n,ok){S.log.push({d:todayStr(),type,total:n,ok});if(S.log.length>500)S.log=S.log.slice(-500);touchDay();save();}
 
 /* 세션 만들기 */
@@ -826,6 +837,11 @@ document.addEventListener('touchstart',e=>{glCancel();glFired=0;const tg=e.targe
 document.addEventListener('touchmove',e=>{if(!glT||!e.touches||!e.touches[0])return;if(Math.abs(e.touches[0].clientX-glXY[0])+Math.abs(e.touches[0].clientY-glXY[1])>10)glCancel();},{passive:true});
 document.addEventListener('touchend',e=>{glCancel();if(glFired&&e.cancelable)e.preventDefault();},{passive:false});
 document.addEventListener('touchcancel',glCancel);
+/* 카드 넘겨 보기: 카드를 옆으로 밀면 다음(왼쪽)·이전(오른쪽) */
+let swXY=null;
+document.addEventListener('touchstart',e=>{const t=e.touches&&e.touches[0];swXY=t&&e.target.closest&&e.target.closest('.fc')?[t.clientX,t.clientY]:null;},{passive:true});
+document.addEventListener('touchend',e=>{const t=e.changedTouches&&e.changedTouches[0];if(!swXY||!t||!SES||R.page!=='sess'||glFired){swXY=null;return;}const dx=t.clientX-swXY[0],dy=t.clientY-swXY[1];swXY=null;
+  if(Math.abs(dx)>60&&Math.abs(dy)<50){if(dx<0)sessAdvance();else sessPrev();}},{passive:true});
 document.addEventListener('contextmenu',e=>{if(glAt(e.target,e.clientX,e.clientY))e.preventDefault();});
 document.addEventListener('click',e=>{if(glFired&&Date.now()-glFired<1500){glFired=0;e.preventDefault();e.stopPropagation();}},true);
 document.addEventListener('click',e=>{
@@ -841,7 +857,7 @@ document.addEventListener('click',e=>{
   /* 세트 */
   case'set-tab':SV[D.d]=D.t;return render();
   case'set-open':{const i=Number(D.i);const key=D.d+':o';SV[key]=SV[key]===i?null:i;if(SV[key]===i){const p=sp(D.d);p.read[i]=1;introduce(setCardId(D.d,i));touchDay();save();}return render();}
-  case'set-flash':{const s=SETS.sets[D.d];const ids=(s.cards||[]).map((_,i)=>setCardId(D.d,i)).filter(Boolean);const p=sp(D.d);(s.cards||[]).forEach((_,i)=>{p.read[i]=1;});save();return startSession({title:korDate(D.d)+' 세트 카드',items:cardItems(ids)});}
+  case'set-flash':{const s=SETS.sets[D.d];const items=(s.cards||[]).map((_,i)=>({type:'card',id:setCardId(D.d,i),si:i})).filter(x=>x.id);return startSession({title:korDate(D.d)+' 세트 카드',items,setD:D.d});}
   case'set-quiz':{const d=D.d,i=Number(D.i),k=Number(D.k);const q=SETS.sets[d].quiz[i];const p=sp(d);if(p.quiz[i])return;const ok=k===q.a;p.quiz[i]={pick:k,ok};const key='Q:'+d+':'+i;const qp=S.qp[key]||(S.qp[key]={ok:0,ng:0});ok?qp.ok++:qp.ng++;qp.last=todayStr();if(!ok)markWrong(key,'quiz');touchDay();save();return render();}
   case'set-eo':SV[D.d+':eo']=1;return render();
   case'guide-tab':SV.guide=D.t;window.scrollTo(0,0);return render();
@@ -878,9 +894,12 @@ document.addEventListener('click',e=>{
   case'start-mcq':return startMCQ();
   case'start-recall':return startRecall();
   case'start-outline':return startOutline();
-  case'sess-flip':if(e.target.closest('[data-act="star"]'))return;SES.back=!SES.back;return render();
-  case'sess-grade':{const it=SES.items[SES.i];const g=Number(D.g);grade(it.id,g);if(it.wrongKey&&g===2)rightOnWrong(it.wrongKey);SES.stats[g===2?'ok':g===1?'mid':'no']++;
-    if(g===0&&SES.requeue)SES.items.push({type:'card',id:it.id});return sessAdvance();}
+  case'sess-flip':{if(e.target.closest('[data-act="star"]'))return;SES.back=!SES.back;if(SES.back)sessMarkRead(SES.items[SES.i]);return render();}
+  case'sess-grade':{const it=SES.items[SES.i];const g=Number(D.g);const gd=SES.graded||(SES.graded={}),sn=SES.snap||(SES.snap={});const prev=gd[SES.i];
+    if(prev!=null){if(prev===g)return sessAdvance();sessUngrade(it,sn[SES.i],prev);}else sn[SES.i]=sessSnap(it);
+    grade(it.id,g);if(it.wrongKey&&g===2)rightOnWrong(it.wrongKey);SES.stats[gradeKey(g)]++;gd[SES.i]=g;sessMarkRead(it);
+    if(g===0&&SES.requeue&&prev!==0)SES.items.push({type:'card',id:it.id});return sessAdvance();}
+  case'sess-prev':return sessPrev();
   case'sess-pick':{if(SES.answered!=null)return;const it=SES.items[SES.i],k=Number(D.k);SES.answered=k;
     if(it.type==='mcq'){const ok=it.opts[k]===it.id;const p=prog(it.id);if(ok){p.ok++;SES.stats.ok++;rightOnWrong('C:'+it.id);}else{p.ng++;SES.stats.no++;markWrong('C:'+it.id,'card');}save();}
     else if(it.type==='quiz'){const q=SETS.sets[it.d].quiz[it.i];const ok=k===q.a;const key='Q:'+it.d+':'+it.i;const qp=S.qp[key]||(S.qp[key]={ok:0,ng:0});qp.last=todayStr();if(ok){qp.ok++;SES.stats.ok++;rightOnWrong(key);}else{qp.ng++;SES.stats.no++;markWrong(key,'quiz');}save();}
