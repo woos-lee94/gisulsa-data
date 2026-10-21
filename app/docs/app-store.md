@@ -96,7 +96,7 @@ https://github.com/woos-lee94/gisulsa-data/blob/main/app/docs/privacy.md
 - 기본: 교육. 토목시공기술사 필기 시험 공부가 핵심 기능
 - 추가: 참고. 기출 문제 요지와 용어 카드를 찾아보는 용도
 
-## 앱 심사 메모 (3891자 / 4,000자)
+## 앱 심사 메모 (3939자 / 4,000자)
 
 ```
 OVERVIEW
@@ -110,20 +110,20 @@ HOW TO TEST (about 2 minutes; the Korean labels can be pasted)
 2. Tap the "테스트" (Test) tab, then "4지선다 10문" (10 multiple-choice questions). Pick an answer, then tap "다음" (Next).
 3. Go back to "테스트" and tap "기출 회차 그대로 풀기" (Past exams by round), then "제140회" (Round 140). Tap a question in the first period to see the linked study cards.
 4. On "테스트" tap "논술 답안 작성 요령" (How to write essay answers), then the "모범 답안" (Model answer) tab: a 4-page model answer sheet with 22 lines per page, a table and two figures.
-5. Tap the "복습" (Review) tab, then "세트 보관함" (Set archive). It lists the daily sets downloaded so far; tap one to see its "용어" (Terms), "퀴즈" (Quiz), "논술" (Essay) and "과제" (Tasks) tabs.
+5. Tap the "복습" (Review) tab, then "세트 보관함" (Set archive), and open a set. In "용어" (Terms) open a term and long-press any word in its explanation: the linked study card or a built-in glossary entry appears.
 6. Tap the "더보기" (More) tab, then "교시 타이머" (Exam timer), then "시작" (Start). A short beep plays and the screen stays awake while the timer runs.
-7. On "더보기" tap "설정" (Settings), then "알림" (Notifications) at the bottom. Ticking the first box asks for permission and schedules a local weekday reminder.
+7. In "더보기" > "설정" (Settings) > "알림" (Notifications), ticking the first box asks for permission and schedules a local reminder.
 8. On "더보기" tap "백업·복원" (Backup and restore). "파일로 저장" (Save as file) opens the iOS share sheet with a JSON backup file.
 9. Account deletion: "더보기" > "설정" (Settings) > "아이디 지우기" (Delete ID) deletes the ID, approval record and account at once and returns to the first screen.
 
 DATA SOURCES
-Past-exam question summaries for rounds 116 to 140 (2018 to 2026) of the written exam administered by HRD Korea. They are summaries written by the developer, not the original wording. Study cards, essay outlines, daily sets and weekly mock exams were written by the developer with the help of an AI assistant (Claude by Anthropic) and partly checked against Korean design and construction standards (KDS and KCS) and laws. Items the developer could not confirm are listed in each set under "확인이 필요한 부분" (Needs checking). Sources are described under "더보기" > "콘텐츠 출처" (Content sources).
+Past-exam question summaries for rounds 116 to 140 (2018 to 2026) of the written exam administered by HRD Korea. They are summaries written by the developer, not the original wording. Study cards, the glossary, essay outlines, daily sets and weekly mock exams were written by the developer with the help of an AI assistant (Claude by Anthropic) and partly checked against Korean design and construction standards (KDS and KCS) and laws. Items the developer could not confirm are listed in each set under "확인이 필요한 부분" (Needs checking). Sources are described under "더보기" > "콘텐츠 출처" (Content sources).
 
 METHOD
-No AI runs inside the app. Spaced repetition, weekly planning and exam dates are rule-based and computed on the device. The app can copy prompt text that the user may paste into an AI assistant of their choice to get feedback on a handwritten answer; the app itself sends nothing to any AI service.
+No AI runs inside the app. Spaced repetition, weekly planning and exam dates are rule-based and computed on the device. Copy buttons give prompt text the user may paste into an AI assistant of their choice to get feedback on a handwritten answer; the app sends nothing to any AI service.
 
 PRIVACY
-No ads, analytics or tracking. Study records stay on the device. For access control the app uses Firebase Anonymous Authentication and Cloud Firestore to store only the chosen ID, a random account number, the approval status and timestamps; no name, email or phone number. The account key is kept in the device keychain. Other network requests are HTTPS GET requests for public JSON files on raw.githubusercontent.com that carry no user data. The only permission is notifications, requested when the user turns on a reminder.
+No ads, analytics or tracking. Study records stay on the device. For access control the app uses Firebase Anonymous Authentication and Cloud Firestore to store only the chosen ID, a random account number, the approval status and timestamps; no name, email or phone number. The account key is kept in the device keychain. Other network requests are HTTPS GET requests for public JSON files on raw.githubusercontent.com that carry no user data. In the word lookup, the "국어사전" and "지식백과" buttons open a Naver search for that word in Safari. The only permission is notifications.
 
 EXTENSIONS
 None.
