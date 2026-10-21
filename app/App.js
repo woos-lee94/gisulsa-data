@@ -197,11 +197,18 @@ export default function App() {
     return false;
   }, []);
 
+  // 화면이 뜬 뒤에 승인·관리자 상태가 바뀌어도(콘솔에서 관리자 지정 등) 앱을 다시 켜지 않고 바로 알린다
+  const memberNow = useRef(null);
+  memberNow.current = { id: m.id || '', admin: !!m.admin, uid: m.uid || '' };
+  const pushMember = useCallback(() => inject(`window.PE_IO&&PE_IO._member&&PE_IO._member(${jsLiteral(memberNow.current)});true;`), [inject]);
+  useEffect(() => { if (loaded.current && m.state === 'approved') pushMember(); }, [m.id, m.admin, m.uid, m.state, pushMember]);
+
   const onLoadEnd = useCallback(() => {
     loaded.current = true;
+    pushMember();
     SplashScreen.hideAsync().catch(() => {});
     if (pendingHash.current) { go(pendingHash.current); pendingHash.current = null; }
-  }, [go]);
+  }, [go, pushMember]);
 
   // 웹뷰 프로세스가 메모리 부족으로 꺼지면, 최신 기록을 다시 넣어 새로 띄운다
   const onTerminate = useCallback(() => { loaded.current = false; setGen(g => g + 1); }, []);

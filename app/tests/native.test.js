@@ -209,6 +209,13 @@ function open(opt = {}) {
   dev.answers.push(true);
   K.click('[data-act="member-remove"]'); await sleep(40);
   ok(dev.member.length === 1 && dev.member[0][0] === 'remove', '아이디 지우기 확인 → 앱에 지우기 요청');
+  // 앱이 떠 있는 동안 관리자로 지정되면(콘솔) 앱이 알려 주고 화면이 바로 바뀐다
+  await K.go('#more');
+  K.w.PE_IO._member({ id: 'kim', admin: true, uid: 'U2' }); await sleep(20);
+  ok(/승인 관리/.test(K.txt()), '떠 있는 더보기에 관리자 지정이 바로 반영');
+  K.w.PE_IO._member({ id: 'kim', admin: false, uid: 'U2' }); await sleep(20);
+  ok(!/승인 관리/.test(K.txt()), '관리자 해제도 바로 반영');
+  dev.member.length = 0;
   ok(K.errors.length === 0, '일반 회원 화면 콘솔 오류 없음 ' + K.errors.slice(0, 3).join(' | '));
 
   dev.member.length = 0;
