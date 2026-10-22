@@ -146,6 +146,15 @@ function open(opt = {}) {
   A.click('[data-act="timer-toggle"]'); await sleep(20);
   A.click('[data-act="timer-reset"]'); await sleep(20);
   ok(dev.awake.join() === 'true,false,true,false', '처음으로 → 화면 켜 두기 끔');
+  // 가리며 외우기도 도는 동안 화면을 켜 두고, 멈추거나 다른 화면으로 가면 끈다
+  await A.go('#set/2026-10-19'); A.click('[data-act="set-tab"][data-t="cards"]'); await sleep(20);
+  A.click('[data-act="memo-set"]'); await sleep(30);
+  A.click('[data-act="memo-play"]'); await sleep(20);
+  ok(dev.awake[dev.awake.length - 1] === true, '가리며 외우기 시작 → 화면 켜 두기');
+  A.click('[data-act="memo-play"]'); await sleep(20);
+  ok(dev.awake[dev.awake.length - 1] === false, '일시정지 → 화면 켜 두기 끔');
+  A.click('[data-act="memo-play"]'); await sleep(20); await A.go('#today');
+  ok(dev.awake[dev.awake.length - 1] === false && !A.pe.MEMO().run, '다른 화면으로 가면 멈추고 끔');
 
   // 알림 설정(앱 전용)
   await A.go('#settings');

@@ -201,6 +201,21 @@ textarea.in{min-height:120px;font-size:.88rem;line-height:1.5;font-family:ui-mon
 .grade3 .g2 small{color:rgba(255,255,255,.85)}
 .grade3 button.on{outline:3px solid var(--blue);outline-offset:2px}
 .sessnav{margin-top:10px}
+/* 가리며 외우기: 가림 때는 고른 줄을 회색 막대로(글자 자리는 그대로) */
+/* 남은 시간 줄은 위쪽 막대 아래에 붙어 있어 긴 카드에서도 보인다 */
+.mhead{position:sticky;top:60px;z-index:15;background:var(--paper);margin:0 -16px;padding:2px 16px 0}
+.mclock{display:flex;align-items:baseline;gap:8px;margin:6px 2px 6px;font-weight:700;font-variant-numeric:tabular-nums}
+.mclock b{font-size:1.25rem}.mclock b.show{color:var(--blue)}.mclock b.hide{color:var(--amber)}
+.mclock span{margin-left:auto;color:var(--ink2);font-weight:600;font-size:.92rem}
+.mhead.hide .mbar i{background:var(--amber)}
+.mbar{height:5px;border-radius:3px;background:var(--rule);overflow:hidden;margin:0 0 12px}.mbar i{display:block;height:100%;background:var(--blue);transition:width .2s linear}
+.memo{background:var(--sheet);border-radius:var(--r-lg);padding:18px 18px 16px;min-height:40vh}
+.memo .ml{border-radius:6px;padding:3px 6px;margin:0 -6px 2px;cursor:pointer;transition:background .25s,color .25s}
+.memo .mterm{font-size:1.3rem;font-weight:800;margin-bottom:8px}
+.memo .mdef{line-height:1.7}
+.memo .mkw{display:inline-block;margin:8px 8px 0 -6px;font-weight:700;background:linear-gradient(transparent 56%,var(--marker) 56%)}
+.memo .ml.pk{box-shadow:inset 0 0 0 2px var(--marker)}
+.memo.hiding .ml.hd{color:transparent;background:var(--rule);box-shadow:none}
 .sessnav .btn{min-height:44px}
 .prog{display:flex;align-items:center;gap:10px;margin:12px 2px}
 .prog .bar{flex:1}

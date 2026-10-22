@@ -325,6 +325,67 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   await go('#test'); ok(view().querySelector('[data-h="guide"]'), '테스트 탭 → 답안 작성 요령');
   await go('#more'); ok(view().querySelector('[data-h="guide"]'), '더보기 → 답안 작성 요령');
 
+  // 가리며 외우기: 보기 → 가림을 정한 시간마다 반복(시계는 검사에서 직접 돌린다)
+  {
+    let T = 2e12; const realNow = w.Date.now; w.Date.now = () => T;
+    const tick = ms => { T += ms; pe.memoTick(); };
+    const box = () => view().querySelector('#memoBox'), clock = () => view().querySelector('#memoClock').textContent;
+    S().settings.memo = { show: 10, hide: 5, mode: 'all', reps: 2, auto: 1 };
+    await go('#set/2026-10-19'); click('[data-act="set-tab"][data-t="cards"]'); await sleep(20);
+    const rdm = () => (S().sp['2026-10-19'] || {}).read || {};
+    click('[data-act="memo-set"]'); await sleep(30);
+    const M = pe.MEMO;
+    ok(M() && w.location.hash === '#memo' && box().querySelector('.mterm'), '세트 용어 탭 → 가리며 외우기');
+    ok(rdm()[M().items[0].si] && !rdm()[M().items[M().items.length - 1].si] || M().items.length === 1, '보여 준 카드만 읽음');
+    const nl = box().querySelectorAll('.ml').length;
+    ok(nl >= 3 && box().querySelectorAll('.ml.hd').length === nl - 1 && !box().querySelector('.mterm.hd'), '전체: 용어만 남기고 모든 줄을 가릴 줄로');
+    ok(!box().classList.contains('hiding') && /보기/.test(clock()) && /1 \/ 2회/.test(clock()), '시작 전: 보기, 1/2회');
+    click('[data-act="memo-play"]'); await sleep(10);
+    ok(M().run && view().querySelector('#memoPlay').textContent === '일시정지', '시작 → 일시정지 버튼');
+    tick(9000);
+    ok(!box().classList.contains('hiding') && /보기 1초/.test(clock()), '보이는 시간 안에는 그대로(남은 1초)');
+    tick(1100);
+    ok(box().classList.contains('hiding') && /가림/.test(clock()), '10초 뒤 가림');
+    tick(5100);
+    ok(!box().classList.contains('hiding') && /2 \/ 2회/.test(clock()), '가림 5초 뒤 다시 보기, 2/2회');
+    const i0 = M().i; tick(10100); tick(5100);
+    ok(M().i === i0 + 1 && M().cnt === 0 && M().run && rdm()[M().items[i0 + 1].si], '정한 횟수를 다 돌면 다음 카드로(그 카드도 읽음)');
+    // 고른 줄만 가리기
+    click('#memoBox .ml[data-li="d0"]'); await sleep(10);
+    ok(pe.S().settings.memo.mode === 'pick' && box().querySelectorAll('.ml.hd').length === 1 && box().querySelector('.ml[data-li="d0"].hd.pk'), '줄을 탭하면 그 줄만 가리기로');
+    click('#memoBox .ml[data-li="k0"]'); await sleep(10);
+    ok(box().querySelectorAll('.ml.hd').length === 2 && JSON.stringify(S().memoPick[M().items[M().i].id]) === '["d0","k0"]', '여러 줄 고르기(카드마다 기억)');
+    click('#memoBox .ml[data-li="k0"]'); await sleep(10);
+    ok(box().querySelectorAll('.ml.hd').length === 1, '다시 탭하면 빼기');
+    // 무한 반복
+    click('[data-act="memo-cfg"][data-k="reps"][data-v="0"]'); await sleep(10);
+    const i1 = M().i; for (let k = 0; k < 6; k++) { tick(10100); tick(5100); }
+    ok(M().i === i1 && M().cnt === 6 && /7회째, 무한 반복/.test(clock()) && view().querySelector('#memoCfg').open, '무한: 다음 카드로 넘어가지 않고 계속(설정 칸은 열린 채)');
+    // 일시정지·계속
+    tick(4000); click('[data-act="memo-play"]'); await sleep(10);
+    const leftAt = M().left; tick(60000);
+    ok(!M().run && leftAt > 5000 && leftAt < 7000 && M().phase === 'show' && view().querySelector('#memoPlay').textContent === '계속', '일시정지하면 시간이 멈춤');
+    click('[data-act="memo-play"]'); await sleep(10); tick(leftAt - 200);
+    ok(M().phase === 'show', '계속: 남은 시간부터'); tick(400);
+    ok(M().phase === 'hide', '남은 시간이 지나면 가림');
+    // 한 번 하고 멈춤
+    click('[data-act="memo-cfg"][data-k="reps"][data-v="1"]'); click('[data-act="memo-cfg"][data-k="auto"][data-v="0"]'); await sleep(10);
+    tick(5100); 
+    ok(!M().run && M().done && /다 했어요/.test(clock()) && view().querySelector('#memoPlay').textContent === '다시 하기' && !box().classList.contains('hiding'), '다 하면 멈춤(멈춤 설정)');
+    // 이전·다음
+    const i2 = M().i; click('[data-act="memo-next"]'); await sleep(10);
+    ok(M().i === i2 + 1 && !M().done, '다음 카드'); click('[data-act="memo-prev"]'); await sleep(10);
+    ok(M().i === i2, '이전 카드');
+    click('[data-act="memo-play"]'); await sleep(10);
+    await go('#study');
+    ok(!M().run, '다른 화면으로 가면 멈춤');
+    ok(/가리며 외우기 \(\d+장/.test(txt()), '암기 탭에 가리며 외우기');
+    click('[data-act="memo-study"]'); await sleep(30);
+    ok(M().items.length >= 1 && M().items.length <= 20 && !M().setD, '암기 탭 → 범위 카드로 가리며 외우기');
+    w.Date.now = realNow; S().settings.memo = { show: 10, hide: 5, mode: 'all', reps: 3, auto: 1 };
+    await go('#today');
+  }
+
   // 어려운 낱말 형광펜: 설명 속 다른 카드 용어, 꾹 누르면 그 카드
   {
     const nm = pe.glNames('평탄성 (PrI·IRI)');

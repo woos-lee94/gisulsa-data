@@ -324,22 +324,22 @@ function syncLine(){const s=S.sync||{};const n=Object.keys(SETS.sets).length;
 function paintSyncBits(){document.querySelectorAll('[data-syncline]').forEach(el=>el.innerHTML=syncLine());}
 
 /* ════════ 10. 라우터 ════════ */
-const TAB_OF={set:'today',sess:'',kichul:'test',mock:'test',guide:'test',admin:'more',plan:'more',schedule:'more',timer:'more',prompts:'more',imp:'more',settings:'more',backup:'more',about:'more',archive:'review',wrong:'review',stats:'test'};
+const TAB_OF={set:'today',sess:'',memo:'',kichul:'test',mock:'test',guide:'test',admin:'more',plan:'more',schedule:'more',timer:'more',prompts:'more',imp:'more',settings:'more',backup:'more',about:'more',archive:'review',wrong:'review',stats:'test'};
 const TABS=['today','review','study','test','more'];
 let R={tab:'today',page:null,a:null,b:null};
 function parseHash(){const h=decodeURIComponent((location.hash||'').replace(/^#\/?/,''));const p=h.split('/');const r={tab:'today',page:null,a:p[1]||null,b:p[2]||null};
   if(TABS.includes(p[0]))r.tab=p[0];else if(p[0]&&TAB_OF[p[0]]!==undefined){r.page=p[0];r.tab=TAB_OF[p[0]]||(SES&&SES.from)||'today';}return r;}
 function nav(h){if(('#'+h)===location.hash)render();else location.hash=h;}
 function back(){if(history.length>1&&document.referrer!==undefined&&R.page){history.back();}else nav(R.tab||'today');}
-window.addEventListener('hashchange',()=>{R=parseHash();if(R.page!=='sess')SES_SAVE();render();window.scrollTo(0,0);});
+window.addEventListener('hashchange',()=>{R=parseHash();if(R.page!=='sess')SES_SAVE();if(R.page!=='memo')memoStop();render();window.scrollTo(0,0);});
 let SES=null;function SES_SAVE(){/* 세션은 메모리에만 */}
 function render(){R=parseHash();document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===R.tab));
   const v=$('#view');let html='';
   try{
     if(!R.page)html=({today:vToday,review:vReview,study:vStudy,test:vTest,more:vMore}[R.tab]||vToday)();
-    else html=({set:vSet,sess:vSess,kichul:vKichul,mock:vMock,guide:vGuide,admin:vAdmin,plan:vPlan,schedule:vSchedule,timer:vTimer,prompts:vPrompts,imp:vImport,settings:vSettings,backup:vBackup,about:vAbout,archive:vArchive,wrong:vWrong,stats:vStats}[R.page]||vToday)();
+    else html=({set:vSet,sess:vSess,memo:vMemo,kichul:vKichul,mock:vMock,guide:vGuide,admin:vAdmin,plan:vPlan,schedule:vSchedule,timer:vTimer,prompts:vPrompts,imp:vImport,settings:vSettings,backup:vBackup,about:vAbout,archive:vArchive,wrong:vWrong,stats:vStats}[R.page]||vToday)();
   }catch(e){html=`<div class="empty" style="margin-top:24px"><b>화면을 그리는 중 오류가 났어요</b>${esc(e.message)}</div>`;console.error(e);}
-  v.innerHTML=html;paintNavBadges();paintPill();if(R.page==='timer')paintTimer();
+  v.innerHTML=html;paintNavBadges();paintPill();if(R.page==='timer')paintTimer();if(R.page==='memo')paintMemo();
   if(R.page==='sess'&&SES&&!SES.answered&&SES.items[SES.i]&&SES.items[SES.i].type==='fill'){const f=v.querySelector('.fill-in');if(f)try{f.focus({preventScroll:true});}catch(e){}}}
 function softRender(){if(R.page==='sess')return paintNavBadges();if(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return paintNavBadges();render();}
 function paintNavBadges(){const rv=dueSetReviews().length+(Object.keys(S.wrong).length?1:0);const b=document.querySelector('#nav button[data-tab="review"]');if(b){let nb=b.querySelector('.nb');const n=dueSetReviews().length;if(n){if(!nb){nb=document.createElement('span');nb.className='nb';b.appendChild(nb);}nb.textContent=n;}else if(nb)nb.remove();}}
@@ -399,7 +399,7 @@ function vSet(){const d=R.a;const s=SETS.sets[d];
         ${sc.plus?`<p class="plus">${esc(sc.plus)}</p>`:''}${(sc.field||(c&&c.field))?`<p class="field">현장: ${esc(sc.field||c.field)}</p>`:''}
         ${c&&c.x&&c.x.length?`<p class="xref">기출 <b>${c.x.length}회</b> 출제: ${c.x.map(kLabelShort).join(', ')}</p>`:''}${(sc.basis||(c&&c.basis))?`<p class="xref">근거: ${esc(sc.basis||c.basis)}</p>`:''}
         ${c?`<div class="btns"><button class="btn sm sec" data-act="star" data-id="${c.id}">${pget(c.id).star?'★ 별표 해제':'☆ 별표'}</button><span class="note" style="margin:auto 0">${unitName(c.u)}</span></div>`:''}</div>`:''}</div>`;}).join('')
-      +`<div class="btns"><button class="btn sec" data-act="set-flash" data-d="${d}">카드로 넘겨 보며 외우기</button><button class="btn sec" data-act="start-fill" data-d="${d}">빈칸 쓰기</button></div><p class="note">펼쳐 읽은 용어는 내일 카드 복습으로 다시 나와요. 모르는 낱말은 꾹 누르면 풀이가 나와요.</p>`;}
+      +`<div class="btns"><button class="btn sec" data-act="set-flash" data-d="${d}">카드로 넘겨 보며 외우기</button><button class="btn sec" data-act="start-fill" data-d="${d}">빈칸 쓰기</button></div><div class="btns" style="margin-top:8px"><button class="btn sec" data-act="memo-set" data-d="${d}">가리며 외우기(보였다 가렸다 반복)</button></div><p class="note">펼쳐 읽은 용어는 내일 카드 복습으로 다시 나와요. 모르는 낱말은 꾹 누르면 풀이가 나와요.</p>`;}
   else if(tab==='quiz'){body=(s.quiz||[]).map((q,i)=>quizBlock(d,i,q,p.quiz[i])).join('')||'<div class="empty">이 세트엔 퀴즈가 없어요</div>';
     if(st.qa)body+=`<p class="note">${st.qok}/${st.nq} 정답. 틀린 문제는 오답 노트로 갔어요.</p>`;}
   else if(tab==='essay'){const e=s.essay;if(!e)body='<div class="empty">이 세트엔 논술 문제가 없어요</div>';else{const show=SV[d+':eo'];
@@ -459,6 +459,7 @@ function vStudy(){const rg=S.range||'week',f=rangeFilter(rg);const pool=deck().f
   <label class="f">범위</label>${rangeSelect('rangeSel',rg)}
   <div class="btns"><button class="btn" data-act="start-study" ${due+nw?'':'disabled'}>${due+nw?`오늘 학습 시작 (${due+nw}장)`:'오늘 분량을 다 했어요'}</button></div>
   <div class="btns" style="margin-top:8px"><button class="btn sec" data-act="start-free">섞어서 자유 복습 (${pool.length}장)</button></div>
+  <div class="btns" style="margin-top:8px"><button class="btn sec" data-act="memo-study" ${pool.length?'':'disabled'}>가리며 외우기 (${Math.min(pool.length,MEMO_MAX)}장, 별표·오답 먼저)</button></div>
   <p class="note">복습 대기부터 나오고, 새 카드는 하루 ${S.settings.newPerDay}장까지(설정에서 바꿀 수 있어요). 세트에서 읽은 카드는 이 한도와 따로 셉니다.</p>
   ${sec('단원별 진도','학습 / 정답률',`<div class="group">${units.map(x=>`<button class="unitbar" data-act="study-unit" data-u="${x.u.id}" style="width:100%"><span class="nm">${esc(x.u.n)}</span><span class="bar"><i style="width:${x.n?Math.round(x.l/x.n*100):0}%"></i></span><span class="c">${x.l}/${x.n}</span><span class="c" style="color:${x.acc==null?'var(--ink3)':x.acc>=80?'var(--ok)':x.acc>=60?'var(--amber)':'var(--red)'}">${x.acc==null?'—':x.acc+'%'}</span></button>`).join('')}</div>`)}`;}
 
@@ -542,6 +543,63 @@ function startMCQ(){const f=rangeFilter(S.range);let pool=deck().filter(f);const
 function startRecall(){const f=rangeFilter(S.range);let pool=deck().filter(f);const l=pool.filter(c=>pget(c.id).seen>0);if(l.length>=8)pool=l;
   const stars=pool.filter(c=>pget(c.id).star);const pick=shuffle(stars).slice(0,3).concat(shuffle(pool.filter(c=>!pget(c.id).star))).slice(0,10);startSession({title:'용어 회상',items:cardItems(pick.map(c=>c.id)),log:'recall'});}
 function startOutline(){const u=rangeUnits(S.range);const pool=essays().filter(e=>!u||u.includes(Number(e.u)));startSession({title:'논술 목차',items:shuffle(pool).slice(0,5).map(e=>({type:'outline',id:e.id})),log:'outline'});}
+
+/* ════════ 15-2. 가리며 외우기(정한 시간마다 보이기·가리기를 반복하는 단기 암기) ════════ */
+let MEMO=null,memoIv=null;
+const MEMO_SHOW=[3,5,10,20,30,60],MEMO_HIDE=[2,3,5,10,20],MEMO_REPS=[1,3,5,10,0],MEMO_MAX=20;
+function memoCfg(){return Object.assign({show:10,hide:5,mode:'all',reps:3,auto:1},S.settings.memo||{});}
+function memoPicks(id){return((S.memoPick||{})[id])||[];}
+/* 카드 한 장의 줄: 용어(t), 정의 문장(d0, d1…), 키워드(k0, k1…) */
+function memoLines(c){const ds=String(c.d||'').replace(/([.。])\s+/g,'$1\n').split('\n').map(x=>x.trim()).filter(Boolean);
+  return[{li:'t',tx:c.t,cls:'mterm'}].concat(ds.map((tx,i)=>({li:'d'+i,tx,cls:'mdef'})),(c.k||[]).map((tx,i)=>({li:'k'+i,tx,cls:'mkw'})));}
+/* 가릴 줄: "전체"는 용어를 뺀 모든 줄, "고른 줄"은 고른 것(아직 안 골랐으면 전체) */
+function memoHideSet(c){const pk=memoPicks(c.id);return new Set(memoCfg().mode==='pick'&&pk.length?pk:memoLines(c).filter(l=>l.li!=='t').map(l=>l.li));}
+function startMemo(o){memoStop();MEMO=Object.assign({i:0,run:false,phase:'show',left:null,cnt:0,done:false,t0:0},o);
+  if(!MEMO.items.length){toast('외울 카드가 없어요');MEMO=null;return;}memoMarkRead();nav('memo');}
+function memoItem(){return MEMO&&MEMO.items[MEMO.i];}
+function memoDur(){const c=memoCfg();return(MEMO.phase==='show'?c.show:c.hide)*1000;}
+function memoAwake(on){PE_IO.keepAwake(on||(typeof TM!=='undefined'&&TM.running));}
+function memoMarkRead(){const it=memoItem();if(!MEMO.setD||!it||it.si==null)return;const p=sp(MEMO.setD);if(!p.read[it.si]){p.read[it.si]=1;introduce(it.id);touchDay();save();}}
+function memoGo(i){if(!MEMO||i<0||i>=MEMO.items.length)return;MEMO.i=i;MEMO.cnt=0;MEMO.phase='show';MEMO.done=false;MEMO.left=null;MEMO.t0=Date.now();memoMarkRead();render();window.scrollTo(0,0);}
+function memoPlay(){if(!MEMO)return;if(MEMO.done){MEMO.done=false;MEMO.cnt=0;MEMO.phase='show';MEMO.left=null;}
+  MEMO.t0=Date.now()-(MEMO.left!=null?memoDur()-MEMO.left:0);MEMO.left=null;MEMO.run=true;clearInterval(memoIv);memoIv=setInterval(memoTick,200);memoAwake(true);paintMemo();}
+function memoPause(){if(!MEMO||!MEMO.run)return;MEMO.left=Math.max(0,memoDur()-(Date.now()-MEMO.t0));MEMO.run=false;clearInterval(memoIv);memoIv=null;memoAwake(false);paintMemo();}
+function memoStop(){clearInterval(memoIv);memoIv=null;if(MEMO&&MEMO.run){MEMO.left=Math.max(0,memoDur()-(Date.now()-MEMO.t0));MEMO.run=false;memoAwake(false);}}
+/* 한 바퀴 = 보기 → 가림. 정한 횟수를 다 돌면 다음 카드로(또는 멈춤), "무한"이면 계속 */
+function memoTick(){if(!MEMO||!MEMO.run)return;const now=Date.now();if(now-MEMO.t0<memoDur())return paintMemo();
+  if(MEMO.phase==='show'){MEMO.phase='hide';MEMO.t0=now;return paintMemo();}
+  const c=memoCfg();MEMO.cnt++;MEMO.phase='show';MEMO.t0=now;
+  if(c.reps&&MEMO.cnt>=c.reps){if(c.auto&&MEMO.i+1<MEMO.items.length){MEMO.i++;MEMO.cnt=0;memoMarkRead();return render();}
+    MEMO.run=false;MEMO.done=true;clearInterval(memoIv);memoIv=null;memoAwake(false);return render();}
+  paintMemo();}
+/* 매 틱에는 화면 전체를 다시 그리지 않고 가림 표시·남은 시간만 바꾼다 */
+function paintMemo(){const box=document.getElementById('memoBox');if(!box||!MEMO)return;const c=memoCfg();
+  const tb=document.querySelector('.topbar'),mh=document.getElementById('memoHead');if(tb&&mh){mh.style.top=tb.offsetHeight+'px';mh.classList.toggle('hide',MEMO.phase==='hide'&&!MEMO.done);}
+  box.classList.toggle('hiding',MEMO.phase==='hide'&&!MEMO.done);
+  const left=MEMO.run?Math.max(0,memoDur()-(Date.now()-MEMO.t0)):(MEMO.left!=null?MEMO.left:memoDur());
+  const cl=document.getElementById('memoClock');
+  if(cl)cl.innerHTML=MEMO.done?'<b>다 했어요</b> <span>다시 하거나 다음 카드로 넘기세요</span>':`<b class="${MEMO.phase}">${MEMO.phase==='show'?'보기':'가림'}</b> ${Math.ceil(left/1000)}초 <span>${c.reps?`${Math.min(MEMO.cnt+1,c.reps)} / ${c.reps}회`:`${MEMO.cnt+1}회째, 무한 반복`}</span>`;
+  const bar=document.getElementById('memoBar');if(bar)bar.style.width=(MEMO.done?0:Math.round(left/memoDur()*100))+'%';
+  const b=document.getElementById('memoPlay');if(b)b.textContent=MEMO.run?'일시정지':MEMO.done?'다시 하기':(MEMO.left!=null?'계속':'시작');}
+function vMemo(){if(!MEMO)return topbar('가리며 외우기')+`<div class="empty" style="margin-top:20px"><b>진행 중인 외우기가 없어요</b><div class="btns"><button class="btn" data-act="go" data-h="study">암기 탭으로</button></div></div>`;
+  const it=memoItem(),c=card(it.id),cf=memoCfg(),n=MEMO.items.length;if(!c)return topbar(MEMO.title||'가리며 외우기')+skipBtn();
+  const pk=new Set(memoPicks(c.id)),hs=memoHideSet(c);
+  const seg=(k,arr,lab)=>`<div class="seg">${arr.map(v=>`<button class="${cf[k]===v?'on':''}" data-act="memo-cfg" data-k="${k}" data-v="${v}">${lab(v)}</button>`).join('')}</div>`;
+  return topbar(MEMO.title||'가리며 외우기')+`<div class="prog"><div class="bar"><i style="width:${Math.round(MEMO.i/n*100)}%"></i></div><span>${MEMO.i+1} / ${n}</span></div>
+  <div class="mhead" id="memoHead"><div class="mclock" id="memoClock"></div><div class="mbar"><i id="memoBar"></i></div></div>
+  <div class="memo${MEMO.phase==='hide'&&!MEMO.done?' hiding':''}" id="memoBox">${memoLines(c).map(l=>`<div class="ml ${l.cls}${pk.has(l.li)?' pk':''}${hs.has(l.li)?' hd':''}" data-act="memo-pick" data-li="${l.li}">${esc(l.tx)}</div>`).join('')}</div>
+  <div class="btns"><button class="btn" id="memoPlay" data-act="memo-play">시작</button></div>
+  <div class="btns sessnav"><button class="btn sec" data-act="memo-prev" ${MEMO.i?'':'disabled'}>‹ 이전</button><button class="btn sec" data-act="memo-next" ${MEMO.i+1<n?'':'disabled'}>다음 ›</button></div>
+  <p class="note">${cf.mode==='pick'?(pk.size?'노란 테두리 줄만 가려요. 줄을 탭해 더하거나 빼세요.':'가릴 줄을 탭해서 고르세요. 고르기 전에는 전체를 가려요.'):'용어만 남기고 전체를 가려요. 가리고 싶은 줄을 탭하면 그 줄만 가리기로 바뀌어요.'}</p>
+  <details class="d" id="memoCfg"${MEMO.cfgOpen?' open':''}><summary>설정: 보기 ${cf.show}초, 가림 ${cf.hide}초, ${cf.mode==='pick'?'고른 줄':'전체'}, ${cf.reps?cf.reps+'회':'무한 반복'}${cf.reps?(cf.auto?', 다음 카드로':', 멈춤'):''}</summary><div class="in-d">
+    <label class="f">보이는 시간</label>${seg('show',MEMO_SHOW,v=>v+'초')}
+    <label class="f">가리는 시간</label>${seg('hide',MEMO_HIDE,v=>v+'초')}
+    <label class="f">가릴 것</label>${seg('mode',['all','pick'],v=>v==='all'?'전체':'고른 줄')}
+    <label class="f">반복</label>${seg('reps',MEMO_REPS,v=>v?v+'회':'무한')}
+    <label class="f">다 하면</label>${seg('auto',[1,0],v=>v?'다음 카드로':'멈춤')}</div></details>`;}
+/* 암기 탭에서: 범위 안에서 별표 → 오답 → 덜 익힌 카드 순으로 20장 */
+function memoStudyIds(){const pool=deck().filter(rangeFilter(S.range||'week'));const sc=c=>{const p=pget(c.id);return(p.star?0:10)+(S.wrong['C:'+c.id]||S.wrong['F:'+c.id]?0:5)+Math.min(p.box||0,6);};
+  return pool.map((c,i)=>({c,i,s:sc(c)})).sort((a,b)=>a.s-b.s||a.i-b.i).slice(0,MEMO_MAX).map(x=>x.c.id);}
 
 /* ════════ 16. 화면: 테스트 ════════ */
 function vTest(){const rg=S.range||'week';const lm=latestMockDate();const rounds=kichulRounds();
@@ -839,9 +897,10 @@ document.addEventListener('touchend',e=>{glCancel();if(glFired&&e.cancelable)e.p
 document.addEventListener('touchcancel',glCancel);
 /* 카드 넘겨 보기: 카드를 옆으로 밀면 다음(왼쪽)·이전(오른쪽) */
 let swXY=null;
-document.addEventListener('touchstart',e=>{const t=e.touches&&e.touches[0];swXY=t&&e.target.closest&&e.target.closest('.fc')?[t.clientX,t.clientY]:null;},{passive:true});
-document.addEventListener('touchend',e=>{const t=e.changedTouches&&e.changedTouches[0];if(!swXY||!t||!SES||R.page!=='sess'||glFired){swXY=null;return;}const dx=t.clientX-swXY[0],dy=t.clientY-swXY[1];swXY=null;
-  if(Math.abs(dx)>60&&Math.abs(dy)<50){if(dx<0)sessAdvance();else sessPrev();}},{passive:true});
+document.addEventListener('touchstart',e=>{const t=e.touches&&e.touches[0];swXY=t&&e.target.closest&&e.target.closest('.fc,.memo')?[t.clientX,t.clientY]:null;},{passive:true});
+document.addEventListener('touchend',e=>{const t=e.changedTouches&&e.changedTouches[0];if(!swXY||!t||glFired){swXY=null;return;}const dx=t.clientX-swXY[0],dy=t.clientY-swXY[1];swXY=null;
+  if(Math.abs(dx)<=60||Math.abs(dy)>=50)return;
+  if(R.page==='sess'&&SES){if(dx<0)sessAdvance();else sessPrev();}else if(R.page==='memo'&&MEMO)memoGo(MEMO.i+(dx<0?1:-1));},{passive:true});
 document.addEventListener('contextmenu',e=>{if(glAt(e.target,e.clientX,e.clientY))e.preventDefault();});
 document.addEventListener('click',e=>{if(glFired&&Date.now()-glFired<1500){glFired=0;e.preventDefault();e.stopPropagation();}},true);
 document.addEventListener('click',e=>{
@@ -871,6 +930,15 @@ document.addEventListener('click',e=>{
   case'start-due':return startDueAll();
   case'start-study':return startStudy();
   case'start-free':return startFree();
+  case'memo-set':{const s=SETS.sets[D.d];const items=(s.cards||[]).map((_,i)=>({id:setCardId(D.d,i),si:i})).filter(x=>x.id);return startMemo({title:korDate(D.d)+' 가리며 외우기',items,setD:D.d});}
+  case'memo-study':return startMemo({title:'가리며 외우기',items:memoStudyIds().map(id=>({id}))});
+  case'memo-play':return MEMO&&MEMO.run?memoPause():memoPlay();
+  case'memo-prev':return MEMO&&memoGo(MEMO.i-1);
+  case'memo-next':return MEMO&&memoGo(MEMO.i+1);
+  case'memo-cfg':{const k=D.k,v=k==='mode'?(D.v==='pick'?'pick':'all'):Number(D.v);S.settings.memo=Object.assign(memoCfg(),{[k]:v});if(MEMO)MEMO.cfgOpen=true;save();return render();}
+  case'memo-pick':{const it=memoItem();if(!it)return;const m=S.memoPick||(S.memoPick={});const li=D.li;
+    if(memoCfg().mode!=='pick'){S.settings.memo=Object.assign(memoCfg(),{mode:'pick'});m[it.id]=[li];save();toast('고른 줄만 가리기로 바꿨어요');return render();}
+    const a=new Set(m[it.id]||[]);a.has(li)?a.delete(li):a.add(li);if(a.size)m[it.id]=[...a];else delete m[it.id];save();return render();}
   case'study-unit':S.range=String(D.u);save();return startStudy();
   case'start-setrev':return startSetReview(D.d);
   case'start-setrev-all':return startSetReviewAll();
@@ -958,12 +1026,12 @@ document.addEventListener('change',e=>{if(e.target.id==='rangeSel'){S.range=e.ta
 document.addEventListener('keydown',e=>{const t=e.target;if(e.key!=='Enter'||!t.classList||!t.classList.contains('fill-in'))return;e.preventDefault();
   const all=Array.from(document.querySelectorAll('.fill-in'));const k=all.indexOf(t);if(k<all.length-1)all[k+1].focus();else fillCheck(false);});
 $('#nav').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b){closeModal();nav(b.dataset.tab);}});
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){sync(false);if(!R.page)render();}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)memoPause();if(!document.hidden){sync(false);if(!R.page)render();}});
 window.addEventListener('online',()=>sync(true));
 
 /* ════════ 23. 시작 ════════ */
 PE_IO.init({toast});recalcPlan();applyLook();setPreset('essay');R=parseHash();
 if(!location.hash)history.replaceState(null,'','#today');
 render();sync(true);
-window.__pe={S:()=>S,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,render,invalidate,startSession};
+window.__pe={S:()=>S,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,render,invalidate,startSession};
 })();
