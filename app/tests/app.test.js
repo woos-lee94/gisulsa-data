@@ -466,7 +466,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(['용어', '논술', '퀴즈·테스트', '모의고사', '할 일', '접속'].every(x => view().querySelector('.callg').textContent.includes(x)) && /접속 \d+일/.test(view().querySelector('.callg').textContent), '색 설명과 이달 날 수');
     ok(/접속 \d+번 \d\d:\d\d/.test(txt()) && /세트 논술 손글씨/.test(txt()) && /세트 퀴즈 \d+\/\d+문 풂/.test(txt()) && /카드 \d+장 매김/.test(txt()) && /가리며 외우기 완료/.test(txt()), '고른 날: 접속 시각과 끝낸 공부 목록');
     ok(/10월 19일 세트 과제 1\/3/.test(txt()), '세트 과제 → 할 일(보라)');
-    ok(view().querySelector('[data-act="cal-mon"][data-v="1"]').disabled, '이번 달 다음은 못 감');
+    ok(!view().querySelector('[data-act="cal-mon"][data-v="1"]').disabled, '앞으로 올 달도 볼 수 있음');
     await go('#set/2026-10-19'); click('[data-act="set-tab"][data-t="essay"]'); await sleep(20);
     click('[data-act="set-essay-done"]'); await sleep(20);
     await go('#cal');
@@ -485,6 +485,31 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(!mt(), '닫기');
     click('[data-act="cal-today"]'); await sleep(10);
     ok(view().querySelector('.cd.today') && !view().querySelector('[data-act="cal-today"]'), '이번 달로');
+    // 옆으로 밀면 이전·다음 달(이번 달 다음과 기록 전 달은 못 감)
+    const head = () => view().querySelector('.calhd b').textContent, nowYm = head();
+    const swipeCal = async dx => { const g = view().querySelector('.calg'); const a = new w.Event('touchstart', { bubbles: true }); a.touches = [{ clientX: 200, clientY: 400 }]; g.dispatchEvent(a); const b = new w.Event('touchend', { bubbles: true }); b.changedTouches = [{ clientX: 200 + dx, clientY: 408 }]; g.dispatchEvent(b); await sleep(20); };
+    const ymOf = k => { const x = new w.Date(new w.Date().getFullYear(), new w.Date().getMonth() + k, 1); return x.getFullYear() + '년 ' + (x.getMonth() + 1) + '월'; };
+    await swipeCal(-120);
+    ok(head() === ymOf(1) && view().querySelector('.calg.nx') && !mt(), '왼쪽으로 밀면 다음 달(넘기는 움직임, 날짜 창은 안 뜸)');
+    await swipeCal(120); await swipeCal(120);
+    ok(head() === ymOf(-1) && view().querySelector('.calg.pv'), '오른쪽으로 밀면 이전 달');
+    await swipeCal(120);
+    ok(head() === ymOf(-1) && /기록이 시작되기 전/.test(d.querySelector('#toast').textContent), '기록 전 달로는 못 감');
+    await swipeCal(30);
+    ok(head() === ymOf(-1), '조금 밀면 그대로');
+    for (let i = 0; i < 30; i++) click('[data-act="cal-mon"][data-v="1"]');
+    ok(view().querySelector('[data-act="cal-mon"][data-v="1"]').disabled && /더 뒤의 달은/.test(d.querySelector('#toast').textContent) && head() === ymOf(12), '앞으로는 12달 뒤까지(목표 시험이 더 뒤면 그 달까지)');
+    click('[data-act="cal-today"]'); await sleep(10);
+    for (let i = 0; i < 40 && head() !== '2026년 10월'; i++) click('[data-act="cal-mon"][data-v="-1"]');
+    // 공휴일: 빨간 숫자와 짧은 이름, 날짜 창에 공휴일 이름
+    ok(pe.KR_HOLI['2026-10-03'] === '개천절' && pe.KR_HOLI['2026-10-05'] === '대체공휴일(개천절)' && pe.KR_HOLI['2027-02-09'] === '대체공휴일(설날)' && pe.KR_HOLI['2026-07-17'] === '제헌절' && pe.KR_HOLI['2027-05-03'] === '대체공휴일(노동절)' && !pe.KR_HOLI['2026-10-04'], '공휴일 표(대체공휴일, 2026년부터 노동절·제헌절)');
+    if (head() === '2026년 10월') {
+      const hc = x => view().querySelector(`[data-act="cal-day"][data-d="${x}"]`);
+      ok(hc('2026-10-03').classList.contains('hol') && hc('2026-10-03').querySelector('.hn').textContent === '개천절' && hc('2026-10-05').querySelector('.hn').textContent === '대체' && hc('2026-10-09').querySelector('.hn').textContent === '한글날' && !hc('2026-10-06').classList.contains('hol'), '달력 칸: 공휴일은 빨간 숫자와 짧은 이름');
+      click('[data-act="cal-day"][data-d="2026-10-05"]'); await sleep(10);
+      ok(/공휴일 · 대체공휴일\(개천절\)/.test(mt()), '날짜 창: 공휴일 이름');
+      click('[data-act="cal-close"]'); await sleep(10);
+    }
     await go('#more'); ok(view().querySelector('[data-h="cal"]'), '더보기 → 학습 달력');
     delete S().daily[old]; S().log.pop(); delete S().cal[old]; delete S().mockp.x;
     await go('#today');
