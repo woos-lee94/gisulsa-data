@@ -100,7 +100,7 @@
 
 ## 앱 폴더
 
-- `web/`: 앱 화면 원본(v2.3.0, 네이티브 다리 포함). `index.html`의 `?v=N`은 `tests/app.test.js`가 스크립트를 찾는 표시라 남겨 둔다. 버전은 `app.js`의 `APP_VER`와 `app.json`의 `version`을 함께 올린다(`tests/native.test.js`가 확인)
+- `web/`: 앱 화면 원본(v2.3.1, 네이티브 다리 포함). `index.html`의 `?v=N`은 `tests/app.test.js`가 스크립트를 찾는 표시라 남겨 둔다. 버전은 `app.js`의 `APP_VER`와 `app.json`의 `version`을 함께 올린다(`tests/native.test.js`가 확인)
 - `tests/`: jsdom 회귀 검사와 가짜 저장소(`tests/fake/data`)
 - `assets/icon-1024.png`: iOS 앱 아이콘
 - 자료 형식은 `../pipeline/spec_set.md`, `../pipeline/spec_mock.md`, 실제 자료는 `../data/`
