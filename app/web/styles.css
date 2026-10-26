@@ -7,7 +7,7 @@
   --rule:#D9DFE7; --rule2:#E9EDF2;
   --blue:#1E5BD7; --blue-soft:#E6EDFB; --blue-ink:#163F94;
   --marker:#FFE15A; --margin:#EDB3AA;
-  --red:#C9372A; --red-soft:#FBE9E6; --ok:#12784F; --ok-soft:#E1F3EA; --amber:#9A5B00; --amber-soft:#FFF1D6;
+  --red:#C9372A; --red-soft:#FBE9E6; --ok:#12784F; --ok-soft:#E1F3EA; --amber:#9A5B00; --amber-soft:#FFF1D6; --violet:#7A4CC9;
   --r-lg:18px; --r-md:14px; --r-sm:10px;
   --tab-h:58px; --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
   color-scheme:light;
@@ -18,7 +18,7 @@
     --rule:#2A3542; --rule2:#222C38;
     --blue:#6F9BFF; --blue-soft:#1A2740; --blue-ink:#A9C2FF;
     --marker:rgba(233,201,58,.42); --margin:#6B3A35;
-    --red:#FF7766; --red-soft:#3A1B18; --ok:#4BD39A; --ok-soft:#12301F; --amber:#F2B23D; --amber-soft:#35270C;
+    --red:#FF7766; --red-soft:#3A1B18; --ok:#4BD39A; --ok-soft:#12301F; --amber:#F2B23D; --amber-soft:#35270C; --violet:#B79BFF;
     color-scheme:dark;
   }
 }
@@ -27,7 +27,7 @@
   --rule:#2A3542; --rule2:#222C38;
   --blue:#6F9BFF; --blue-soft:#1A2740; --blue-ink:#A9C2FF;
   --marker:rgba(233,201,58,.42); --margin:#6B3A35;
-  --red:#FF7766; --red-soft:#3A1B18; --ok:#4BD39A; --ok-soft:#12301F; --amber:#F2B23D; --amber-soft:#35270C;
+  --red:#FF7766; --red-soft:#3A1B18; --ok:#4BD39A; --ok-soft:#12301F; --amber:#F2B23D; --amber-soft:#35270C; --violet:#B79BFF;
   color-scheme:dark;
 }
 
@@ -217,6 +217,31 @@ textarea.in{min-height:120px;font-size:.88rem;line-height:1.5;font-family:ui-mon
 .memo .ml.pk{box-shadow:inset 0 0 0 2px var(--marker)}
 .memo.hiding .ml.hd{color:transparent;background:var(--rule);box-shadow:none}
 .sessnav .btn{min-height:44px}
+.lnk{color:var(--blue);font:inherit;font-weight:700;padding:0 2px}
+/* 학습 달력: 접속한 날은 숫자에 회색 원, 끝낸 공부는 종류별 점(빨강 용어·파랑 논술·초록 퀴즈·주황 모의·보라 할 일) */
+.callg{display:flex;flex-wrap:wrap;gap:6px 14px;margin:12px 2px 0;font-size:.86rem;color:var(--ink2);font-weight:600}
+.callg span{display:inline-flex;align-items:center;gap:5px}
+.calhd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0 8px}
+.calhd b{font-size:1.15rem;font-variant-numeric:tabular-nums}
+.calhd .btn.sm{min-width:48px;padding:6px 10px;font-size:1.1rem}
+.calw,.calg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}
+.calw{padding:0 6px;margin-bottom:4px}
+.calw span{text-align:center;font-size:.8rem;font-weight:700;color:var(--ink2)}
+.calw .sun{color:var(--red)}.calw .sat{color:var(--blue)}
+.calg{background:var(--sheet);border-radius:var(--r-md);padding:6px}
+.cd{display:flex;flex-direction:column;align-items:center;gap:3px;min-height:54px;padding:4px 0;border-radius:10px;color:var(--ink);text-align:center}
+.cd .n{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;font-size:.92rem;font-weight:600;font-variant-numeric:tabular-nums}
+.cd.was .n{background:var(--rule2);box-shadow:inset 0 0 0 1.5px var(--rule)}
+.cd.ev .n{color:var(--red);font-weight:800}
+.cd.today .n{box-shadow:inset 0 0 0 2px var(--blue);color:var(--blue);font-weight:800}
+.cd.sel{background:var(--blue-soft)}
+.cd.fut{opacity:.5}
+.cd .dots{display:flex;flex-wrap:wrap;justify-content:center;gap:2px;max-width:40px;min-height:7px}
+.cd .dots i,.cdot{display:inline-block;width:7px;height:7px;border-radius:50%}
+.cdot{width:11px;height:11px;flex:none}
+.cdot.was{background:var(--rule2);box-shadow:inset 0 0 0 1.5px var(--rule)}
+.k-term{background:var(--red)}.k-essay{background:var(--blue)}.k-quiz{background:var(--ok)}.k-mock{background:var(--amber)}.k-todo{background:var(--violet)}
+.calrow{gap:12px}
 .prog{display:flex;align-items:center;gap:10px;margin:12px 2px}
 .prog .bar{flex:1}
 .prog span{color:var(--ink2);font-size:.86rem;font-weight:600;font-variant-numeric:tabular-nums}

@@ -129,6 +129,19 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   ok(view().querySelector('.topbar [data-act="back"]'), '세션 위쪽 뒤로 버튼');
   await go('#set/2026-10-19');
   ok(rd().split(',').includes(String(it0.si)) && rd().split(',').filter(Boolean).length <= read0.split(',').filter(Boolean).length + 1, '중간에 나가도 본 카드만 읽음(나머지는 그대로)');
+  // 이어 하기: 나갔다 다시 들어오면 보던 카드부터
+  const si = pe.SES().i, nC = pe.SETS().sets['2026-10-19'].cards.length;
+  ok(si > 0 && new RegExp('카드 넘겨 보기 이어서 \\(' + (si + 1) + '/' + nC + '\\)').test(txt()) && view().querySelector('[data-act="resume-clear"]'), '세트 화면: 카드 넘겨 보기 이어서 (n/N), 처음부터 버튼');
+  const ses0 = pe.SES(); click('[data-act="set-flash"]'); await sleep(30);
+  ok(w.location.hash === '#sess' && pe.SES() === ses0 && pe.SES().i === si, '넘겨 보기: 다시 누르면 보던 카드부터(매긴 기록도 그대로)');
+  await go('#set/2026-10-19'); click('[data-act="resume-clear"]'); await sleep(20);
+  ok(!pe.SES() && !S().resume['flash:2026-10-19'] && /카드로 넘겨 보며 외우기/.test(txt()) && !view().querySelector('[data-act="resume-clear"]'), '처음부터: 이어 하기 지움');
+  S().resume['flash:2026-10-19'] = { i: 2, n: nC, day: '2020-01-01' }; await go('#today'); await go('#set/2026-10-19');
+  click('[data-act="set-flash"]'); await sleep(30);
+  ok(pe.SES().i === 2 && /3번째 카드부터 이어서/.test(w.document.querySelector('#toast').textContent), '앱을 껐다 켜도(저장된 자리) 보던 카드부터');
+  click('[data-act="sess-skip"]'); await sleep(20);
+  ok(S().resume['flash:2026-10-19'].i === 3, '넘길 때마다 자리 저장');
+  await go('#set/2026-10-19'); click('[data-act="resume-clear"]'); await sleep(20);
 
   // 복습 탭
   await go('#review');
@@ -382,7 +395,86 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(/가리며 외우기 \(\d+장/.test(txt()), '암기 탭에 가리며 외우기');
     click('[data-act="memo-study"]'); await sleep(30);
     ok(M().items.length >= 1 && M().items.length <= 20 && !M().setD, '암기 탭 → 범위 카드로 가리며 외우기');
+    // 이어 하기: 세트 가리며 외우기는 저장된 자리부터(메모리의 암기 탭 외우기와 따로)
+    await go('#set/2026-10-19');
+    const rs = S().resume['memo:set:2026-10-19'];
+    ok(rs && rs.i > 0 && new RegExp('가리며 외우기 이어서 \\(' + (rs.i + 1) + '/').test(txt()), '세트 화면: 가리며 외우기 이어서 (n/N)');
+    click('[data-act="memo-set"]'); await sleep(30);
+    ok(M().key === 'memo:set:2026-10-19' && M().i === rs.i, '다시 들어오면 보던 카드부터(앱을 껐다 켜도)');
+    while (M().i > 0) { click('[data-act="memo-prev"]'); await sleep(5); }
+    click('[data-act="memo-next"]'); await sleep(10);
+    const m0 = M(); await go('#set/2026-10-19'); click('[data-act="memo-set"]'); await sleep(20);
+    ok(M() === m0 && M().i === 1 && S().resume['memo:set:2026-10-19'].i === 1, '뒤로 갔다 다시 누르면 그 자리 그대로');
+    click('[data-act="memo-prev"]'); await sleep(10);
+    // 무작위 N줄: 가릴 때마다 용어를 뺀 줄에서 N줄을 새로(바로 전에 가린 줄은 피함)
+    click('[data-act="memo-cfg"][data-k="reps"][data-v="0"]'); click('[data-act="memo-cfg"][data-k="mode"][data-v="rand"]'); await sleep(10);
+    ok(view().querySelector('[data-act="memo-cfg"][data-k="n"][data-v="2"].on') && /무작위 2줄/.test(txt()) && /2줄을 무작위로/.test(txt()), '가릴 것: 무작위(기본 2줄), 줄 수 고르기');
+    click('[data-act="memo-cfg"][data-k="n"][data-v="3"]'); await sleep(10);
+    const nh = box().querySelectorAll('.ml').length - 1, hd = () => [...box().querySelectorAll('.ml.hd')].map(e => e.dataset.li);
+    click('[data-act="memo-play"]'); await sleep(10); tick(10100);
+    const h1 = hd();
+    ok(nh >= 6 && box().classList.contains('hiding') && h1.length === 3 && !h1.includes('t'), '무작위: 가릴 때 3줄(용어는 안 가림)');
+    tick(5100); ok(!box().classList.contains('hiding'), '보기로 돌아옴'); tick(10100);
+    const h2 = hd();
+    ok(h2.length === 3 && h2.every(x => !h1.includes(x)), '다음 가림: 새로 고른 3줄(바로 전 줄은 피함)');
+    tick(5100); tick(10100);
+    ok(hd().length === 3 && hd().some(x => !h2.includes(x)), '반복마다 바뀜');
+    click('[data-act="memo-play"]'); await sleep(10);
+    click('#memoBox .ml[data-li="d1"]'); await sleep(10);
+    ok(pe.S().settings.memo.mode === 'pick' && hd().join() === 'd1', '무작위 중 줄을 탭하면 고른 줄 가리기로');
+    click('#memoBox .ml[data-li="d1"]'); await sleep(10);
+    // 끝까지 가면 완료
+    while (M().i + 1 < M().items.length) { click('[data-act="memo-next"]'); await sleep(5); }
+    ok(!view().querySelector('[data-act="memo-next"]') && view().querySelector('[data-act="memo-finish"]').textContent === '완료', '마지막 카드: 다음 대신 완료');
+    click('[data-act="memo-finish"]'); await sleep(20);
+    const tdy = (d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'))(new w.Date());
+    const cx = () => Object.values((S().cal[tdy] || {}).x || {});
+    ok(M().fin && /가리며 외우기 완료/.test(txt()) && /외운 카드/.test(txt()) && !S().resume['memo:set:2026-10-19'], '완료: 끝 화면, 이어 하기 자리 지움');
+    ok(cx().some(v => v[0] === 'term' && /가리며 외우기 완료: 10월 19일 세트 10장/.test(v[1])) && !cx().some(v => /가리며 외우기: 10월 19일/.test(v[1])), '달력에 완료로 남음(진행 기록은 완료로 바뀜)');
+    click('[data-act="memo-close"]'); await sleep(20);
+    ok(w.location.hash === '#set/2026-10-19' && !M() && /가리며 외우기\(보였다 가렸다 반복\)/.test(txt()), '돌아가기 → 세트 화면(이어 하기 없음)');
+    click('[data-act="memo-set"]'); await sleep(20);
+    ok(M().i === 0 && !M().fin, '완료 뒤에는 처음부터');
+    click('[data-act="memo-next"]'); await sleep(10);
+    await go('#set/2026-10-19'); click('[data-act="resume-clear"]'); await sleep(10);
+    ok(!M() && !S().resume['memo:set:2026-10-19'], '처음부터 버튼: 가리며 외우기 자리도 지움');
     w.Date.now = realNow; S().settings.memo = { show: 10, hide: 5, mode: 'all', reps: 3, auto: 1 };
+    await go('#today');
+  }
+
+  // 학습 달력: 접속한 날과 끝낸 공부(빨강 용어·파랑 논술·초록 퀴즈·주황 모의·보라 할 일)
+  {
+    const tdy = (d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'))(new w.Date());
+    ok(S().cal[tdy] && S().cal[tdy].in.length >= 1 && /^\d\d:\d\d$/.test(S().cal[tdy].in[0]), '앱을 열면 접속 시각을 적음');
+    ok(view().querySelector('[data-h="cal"]') && /학습 달력/.test(txt()), '오늘 화면 → 학습 달력');
+    await go('#set/2026-10-19'); click('[data-act="set-tab"][data-t="essay"]'); await sleep(20);
+    click('[data-act="set-essay-done"]'); await sleep(20);
+    click('[data-act="set-tab"][data-t="tasks"]'); await sleep(20); click('[data-act="set-task"][data-i="0"]'); await sleep(20);
+    await go('#cal');
+    const cell = () => view().querySelector('.cd.today');
+    ok(cell() && cell().classList.contains('was') && cell().classList.contains('sel'), '오늘 칸: 접속 표시·골라짐');
+    ok(['term', 'essay', 'quiz', 'todo'].every(k => cell().querySelector('.dots .k-' + k)), '오늘 칸: 용어·논술·퀴즈·할 일 동그라미');
+    ok(['용어', '논술', '퀴즈·테스트', '모의고사', '할 일', '접속만'].every(x => view().querySelector('.callg').textContent.includes(x)), '색 설명');
+    ok(/접속 \d\d:\d\d/.test(txt()) && /세트 논술 손글씨/.test(txt()) && /세트 퀴즈 \d+\/\d+문 풂/.test(txt()) && /카드 \d+장 매김/.test(txt()) && /가리며 외우기 완료/.test(txt()), '고른 날: 접속 시각과 끝낸 공부 목록');
+    ok(/10월 19일 세트 과제 1\/3/.test(txt()), '세트 과제 → 할 일(보라)');
+    ok(view().querySelector('[data-act="cal-mon"][data-v="1"]').disabled, '이번 달 다음은 못 감');
+    await go('#set/2026-10-19'); click('[data-act="set-tab"][data-t="essay"]'); await sleep(20);
+    click('[data-act="set-essay-done"]'); await sleep(20);
+    await go('#cal');
+    ok(!cell().querySelector('.k-essay') && !/세트 논술 손글씨/.test(txt()), '논술 체크를 풀면 달력에서도 빠짐');
+    // 예전 기록(카드 매김·테스트·오늘 할 일)도 보임
+    const old = (d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'))(new w.Date(new w.Date().getFullYear(), new w.Date().getMonth() - 1, 15));
+    S().daily[old] = { newSeen: 2, graded: 7, active: true }; S().log.push({ d: old, type: 'outline', total: 5, ok: 3 });
+    S().mockp.x = 1; S().cal[old] = { in: ['21:05'], x: { 'mock:2026-10-24:p1': ['mock', '10월 24일 모의고사 1교시 다 씀'] } };
+    click('[data-act="cal-mon"][data-v="-1"]'); await sleep(10);
+    const oc = view().querySelector(`[data-act="cal-day"][data-d="${old}"]`);
+    ok(oc && ['term', 'essay', 'mock'].every(k => oc.querySelector('.k-' + k)) && !view().querySelector('[data-act="cal-mon"][data-v="1"]').disabled, '지난달로: 예전 기록 동그라미');
+    click(`[data-act="cal-day"][data-d="${old}"]`); await sleep(10);
+    ok(/카드 7장 매김\(처음 본 카드 2장\)/.test(txt()) && /논술 목차 떠올리기 3\/5/.test(txt()) && /접속 21:05/.test(txt()) && /모의고사 1교시 다 씀/.test(txt()), '예전 날: 카드 매김·논술 목차·모의고사·접속 시각');
+    click('[data-act="cal-today"]'); await sleep(10);
+    ok(view().querySelector('.cd.today.sel'), '오늘로');
+    await go('#more'); ok(view().querySelector('[data-h="cal"]'), '더보기 → 학습 달력');
+    delete S().daily[old]; S().log.pop(); delete S().cal[old]; delete S().mockp.x;
     await go('#today');
   }
 
