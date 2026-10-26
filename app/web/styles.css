@@ -219,29 +219,64 @@ textarea.in{min-height:120px;font-size:.88rem;line-height:1.5;font-family:ui-mon
 .sessnav .btn{min-height:44px}
 .lnk{color:var(--blue);font:inherit;font-weight:700;padding:0 2px}
 /* 학습 달력: 접속한 날은 숫자에 회색 원, 끝낸 공부는 종류별 점(빨강 용어·파랑 논술·초록 퀴즈·주황 모의·보라 할 일) */
-.callg{display:flex;flex-wrap:wrap;gap:6px 14px;margin:12px 2px 0;font-size:.86rem;color:var(--ink2);font-weight:600}
-.callg span{display:inline-flex;align-items:center;gap:5px}
-.calhd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0 8px}
-.calhd b{font-size:1.15rem;font-variant-numeric:tabular-nums}
-.calhd .btn.sm{min-width:48px;padding:6px 10px;font-size:1.1rem}
+.k-term{background:var(--red)}.k-essay{background:var(--blue)}.k-quiz{background:var(--ok)}.k-mock{background:var(--amber)}.k-todo{background:var(--violet)}
+.cdot{display:inline-block;width:12px;height:12px;border-radius:50%;flex:none}
+.cdot.was{background:color-mix(in srgb,var(--ink3) 22%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--ink3) 45%,transparent)}
+/* 홈 화면 왼쪽 위 달력 아이콘 */
+.ltl{display:flex;align-items:center;gap:12px;min-width:0}
+.calbtn{flex:none;display:flex;flex-direction:column;align-items:center;width:58px;border-radius:13px;background:var(--sheet);overflow:hidden;
+  box-shadow:0 0 0 1px var(--rule),0 3px 10px rgba(16,24,40,.08)}
+.calbtn .cm{display:block;width:100%;background:var(--red);color:#fff;font-size:.72rem;font-weight:800;text-align:center;line-height:1.7;letter-spacing:.02em}
+.calbtn b{font-size:1.55rem;font-weight:800;line-height:1.15;margin-top:1px;font-variant-numeric:tabular-nums;color:var(--ink)}
+.calbtn .cdots{display:flex;gap:2px;height:6px;margin:1px 0 6px}
+.calbtn .cdots i{width:6px;height:6px;border-radius:50%}
+.calbtn:active{transform:scale(.96)}
+/* 오늘 끝낸 공부 */
+.calhero{background:var(--sheet);border-radius:var(--r-lg);padding:16px 16px 14px;margin-top:14px}
+.chtop{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.chtop h2,.cmh{margin:0;font-size:1.35rem;font-weight:800;letter-spacing:-.02em;line-height:1.25}
+.cmh{margin-bottom:8px}
+.chst{text-align:center;line-height:1.05;flex:none}
+.chst b{display:block;font-size:1.6rem;font-weight:800;color:var(--blue)}
+.chst span{font-size:.76rem;font-weight:700;color:var(--ink2)}
+.chin{margin:8px 0 0;color:var(--ink2);font-size:.9rem;font-variant-numeric:tabular-nums}
+.chin b{color:var(--ink);margin-right:4px}
+.chev{margin:6px 0 0;color:var(--red);font-weight:700;font-size:.92rem}
+.ch5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:12px 0 2px}
+.ch5 div{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0 6px;border-radius:12px;background:var(--paper)}
+.ch5 i{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;color:#fff;font-style:normal;font-weight:800;font-size:1rem;opacity:.22}
+.ch5 span{font-size:.8rem;font-weight:700;color:var(--ink3)}
+.ch5 .on i{opacity:1}.ch5 .on span{color:var(--ink)}
+.chh{display:flex;align-items:center;gap:7px;margin:14px 2px 6px;font-weight:800;font-size:.95rem}
+.chg{border-left:4px solid var(--rule)}
+.chg .row{min-height:48px;padding:10px 14px}
+.chg .tt{font-weight:600}
+.calhero .chg{background:var(--paper)}
+.k-term-l{border-left-color:var(--red)}.k-essay-l{border-left-color:var(--blue)}.k-quiz-l{border-left-color:var(--ok)}.k-mock-l{border-left-color:var(--amber)}.k-todo-l{border-left-color:var(--violet)}
+.msheet .ch5 div{background:var(--sheet)}.msheet .chg{background:var(--sheet)}
+/* 달력 */
+.calhd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:20px 0 8px}
+.calhd b{font-size:1.2rem;font-weight:800;font-variant-numeric:tabular-nums}
+.calhd .btn.sm{min-width:48px;padding:6px 10px;font-size:1.15rem}
 .calw,.calg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}
 .calw{padding:0 6px;margin-bottom:4px}
-.calw span{text-align:center;font-size:.8rem;font-weight:700;color:var(--ink2)}
+.calw span{text-align:center;font-size:.82rem;font-weight:700;color:var(--ink2)}
 .calw .sun{color:var(--red)}.calw .sat{color:var(--blue)}
 .calg{background:var(--sheet);border-radius:var(--r-md);padding:6px}
-.cd{display:flex;flex-direction:column;align-items:center;gap:3px;min-height:54px;padding:4px 0;border-radius:10px;color:var(--ink);text-align:center}
-.cd .n{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;font-size:.92rem;font-weight:600;font-variant-numeric:tabular-nums}
-.cd.was .n{background:var(--rule2);box-shadow:inset 0 0 0 1.5px var(--rule)}
-.cd.ev .n{color:var(--red);font-weight:800}
-.cd.today .n{box-shadow:inset 0 0 0 2px var(--blue);color:var(--blue);font-weight:800}
+.cd{display:flex;flex-direction:column;align-items:center;gap:4px;min-height:60px;padding:5px 0 4px;border-radius:12px;color:var(--ink);text-align:center}
+.cd .n{position:relative;display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;font-size:1rem;font-weight:700;font-variant-numeric:tabular-nums}
+.cd.sun .n{color:var(--red)}.cd.sat .n{color:var(--blue)}
+.cd.was .n{background:color-mix(in srgb,var(--ink3) 18%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--ink3) 40%,transparent)}
+.cd.ev .n::after{content:"";position:absolute;left:9px;right:9px;bottom:2px;height:2.5px;border-radius:2px;background:var(--red)}
+.cd.today .n{background:var(--blue);color:#fff;box-shadow:none;font-weight:800}
+.cd.today.ev .n::after{background:#fff}
 .cd.sel{background:var(--blue-soft)}
-.cd.fut{opacity:.5}
-.cd .dots{display:flex;flex-wrap:wrap;justify-content:center;gap:2px;max-width:40px;min-height:7px}
-.cd .dots i,.cdot{display:inline-block;width:7px;height:7px;border-radius:50%}
-.cdot{width:11px;height:11px;flex:none}
-.cdot.was{background:var(--rule2);box-shadow:inset 0 0 0 1.5px var(--rule)}
-.k-term{background:var(--red)}.k-essay{background:var(--blue)}.k-quiz{background:var(--ok)}.k-mock{background:var(--amber)}.k-todo{background:var(--violet)}
-.calrow{gap:12px}
+.cd.fut{opacity:.45}
+.cd .dots{display:flex;flex-wrap:wrap;justify-content:center;gap:2px;max-width:44px;min-height:8px}
+.cd .dots i{display:block;width:8px;height:8px;border-radius:50%}
+.callg{display:flex;flex-wrap:wrap;gap:8px 14px;margin:12px 2px 0;font-size:.88rem;color:var(--ink2);font-weight:600}
+.callg span{display:inline-flex;align-items:center;gap:6px}
+.callg b{color:var(--ink)}
 .prog{display:flex;align-items:center;gap:10px;margin:12px 2px}
 .prog .bar{flex:1}
 .prog span{color:var(--ink2);font-size:.86rem;font-weight:600;font-variant-numeric:tabular-nums}

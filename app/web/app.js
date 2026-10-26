@@ -381,7 +381,7 @@ function vToday(){const t=todayStr(),w=weekIndex(),wk=weekObj(w),ph=phaseObj(w),
   const thisMock=lm&&weekIndex(lm)===w?lm:null;
   const items=routineFor(t),chk=S.checks[t]||{},done=items.filter((_,i)=>chk[i]).length;
   const ms=milestones().filter(m=>m.d>=t).slice(0,2);
-  return`<div class="ltitle"><div><h1>오늘</h1><p class="lsub">${esc(korDate(t,true))}, ${esc(weekLabel(w))}</p></div><div class="dday"><span>제${PLAN.target.r}회까지</span><b class="num">D-${de>=0?de:0}</b></div></div>
+  return`<div class="ltitle"><div class="ltl">${calIconHTML()}<div><h1>오늘</h1><p class="lsub">${esc(korDate(t,true))}, ${esc(weekLabel(w))}</p></div></div><div class="dday"><span>제${PLAN.target.r}회까지</span><b class="num">D-${de>=0?de:0}</b></div></div>
   <div style="margin-top:14px">${setBox}</div><div data-syncline>${syncLine()}</div>
   ${sec('복습','',`<div class="group">
     ${row({ic:'cards',t:'카드 복습',d:due?'간격이 돌아온 카드부터':'오늘 복습할 카드를 다 했어요',v:due,zero:!due,act:'start-due'})}
@@ -390,8 +390,7 @@ function vToday(){const t=todayStr(),w=weekIndex(),wk=weekObj(w),ph=phaseObj(w),
     ${thisMock?row({ic:'paper',tone:'amber',t:'이번 주 모의고사',d:esc(SETS.mocks[thisMock].title||korDate(thisMock)),act:'go',data:{h:'mock/'+thisMock}}):''}
   </div>`)}
   ${sec('오늘 할 일',`${done}/${items.length}`,`<div class="group">${items.map((it,i)=>`<label class="check ${chk[i]?'done':''}"><input type="checkbox" data-act="chk" data-i="${i}" ${chk[i]?'checked':''}><span>${esc(it)}</span></label>`).join('')}</div>
-    <p class="note">연속 학습 ${streak()}일. 손글씨 항목이 합격을 가릅니다.</p>
-    <div class="group" style="margin-top:10px">${row({ic:'caldot',t:'학습 달력',d:'접속한 날과 끝낸 공부(용어·논술·퀴즈·모의)',v:calMonthIn(t.slice(0,7))+'일',act:'go',data:{h:'cal'}})}</div>`)}
+    <p class="note">연속 학습 ${streak()}일. 손글씨 항목이 합격을 가릅니다.</p>`)}
   ${sec('이번 주 목표',`${md(weekRange(Math.max(0,w))[0])}~${md(weekRange(Math.max(0,w))[1])}`,`<p class="wk-t">${esc(wk.t)}</p><div class="group plain">${(wk.goals||[]).slice(0,4).map(g=>`<div class="row noic"><span class="tx"><span class="tt" style="font-weight:500">${esc(g)}</span></span></div>`).join('')}
     ${row({t:PLAN.E+'주 로드맵 전체 보기',act:'go',data:{h:'plan'}})}</div>`)}
   ${ms.length?sec('다가오는 일정','',`<div class="group">${ms.map(m=>row({ic:'flag',tone:m.k==='exam'?'red':'gray',t:esc(m.t),d:`${esc(m.d)}, D-${diffDays(t,m.d)}`})).join('')}</div>${PLAN.target.est||(PLAN.mock&&PLAN.mock.est)?`<p class="note">시험일은 예년 패턴으로 잡은 예상치예요. 큐넷 공고가 나오면 더보기 → 시험 일정에서 고치세요.</p>`:''}`):''}`;}
@@ -763,26 +762,30 @@ function calItems(ds){const out=[],c=S.cal[ds]||{},x=c.x||{},dl=S.daily[ds];
   return out;}
 function calIn(ds){const c=S.cal[ds];return(c&&c.in)||[];}
 function calWas(ds,items){return calIn(ds).length>0||items.length>0||!!(S.daily[ds]&&S.daily[ds].active);}
-function calMonthIn(ym){let n=0;const[y,m]=ym.split('-').map(Number),nd=new Date(y,m,0).getDate();for(let d=1;d<=nd;d++){const ds=fmt(new Date(y,m-1,d));if(calWas(ds,calItems(ds)))n++;}return n;}
-function vCal(){const t=todayStr(),ym=SV.calM||t.slice(0,7),sel=SV.calD||t;const[y,mo]=ym.split('-').map(Number);
-  const lead=new Date(y,mo-1,1).getDay(),nd=new Date(y,mo,0).getDate(),ev={};milestones().forEach(m=>{(ev[m.d]=ev[m.d]||[]).push(m.t);});
+const CAL_S={term:'용어',essay:'논술',quiz:'퀴즈',mock:'모의',todo:'할 일'};
+function calKinds(its){return CAL_K.map(a=>a[0]).filter(k=>its.some(x=>x[0]===k));}
+/* 하루 내용: 접속 시각, 종류별 개수 칸, 종류별 목록 */
+function calDayBody(ds){const t=todayStr(),its=calItems(ds),ins=calIn(ds),was=calWas(ds,its),ev=milestones().filter(m=>m.d===ds);const cnt=k=>its.filter(x=>x[0]===k).length;
+  return`${ins.length?`<p class="chin"><b>접속 ${ins.length}번</b> ${esc(ins.length>8?ins.slice(0,7).join(' · ')+' …':ins.join(' · '))}</p>`:''}${ev.map(m=>`<p class="chev">${esc(m.t)}</p>`).join('')}
+  <div class="ch5">${CAL_K.map(([k])=>`<div class="${cnt(k)?'on':''}"><i class="k-${k}">${cnt(k)||''}</i><span>${CAL_S[k]}</span></div>`).join('')}</div>
+  ${its.length?CAL_K.filter(([k])=>cnt(k)).map(([k,l])=>`<p class="chh"><i class="cdot k-${k}"></i>${l} ${cnt(k)}</p><div class="group chg k-${k}-l">${its.filter(x=>x[0]===k).map(x=>`<div class="row noic"><span class="tx"><span class="tt">${esc(x[1])}</span></span></div>`).join('')}</div>`).join('')
+    :`<div class="empty" style="margin-top:12px">${ds>t?'아직 오지 않은 날이에요':ds===t?'아직 끝낸 공부가 없어요. 오늘 세트부터 시작해 보세요':was?'앱을 열었지만 끝낸 공부는 없어요':'기록이 없어요'}</div>`}`;}
+/* 홈 화면 왼쪽 위 달력 아이콘: 이달·오늘 날짜와 오늘 끝낸 공부 점 */
+function calIconHTML(){const t=todayStr(),d=parse(t),ks=calKinds(calItems(t));
+  return`<button class="calbtn" data-act="go" data-h="cal" aria-label="학습 달력, 오늘 끝낸 공부 보기"><span class="cm">${d.getMonth()+1}월</span><b>${d.getDate()}</b><span class="cdots">${ks.map(k=>`<i class="k-${k}"></i>`).join('')}</span></button>`;}
+function vCal(){const t=todayStr(),ym=SV.calM||t.slice(0,7),sel=SV.calD;const[y,mo]=ym.split('-').map(Number);
+  const lead=new Date(y,mo-1,1).getDay(),nd=new Date(y,mo,0).getDate(),ev={};milestones().forEach(m=>{ev[m.d]=1;});
   const first=[S.created,PLAN.start].concat(Object.keys(S.daily),Object.keys(S.cal)).filter(Boolean).sort()[0]||t;
   const sum={was:0};CAL_K.forEach(([k])=>{sum[k]=0;});let cells='';for(let i=0;i<lead;i++)cells+='<span class="cd emp"></span>';
-  for(let dd=1;dd<=nd;dd++){const ds=fmt(new Date(y,mo-1,dd)),its=calItems(ds),ks=CAL_K.map(a=>a[0]).filter(k=>its.some(x=>x[0]===k)),was=calWas(ds,its);
+  for(let dd=1;dd<=nd;dd++){const ds=fmt(new Date(y,mo-1,dd)),its=calItems(ds),ks=calKinds(its),was=calWas(ds,its),dw=(lead+dd-1)%7;
     if(was)sum.was++;ks.forEach(k=>{sum[k]++;});
-    cells+=`<button class="cd${ds===t?' today':''}${ds===sel?' sel':''}${was?' was':''}${ds>t?' fut':''}${ev[ds]?' ev':''}" data-act="cal-day" data-d="${ds}" aria-label="${esc(korDate(ds))}"><span class="n">${dd}</span><span class="dots">${ks.map(k=>`<i class="k-${k}"></i>`).join('')}</span></button>`;}
-  const its=calItems(sel),ins=calIn(sel),was=calWas(sel,its);
-  const inTxt=ins.length?'접속 '+(ins.length>8?ins.slice(0,6).join(', ')+` 외 ${ins.length-6}번`:ins.join(', ')):'';
-  return topbar('학습 달력')+`<h1 class="ptitle">학습 달력</h1><p class="lsub">앱을 연 날과 그날 끝낸 공부예요. 날짜를 누르면 자세히 보여요.</p>
-  <div class="callg">${CAL_K.map(([k,l])=>`<span><i class="cdot k-${k}"></i>${l}</span>`).join('')}<span><i class="cdot was"></i>접속만</span></div>
+    cells+=`<button class="cd${ds===t?' today':''}${ds===sel?' sel':''}${was?' was':''}${ds>t?' fut':''}${ev[ds]?' ev':''}${dw===0?' sun':dw===6?' sat':''}" data-act="cal-day" data-d="${ds}" aria-label="${esc(korDate(ds))}"><span class="n">${dd}</span><span class="dots">${ks.map(k=>`<i class="k-${k}"></i>`).join('')}</span></button>`;}
+  return topbar('학습 달력')+`<div class="calhero"><div class="chtop"><div><p class="sheet-k">오늘 끝낸 공부</p><h2>${esc(korDate(t,true))}</h2></div><div class="chst"><b class="num">${streak()}</b><span>일 연속</span></div></div>${calDayBody(t)}</div>
   <div class="calhd"><button class="btn sm sec" data-act="cal-mon" data-v="-1" aria-label="이전 달" ${ym>first.slice(0,7)?'':'disabled'}>‹</button><b>${y}년 ${mo}월</b><button class="btn sm sec" data-act="cal-mon" data-v="1" aria-label="다음 달" ${ym<t.slice(0,7)?'':'disabled'}>›</button></div>
   <div class="calw">${'일월화수목금토'.split('').map((d,i)=>`<span class="${i===0?'sun':i===6?'sat':''}">${d}</span>`).join('')}</div>
   <div class="calg">${cells}</div>
-  <p class="note">이달 접속 ${sum.was}일, ${CAL_K.filter(([k])=>sum[k]).map(([k,l])=>`${l} ${sum[k]}일`).join(', ')||'아직 끝낸 공부 없음'}${ym!==t.slice(0,7)||sel!==t?' · <button class="lnk" data-act="cal-today">오늘로</button>':''}</p>
-  ${sec(korDate(sel,true),esc(inTxt),`${ev[sel]?`<div class="group plain">${ev[sel].map(m=>`<div class="row noic"><span class="tx"><span class="tt" style="color:var(--red)">${esc(m)}</span></span></div>`).join('')}</div>`:''}
-    ${its.length?`<div class="group">${its.map(([k,tx])=>`<div class="row noic calrow"><i class="cdot k-${k}"></i><span class="tx"><span class="tt" style="font-weight:500">${esc(tx)}</span></span></div>`).join('')}</div>`
-    :`<div class="empty">${sel>t?'아직 오지 않은 날이에요':was?'앱을 열었지만 끝낸 공부는 없어요':'기록이 없어요'}</div>`}`)}
-  <p class="note">카드 매김·테스트·오늘 할 일은 이 휴대폰에 남은 기록으로 예전 날짜까지 보여 주고, 접속 시각과 세트·논술·모의고사 완료는 이 기능을 넣은 뒤부터 쌓여요.</p>`;}
+  <div class="callg">${CAL_K.map(([k,l])=>`<span><i class="cdot k-${k}"></i>${l}${sum[k]?` <b>${sum[k]}일</b>`:''}</span>`).join('')}<span><i class="cdot was"></i>접속 <b>${sum.was}일</b></span></div>
+  <p class="note">날짜를 누르면 그날 접속 시각과 끝낸 공부가 나와요.${ym!==t.slice(0,7)?' <button class="lnk" data-act="cal-today">이번 달로</button>':''} 카드 매김·테스트·오늘 할 일은 이 휴대폰에 남은 기록으로 예전 날짜까지 보이고, 접속 시각과 세트·논술·모의고사 완료는 2.3.1부터 쌓여요.</p>`;}
 function vPlan(){const t=todayStr(),cw=weekIndex(),E=PLAN.E,ms=milestones();
   const groups=PE_PHASES.map(p=>({p,ws:[]}));for(let a=0;a<=E;a++){const o=weekObj(a);const g=groups.find(x=>x.p.id===o.ph)||groups[1];g.ws.push(o);}
   return topbar('로드맵')+`<h1 class="ptitle">${E}주 로드맵</h1><p class="lsub">${esc(korDate(PLAN.start))} 시작 → 제${PLAN.target.r}회 필기 ${esc(PLAN.target.d)}${esc(estTag(PLAN.target))}${PLAN.mock?`, 실전 모의 제${PLAN.mock.r}회`:''}. 1단계 단원 순서는 최근 기출 13회분(제128~140회) 출제 비중을 따라 짰어요.</p>
@@ -997,8 +1000,9 @@ document.addEventListener('click',e=>{
     const s=SETS.sets[D.d];const items=(s.cards||[]).map((_,i)=>({type:'card',id:setCardId(D.d,i),si:i})).filter(x=>x.id);const r=resumeGet(rk),i0=r&&r.i<items.length?r.i:0;
     if(i0)toast(`${i0+1}번째 카드부터 이어서 해요`);return startSession({title:korDate(D.d)+' 세트 카드',items,setD:D.d,rkey:rk,i:i0});}
   case'cal-mon':{const[y,m]=(SV.calM||todayStr().slice(0,7)).split('-').map(Number);const nm=fmt(new Date(y,m-1+Number(D.v),1)).slice(0,7),t=todayStr();SV.calM=nm;SV.calD=nm===t.slice(0,7)?t:nm+'-01';return render();}
-  case'cal-day':SV.calD=D.d;return render();
+  case'cal-day':{SV.calD=D.d;render();return openModal(`<p class="sheet-k">${D.d===todayStr()?'오늘':'그날'} 끝낸 공부</p><h2 class="cmh">${esc(korDate(D.d,true))}</h2>${calDayBody(D.d)}<div class="btns"><button class="btn sec" data-act="cal-close">닫기</button></div>`);}
   case'cal-today':SV.calM=null;SV.calD=null;return render();
+  case'cal-close':closeModal();return;
   case'resume-clear':{String(D.k).split(' ').forEach(k=>{delete S.resume[k];if(MEMO&&MEMO.key===k){memoStop();MEMO=null;}if(SES&&SES.rkey===k)SES=null;});save();toast('처음부터 시작해요');return render();}
   case'set-quiz':{const d=D.d,i=Number(D.i),k=Number(D.k);const q=SETS.sets[d].quiz[i];const p=sp(d);if(p.quiz[i])return;const ok=k===q.a;p.quiz[i]={pick:k,ok};const key='Q:'+d+':'+i;const qp=S.qp[key]||(S.qp[key]={ok:0,ng:0});ok?qp.ok++:qp.ng++;qp.last=todayStr();if(!ok)markWrong(key,'quiz');touchDay();const st=setStatus(d);calMark('quiz:'+d,'quiz',`${korDate(d)} 세트 퀴즈 ${st.qa}/${st.nq}문 풂(정답 ${st.qok})`);save();return render();}
   case'set-eo':SV[D.d+':eo']=1;return render();

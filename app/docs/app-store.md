@@ -149,6 +149,7 @@ The app is an independent study aid and is not affiliated with HRD Korea or any 
 마지막 카드에서 완료를 눌러 마칠 수 있어요
 외우다가 나갔다 와도 보던 카드부터 이어서 할 수 있어요 카드 넘겨 보기도 같아요
 학습 달력을 더했어요 앱을 연 날과 시각 그날 끝낸 공부를 용어 논술 퀴즈 모의고사별 색 동그라미로 보여 줍니다
+홈 화면 왼쪽 위 달력 아이콘을 누르면 오늘 끝낸 공부를 바로 볼 수 있어요
 ```
 
 ## App Privacy(참고)
