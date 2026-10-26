@@ -476,7 +476,7 @@ function vStudy(){const rg=S.range||'week',f=rangeFilter(rg);const pool=deck().f
 function startSession(o){SES=Object.assign({i:0,back:false,answered:null,stats:{ok:0,mid:0,no:0},from:R.page?('#'+R.page+(R.a?'/'+R.a:'')):'#'+R.tab},o);if(!SES.items.length){toast('이 범위에 문제가 없어요');SES=null;return;}nav('sess');}
 function vSess(){if(!SES)return topbar('학습')+`<div class="empty" style="margin-top:20px"><b>진행 중인 학습이 없어요</b><div class="btns"><button class="btn" data-act="go" data-h="study">암기 탭으로</button></div></div>`;
   const it=SES.items[SES.i];if(!it)return sessDone();const n=SES.items.length;
-  const head=`${topbar(SES.title||'학습')}<div class="prog"><div class="bar"><i style="width:${Math.round(SES.i/n*100)}%"></i></div><span>${SES.i+1} / ${n}</span></div>`;
+  const head=`${topbar(SES.title||'학습')}<div class="prog"><div class="bar"><i style="width:${Math.round((SES.i+1)/n*100)}%"></i></div><span>${SES.i+1} / ${n}</span></div>`;
   if(it.type==='card'){const c=card(it.id);if(!c)return head+skipBtn();const p=pget(c.id);const gotG=SES.graded?SES.graded[SES.i]:null;
     return head+`<div class="fc ${SES.back?'back':''}" data-act="sess-flip"><div class="meta"><span>${esc(unitName(c.u))}${c.x&&c.x.length?`, 기출 ${c.x.length}회`:''}${p.seen?'':', 처음 보는 카드'}</span><button class="star ${p.star?'on':''}" data-act="star" data-id="${c.id}" aria-label="별표">★</button></div>
       ${SES.back?`<div class="term">${esc(c.t)}</div><p class="defn ruled">${glHTML(c.d,c.id)}</p><ul class="kws">${(c.k||[]).map(k=>`<li><span>${esc(k)}</span></li>`).join('')}</ul>${c.x&&c.x.length?`<p class="xref">기출: ${c.x.map(kLabelShort).join(', ')}</p>`:''}`
@@ -562,12 +562,54 @@ function memoPicks(id){return((S.memoPick||{})[id])||[];}
 /* 카드 한 장의 줄: 용어(t), 정의 문장(d0, d1…), 키워드(k0, k1…) */
 function memoLines(c){const ds=String(c.d||'').replace(/([.。])\s+/g,'$1\n').split('\n').map(x=>x.trim()).filter(Boolean);
   return[{li:'t',tx:c.t,cls:'mterm'}].concat(ds.map((tx,i)=>({li:'d'+i,tx,cls:'mdef'})),(c.k||[]).map((tx,i)=>({li:'k'+i,tx,cls:'mkw'})));}
-/* 가릴 줄: "전체"는 용어를 뺀 모든 줄, "고른 줄"은 고른 것(아직 안 골랐으면 전체), "무작위"는 반복마다 새로 고른 N줄 */
+/* 가릴 줄: "전체"는 용어를 뺀 모든 줄, "고른 줄"은 고른 것(아직 안 골랐으면 전체), "무작위"는 반복마다 새로 고른 N줄,
+   "테이프"는 줄 대신 테이프 붙인 곳만(아직 안 붙였으면 전체) */
 function memoHideSet(c){const cf=memoCfg();if(cf.mode==='rand'){if(!MEMO.rnd||MEMO.rndId!==c.id)memoRoll(c,false);return new Set(MEMO.rnd);}
+  if(cf.mode==='tape'&&memoTapes(c).length)return new Set();
   const pk=memoPicks(c.id);return new Set(cf.mode==='pick'&&pk.length?pk:memoLines(c).filter(l=>l.li!=='t').map(l=>l.li));}
 /* 무작위 N줄(용어 제외). avoid면 바로 전에 가린 줄은 되도록 피한다 */
 function memoRoll(c,avoid){const all=memoLines(c).filter(l=>l.li!=='t').map(l=>l.li);const prev=new Set(avoid&&MEMO.rndId===c.id?MEMO.rnd||[]:[]);
   MEMO.rnd=shuffle(all.filter(x=>!prev.has(x))).concat(shuffle(all.filter(x=>prev.has(x)))).slice(0,Math.min(memoCfg().n,all.length));MEMO.rndId=c.id;}
+/* 테이프: 카드 줄을 줄바꿈으로 이은 글에서 [시작, 끝) 글자 자리(S.memoTape[카드id] = [[시작, 끝, 글귀]], 카드마다 기억).
+   카드 글이 바뀌어 자리가 어긋나면 같은 글귀를 다시 찾고, 없으면 버린다 */
+function memoFull(c){return memoLines(c).map(l=>l.tx).join('\n');}
+function memoTapes(c){const full=memoFull(c),out=[];((S.memoTape||{})[c.id]||[]).forEach(([a,b,tx])=>{if(full.slice(a,b)===tx)out.push([a,b]);else if(tx){const k=full.indexOf(tx);if(k>=0)out.push([k,k+tx.length]);}});return out;}
+function memoTapeSet(c,list){const m=[];list.filter(r=>r[1]>r[0]).sort((x,y)=>x[0]-y[0]).forEach(r=>{const l=m[m.length-1];if(l&&r[0]<=l[1])l[1]=Math.max(l[1],r[1]);else m.push([r[0],r[1]]);});
+  const full=memoFull(c),T=S.memoTape||(S.memoTape={});if(m.length)T[c.id]=m.map(([a,b])=>[a,b,full.slice(a,b)]);else delete T[c.id];save();}
+function memoTapeAdd(c,a,b){const full=memoFull(c);a=Math.max(0,a);b=Math.min(full.length,b);while(a<b&&/\s/.test(full[a]))a++;while(b>a&&/\s/.test(full[b-1]))b--;if(b<=a)return false;memoTapeSet(c,memoTapes(c).concat([[a,b]]));return true;}
+/* 짧게 누른 자리의 낱말(조사·어미는 남겨 힌트로): 음전하를 → 음전하 */
+function memoWordAt(c,k){const full=memoFull(c),isW=ch=>/[가-힣A-Za-z0-9]/.test(ch||'');if(!isW(full[k])&&isW(full[k-1]))k--;if(!isW(full[k]))return null;
+  let a=k,b=k;while(a>0&&isW(full[a-1]))a--;while(b<full.length&&isW(full[b]))b++;const st=glStem(full.slice(a,b));return[a,a+(full.slice(a,b).startsWith(st)&&st?st.length:b-a)];}
+/* 줄 글을 테이프·지금 긋는 범위로 나눠 그린다(base: 이 줄이 전체 글에서 시작하는 자리) */
+function memoLineHTML(tx,base,tapes,sel){const cut=new Set([0,tx.length]),add=(a,b)=>{a-=base;b-=base;if(b<=0||a>=tx.length)return;cut.add(Math.max(0,a));cut.add(Math.min(tx.length,b));};
+  tapes.forEach(r=>add(r[0],r[1]));if(sel)add(sel[0],sel[1]);const pt=[...cut].sort((x,y)=>x-y);let h='';
+  for(let i=0;i<pt.length-1;i++){const a=pt[i],b=pt[i+1],g=base+a,k=tapes.findIndex(r=>g>=r[0]&&g<r[1]),sl=sel&&g>=sel[0]&&g<sel[1],seg=esc(tx.slice(a,b));
+    h+=k>=0||sl?`<span class="${k>=0?'tp':''}${sl?' tsel':''}"${k>=0?` data-tp="${k}"`:''}>${seg}</span>`:seg;}
+  return h;}
+function memoLinesHTML(c,sel){const cf=memoCfg(),pk=new Set(memoPicks(c.id)),hs=memoHideSet(c),tp=cf.mode==='tape'?memoTapes(c):[];let o=0;
+  return memoLines(c).map(l=>{const h=`<div class="ml ${l.cls}${cf.mode==='pick'&&pk.has(l.li)?' pk':''}${hs.has(l.li)?' hd':''}" data-act="memo-pick" data-li="${l.li}" data-o="${o}">${memoLineHTML(l.tx,o,tp,sel)}</div>`;o+=l.tx.length+1;return h;}).join('');}
+/* 화면 자리 → 전체 글 자리(손가락 밑 글자). 줄 밖이면 null */
+function memoOff(n,k){const el=n&&(n.nodeType===3?n.parentNode:n),ml=el&&el.closest&&el.closest('#memoBox .ml');if(!ml)return null;
+  try{const r=document.createRange();r.setStart(ml,0);r.setEnd(n,k);return(Number(ml.dataset.o)||0)+r.toString().length;}catch(e){return null;}}
+function memoOffAt(x,y){let n=null,k=0;if(document.caretRangeFromPoint){const r=document.caretRangeFromPoint(x,y);if(r){n=r.startContainer;k=r.startOffset;}}
+  else if(document.caretPositionFromPoint){const p=document.caretPositionFromPoint(x,y);if(p){n=p.offsetNode;k=p.offset;}}return n?memoOff(n,k):null;}
+/* 테이프 붙이기 켜기: 시간을 멈추고 글을 보이게 */
+function memoEdit(on){if(!MEMO)return;MEMO.edit=!!on;if(on){memoPause();if(MEMO.phase==='hide'){MEMO.phase='show';MEMO.left=null;}}}
+/* 붙이는 중에는 글 위를 그으면 그 범위(여러 줄 이어서), 짧게 누르면 그 낱말, 붙은 테이프를 누르면 뗀다. 화면은 줄만 다시 그린다 */
+let tpDrag=null;
+function memoTapeDown(e){const box=e.target&&e.target.closest&&e.target.closest('#memoBox.editing');if(!box||!MEMO)return;const tp=e.target.closest('.tp'),o=memoOffAt(e.clientX,e.clientY);
+  tpDrag={s:o,e:o,x:e.clientX,y:e.clientY,moved:false,tp:tp?Number(tp.dataset.tp):null};if(e.cancelable)e.preventDefault();try{box.setPointerCapture(e.pointerId);}catch(_){}}
+function memoTapeMove(e){if(!tpDrag)return;if(Math.abs(e.clientX-tpDrag.x)+Math.abs(e.clientY-tpDrag.y)>8)tpDrag.moved=true;const o=memoOffAt(e.clientX,e.clientY);
+  if(o!=null){if(tpDrag.s==null)tpDrag.s=o;tpDrag.e=o;}if(e.cancelable)e.preventDefault();
+  const box=document.getElementById('memoBox'),c=MEMO&&card(memoItem().id);if(tpDrag.moved&&tpDrag.s!=null&&box&&c)box.innerHTML=memoLinesHTML(c,[Math.min(tpDrag.s,tpDrag.e),Math.max(tpDrag.s,tpDrag.e)+1]);}
+function memoTapeUp(){const d=tpDrag;tpDrag=null;const c=d&&MEMO&&card(memoItem().id);if(!c)return;
+  if(!d.moved){if(d.tp!=null){const t=memoTapes(c);t.splice(d.tp,1);memoTapeSet(c,t);toast('테이프를 뗐어요');}else if(d.s!=null){const w=memoWordAt(c,d.s);if(w)memoTapeAdd(c,w[0],w[1]);}}
+  else if(d.s!=null)memoTapeAdd(c,Math.min(d.s,d.e),Math.max(d.s,d.e)+1);
+  render();}
+document.addEventListener('pointerdown',memoTapeDown,{passive:false});
+document.addEventListener('pointermove',memoTapeMove,{passive:false});
+document.addEventListener('pointerup',memoTapeUp);
+document.addEventListener('pointercancel',()=>{if(!tpDrag)return;tpDrag=null;render();});
 /* 이어 하기 키: 세트는 memo:set:날짜, 암기 탭은 memo:study(그날 고른 카드 목록째로) */
 function startMemo(o,fresh){
   if(!fresh&&MEMO&&MEMO.key===o.key&&!MEMO.fin){memoStop();return nav('memo');}
@@ -618,19 +660,21 @@ function memoDoneHTML(){const n=MEMO.items.length,min=Math.max(1,Math.round((MEM
 function vMemo(){if(!MEMO)return topbar('가리며 외우기')+`<div class="empty" style="margin-top:20px"><b>진행 중인 외우기가 없어요</b><div class="btns"><button class="btn" data-act="go" data-h="study">암기 탭으로</button></div></div>`;
   if(MEMO.fin)return memoDoneHTML();
   const it=memoItem(),c=card(it.id),cf=memoCfg(),n=MEMO.items.length,last=MEMO.i+1>=n;if(!c)return topbar(MEMO.title||'가리며 외우기')+skipBtn();
-  const pk=new Set(memoPicks(c.id)),hs=memoHideSet(c);
+  const pk=new Set(memoPicks(c.id)),tp=cf.mode==='tape'?memoTapes(c):[],ed=cf.mode==='tape'&&MEMO.edit;
   const seg=(k,arr,lab)=>`<div class="seg">${arr.map(v=>`<button class="${cf[k]===v?'on':''}" data-act="memo-cfg" data-k="${k}" data-v="${v}">${lab(v)}</button>`).join('')}</div>`;
-  const how=cf.mode==='pick'?'고른 줄':cf.mode==='rand'?`무작위 ${cf.n}줄`:'전체';
-  return topbar(MEMO.title||'가리며 외우기')+`<div class="prog"><div class="bar"><i style="width:${Math.round(MEMO.i/n*100)}%"></i></div><span>${MEMO.i+1} / ${n}</span></div>
+  const how=cf.mode==='pick'?'고른 줄':cf.mode==='rand'?`무작위 ${cf.n}줄`:cf.mode==='tape'?'테이프':'전체';
+  return topbar(MEMO.title||'가리며 외우기')+`<div class="prog"><div class="bar"><i style="width:${Math.round((MEMO.i+1)/n*100)}%"></i></div><span>${MEMO.i+1} / ${n}</span></div>
   <div class="mhead" id="memoHead"><div class="mclock" id="memoClock"></div><div class="mbar"><i id="memoBar"></i></div></div>
-  <div class="memo${MEMO.phase==='hide'&&!MEMO.done?' hiding':''}" id="memoBox">${memoLines(c).map(l=>`<div class="ml ${l.cls}${cf.mode==='pick'&&pk.has(l.li)?' pk':''}${hs.has(l.li)?' hd':''}" data-act="memo-pick" data-li="${l.li}">${esc(l.tx)}</div>`).join('')}</div>
+  <div class="memo${cf.mode==='tape'?' tape':''}${ed?' editing':''}${MEMO.phase==='hide'&&!MEMO.done?' hiding':''}" id="memoBox">${memoLinesHTML(c,null)}</div>
+  ${cf.mode==='tape'?`<div class="btns tapebar"><button class="btn sm${ed?'':' sec'}" data-act="memo-tape-edit">${ed?'다 붙였어요':'테이프 붙이기'}</button>${tp.length?`<button class="btn sm ghost" data-act="memo-tape-clear">이 카드 테이프 모두 떼기</button>`:''}</div>`
+    :`<div class="btns tapebar"><button class="btn sm ghost" data-act="memo-tape-on">손가락으로 그어 테이프로 가리기</button></div>`}
   <div class="btns"><button class="btn" id="memoPlay" data-act="memo-play">시작</button></div>
   <div class="btns sessnav"><button class="btn sec" data-act="memo-prev" ${MEMO.i?'':'disabled'}>‹ 이전</button>${last?'<button class="btn" data-act="memo-finish">완료</button>':'<button class="btn sec" data-act="memo-next">다음 ›</button>'}</div>
-  <p class="note">${cf.mode==='pick'?(pk.size?'노란 테두리 줄만 가려요. 줄을 탭해 더하거나 빼세요.':'가릴 줄을 탭해서 고르세요. 고르기 전에는 전체를 가려요.'):cf.mode==='rand'?`가릴 때마다 정의·키워드 중 ${cf.n}줄을 무작위로 골라 가려요. 줄을 탭하면 고른 줄 가리기로 바뀌어요.`:'용어만 남기고 전체를 가려요. 가리고 싶은 줄을 탭하면 그 줄만 가리기로 바뀌어요.'}</p>
+  <p class="note">${cf.mode==='tape'?(ed?'가릴 곳을 손가락으로 그으세요. 여러 줄도 이어서 그을 수 있어요. 짧게 누르면 그 낱말, 붙은 테이프를 누르면 떼요.':tp.length?`테이프 ${tp.length}곳만 가려요. 테이프 붙이기를 눌러 더하거나 뗄 수 있어요.`:'아직 테이프가 없어 용어만 남기고 전체를 가려요. 테이프 붙이기를 눌러 가릴 곳을 그으세요.'):cf.mode==='pick'?(pk.size?'노란 테두리 줄만 가려요. 줄을 탭해 더하거나 빼세요.':'가릴 줄을 탭해서 고르세요. 고르기 전에는 전체를 가려요.'):cf.mode==='rand'?`가릴 때마다 정의·키워드 중 ${cf.n}줄을 무작위로 골라 가려요. 줄을 탭하면 고른 줄 가리기로 바뀌어요.`:'용어만 남기고 전체를 가려요. 가리고 싶은 줄을 탭하면 그 줄만 가리기로 바뀌어요.'}</p>
   <details class="d" id="memoCfg"${MEMO.cfgOpen?' open':''}><summary>설정: 보기 ${cf.show}초, 가림 ${cf.hide}초, ${how}, ${cf.reps?cf.reps+'회':'무한 반복'}${cf.reps?(cf.auto?', 다음 카드로':', 멈춤'):''}</summary><div class="in-d">
     <label class="f">보이는 시간</label>${seg('show',MEMO_SHOW,v=>v+'초')}
     <label class="f">가리는 시간</label>${seg('hide',MEMO_HIDE,v=>v+'초')}
-    <label class="f">가릴 것</label>${seg('mode',['all','pick','rand'],v=>v==='all'?'전체':v==='pick'?'고른 줄':'무작위')}
+    <label class="f">가릴 것</label>${seg('mode',['all','pick','rand','tape'],v=>({all:'전체',pick:'고른 줄',rand:'무작위',tape:'테이프'})[v])}
     ${cf.mode==='rand'?`<label class="f">무작위로 가릴 줄 수</label>${seg('n',MEMO_N,v=>v+'줄')}`:''}
     <label class="f">반복</label>${seg('reps',MEMO_REPS,v=>v?v+'회':'무한')}
     <label class="f">다 하면</label>${seg('auto',[1,0],v=>v?'다음 카드로':'멈춤')}</div></details>`;}
@@ -976,7 +1020,7 @@ function promptWith(id,from,to){const p=PE_PROMPTS.find(x=>x.id===id);return p?f
 /* ════════ 22. 이벤트 ════════ */
 /* 꾹 누르기(0.45초): 형광펜 낱말은 그 카드, 다른 낱말은 카드 → 앱 사전 → 바깥 사전 찾기. 데스크톱은 오른쪽 클릭.
    손을 움직이면(스크롤) 취소하고, 누른 뒤 손을 뗄 때 생기는 클릭은 버린다(카드 뒤집기·답 고르기·창 닫기 방지). 입력 칸·버튼·탭은 빼고 */
-const GL_SKIP='input,textarea,select,.btn,nav,.topbar,.seg,label.check';
+const GL_SKIP='input,textarea,select,.btn,nav,.topbar,.seg,label.check,#memoBox.editing';
 let glT=null,glXY=null,glEl=null,glFired=0;
 function glAt(target,x,y){if(!target||!target.closest||target.closest(GL_SKIP)||!target.closest('#view,#modal-wrap'))return false;
   const g=target.closest('.gl');if(g){const c=card(g.dataset.gl);if(c){openModal(cardModal(c));return true;}}
@@ -990,7 +1034,7 @@ document.addEventListener('touchend',e=>{glCancel();if(glFired&&e.cancelable)e.p
 document.addEventListener('touchcancel',glCancel);
 /* 옆으로 밀기: 카드·가리며 외우기는 다음(왼쪽)·이전(오른쪽), 학습 달력은 다음 달·이전 달 */
 let swXY=null;
-document.addEventListener('touchstart',e=>{const t=e.touches&&e.touches[0];swXY=t&&e.target.closest&&e.target.closest('.fc,.memo,.calsw')?[t.clientX,t.clientY]:null;},{passive:true});
+document.addEventListener('touchstart',e=>{const t=e.touches&&e.touches[0];swXY=t&&e.target.closest&&e.target.closest('.fc,.memo,.calsw')&&!e.target.closest('.editing')?[t.clientX,t.clientY]:null;},{passive:true});
 document.addEventListener('touchend',e=>{const t=e.changedTouches&&e.changedTouches[0];if(!swXY||!t||glFired){swXY=null;return;}const dx=t.clientX-swXY[0],dy=t.clientY-swXY[1];swXY=null;
   if(Math.abs(dx)<=60||Math.abs(dy)>=50)return;
   if(R.page==='sess'&&SES){if(dx<0)sessAdvance();else sessPrev();}else if(R.page==='memo'&&MEMO)memoGo(MEMO.i+(dx<0?1:-1));else if(R.page==='cal')calShift(dx<0?1:-1,true);},{passive:true});
@@ -1035,11 +1079,15 @@ document.addEventListener('click',e=>{
   case'memo-finish':return memoFinish();
   case'memo-close':{const f=MEMO&&MEMO.from;MEMO=null;return nav(f?f.replace(/^#/,''):'study');}
   case'memo-again':{if(!MEMO)return;const o={key:MEMO.key,label:MEMO.label,title:MEMO.title,items:MEMO.items,setD:MEMO.setD,from:MEMO.from};MEMO=null;return startMemo(o,true);}
-  case'memo-play':return MEMO&&MEMO.run?memoPause():memoPlay();
+  case'memo-play':if(MEMO&&MEMO.edit){MEMO.edit=false;render();}return MEMO&&MEMO.run?memoPause():memoPlay();
   case'memo-prev':return MEMO&&memoGo(MEMO.i-1);
   case'memo-next':return MEMO&&memoGo(MEMO.i+1);
-  case'memo-cfg':{const k=D.k,v=k==='mode'?(['pick','rand'].includes(D.v)?D.v:'all'):Number(D.v);S.settings.memo=Object.assign(memoCfg(),{[k]:v});if(MEMO){MEMO.cfgOpen=true;MEMO.rnd=null;MEMO.rndShown=false;}save();return render();}
-  case'memo-pick':{const it=memoItem();if(!it)return;const m=S.memoPick||(S.memoPick={});const li=D.li;
+  case'memo-cfg':{const k=D.k,v=k==='mode'?(['pick','rand','tape'].includes(D.v)?D.v:'all'):Number(D.v);S.settings.memo=Object.assign(memoCfg(),{[k]:v});
+    if(MEMO){MEMO.cfgOpen=true;MEMO.rnd=null;MEMO.rndShown=false;if(k==='mode'){const c=card(memoItem().id);memoEdit(v==='tape'&&!!c&&!memoTapes(c).length);}}save();return render();}
+  case'memo-tape-on':S.settings.memo=Object.assign(memoCfg(),{mode:'tape'});save();memoEdit(true);return render();
+  case'memo-tape-edit':memoEdit(!MEMO.edit);return render();
+  case'memo-tape-clear':{const c=MEMO&&card(memoItem().id);if(!c)return;return PE_IO.ask('이 카드의 테이프를 모두 뗄까요?',()=>{memoTapeSet(c,[]);render();});}
+  case'memo-pick':{const it=memoItem();if(!it||memoCfg().mode==='tape')return;const m=S.memoPick||(S.memoPick={});const li=D.li;
     if(memoCfg().mode!=='pick'){S.settings.memo=Object.assign(memoCfg(),{mode:'pick'});m[it.id]=[li];save();toast('고른 줄만 가리기로 바꿨어요');return render();}
     const a=new Set(m[it.id]||[]);a.has(li)?a.delete(li):a.add(li);if(a.size)m[it.id]=[...a];else delete m[it.id];save();return render();}
   case'study-unit':S.range=String(D.u);save();return startStudy();
@@ -1137,5 +1185,5 @@ window.addEventListener('online',()=>sync(true));
 PE_IO.init({toast});recalcPlan();applyLook();setPreset('essay');R=parseHash();
 if(!location.hash)history.replaceState(null,'','#today');
 calOpen();render();sync(true);
-window.__pe={S:()=>S,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,render,invalidate,startSession};
+window.__pe={S:()=>S,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,render,invalidate,startSession};
 })();

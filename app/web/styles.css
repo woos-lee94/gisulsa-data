@@ -208,7 +208,8 @@ textarea.in{min-height:120px;font-size:.88rem;line-height:1.5;font-family:ui-mon
 .mclock b{font-size:1.25rem}.mclock b.show{color:var(--blue)}.mclock b.hide{color:var(--amber)}
 .mclock span{margin-left:auto;color:var(--ink2);font-weight:600;font-size:.92rem}
 .mhead.hide .mbar i{background:var(--amber)}
-.mbar{height:5px;border-radius:3px;background:var(--rule);overflow:hidden;margin:0 0 12px}.mbar i{display:block;height:100%;background:var(--blue);transition:width .2s linear}
+/* 남은 시간 막대는 눈에 덜 띄게(옅고 얇게) */
+.mbar{height:3px;border-radius:2px;background:color-mix(in srgb,var(--rule) 55%,transparent);overflow:hidden;margin:0 0 12px}.mbar i{display:block;height:100%;background:var(--blue);opacity:.35;transition:width .2s linear}
 .memo{background:var(--sheet);border-radius:var(--r-lg);padding:18px 18px 16px;min-height:40vh}
 .memo .ml{border-radius:6px;padding:3px 6px;margin:0 -6px 2px;cursor:pointer;transition:background .25s,color .25s}
 .memo .mterm{font-size:1.3rem;font-weight:800;margin-bottom:8px}
@@ -216,6 +217,15 @@ textarea.in{min-height:120px;font-size:.88rem;line-height:1.5;font-family:ui-mon
 .memo .mkw{display:inline-block;margin:8px 8px 0 -6px;font-weight:700;background:linear-gradient(transparent 56%,var(--marker) 56%)}
 .memo .ml.pk{box-shadow:inset 0 0 0 2px var(--marker)}
 .memo.hiding .ml.hd{color:transparent;background:var(--rule);box-shadow:none}
+/* 테이프: 보일 때는 비치는 마스킹 테이프, 가릴 때는 불투명 테이프. 여러 줄에 걸쳐도 줄마다 이어 붙는다 */
+.memo .tp{border-radius:3px;background:rgba(214,176,98,.30);box-shadow:inset 0 0 0 1px rgba(176,136,60,.38);-webkit-box-decoration-break:clone;box-decoration-break:clone;transition:background .25s,color .25s}
+.memo.hiding .tp{color:transparent;background:repeating-linear-gradient(-45deg,#E7D4A4 0 5px,#DCC58E 5px 10px);box-shadow:0 1px 2px rgba(60,40,10,.18)}
+.memo .tsel{background:color-mix(in srgb,var(--blue) 26%,transparent);border-radius:3px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+#memoBox.editing{touch-action:none;outline:2px dashed var(--amber);outline-offset:3px;cursor:text}
+#memoBox.editing .ml{cursor:text}
+.tapebar{margin-top:10px}.tapebar .btn.sm{flex:0 1 auto}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .memo.hiding .tp{background:repeating-linear-gradient(-45deg,#7C6843 0 5px,#6E5B37 5px 10px)}}
+:root[data-theme="dark"] .memo.hiding .tp{background:repeating-linear-gradient(-45deg,#7C6843 0 5px,#6E5B37 5px 10px)}
 .sessnav .btn{min-height:44px}
 .lnk{color:var(--blue);font:inherit;font-weight:700;padding:0 2px}
 /* 학습 달력: 접속한 날은 숫자에 회색 원, 끝낸 공부는 종류별 점(빨강 용어·파랑 논술·초록 퀴즈·주황 모의·보라 할 일) */
