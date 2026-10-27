@@ -656,19 +656,28 @@ function memoOffAt(x,y){let n=null,k=0;if(document.caretRangeFromPoint){const r=
 function memoEdit(on){if(!MEMO)return;MEMO.edit=!!on;if(on){memoPause();if(MEMO.phase==='hide'){MEMO.phase='show';MEMO.left=null;}}}
 /* 붙이는 중에는 한 손가락으로 글 위를 그으면 그 범위(여러 줄 이어서), 짧게 누르면 그 낱말, 붙은 테이프를 누르면 뗀다. 화면은 줄만 다시 그린다.
    두 손가락이 닿으면 테이프를 만들지 않고, 두 손가락으로 끌면 화면이 위아래로 움직인다(상자가 touch-action:none이라 직접 스크롤).
+   손가락마다 포인터를 상자에 잡아 두고(setPointerCapture) 두 손가락 움직임도 포인터로 읽는다. 손가락이 닿아 있는 동안에는 줄을 새로 그리지 않는다:
+   iOS는 손가락이 처음 닿은 글자 요소가 바뀌면 그 뒤 터치 이벤트를 문서로 올려 보내지 않아 스크롤이 끊긴다(긋던 범위는 tpoff로 숨겼다가 다 떼면 다시 그림).
    짧게 누른 것은 90ms 기다렸다 붙여, 두 손가락으로 톡 칠 때 먼저 닿은 손가락이 테이프가 되지 않게 한다 */
-let tpDrag=null,tpMulti=false,tpTap=null,tp2=null;const tpPtr=new Set();
-function tpCancel(){tpMulti=true;clearTimeout(tpTap);tpTap=null;if(tpDrag){tpDrag=null;const box=document.getElementById('memoBox'),c=MEMO&&card(memoItem().id);if(box&&c)box.innerHTML=memoLinesHTML(c,null);}}
+let tpDrag=null,tpMulti=false,tpTap=null,tp2=null,tpStale=false;const tpPts=new Map();
+const tpAvg=()=>{let y=0;tpPts.forEach(p=>{y+=p.y;});return y/tpPts.size;};
+function tpCancel(){tpMulti=true;clearTimeout(tpTap);tpTap=null;if(tpDrag){if(tpDrag.moved){tpStale=true;const box=document.getElementById('memoBox');if(box)box.classList.add('tpoff');}tpDrag=null;}}
+function tpIdle(){tpMulti=false;tp2=null;if(tpStale){tpStale=false;render();}}
 function memoTapeDown(e){const box=e.target&&e.target.closest&&e.target.closest('#memoBox.editing');if(!box||!MEMO)return;if(e.cancelable)e.preventDefault();
-  tpPtr.add(e.pointerId);if(tpPtr.size>1||tpMulti||tp2)return tpCancel();
+  tpPts.set(e.pointerId,{y:e.clientY});try{box.setPointerCapture(e.pointerId);}catch(_){}
+  if(tpPts.size>1){tpCancel();tp2={y:tpAvg()};return;}
+  if(tpMulti)return;
   if(tpTap)return tpCancel();
   const tp=e.target.closest('.tp'),o=memoOffAt(e.clientX,e.clientY);
-  tpDrag={s:o,e:o,x:e.clientX,y:e.clientY,moved:false,tp:tp?Number(tp.dataset.tp):null};try{box.setPointerCapture(e.pointerId);}catch(_){}}
-function memoTapeMove(e){if(!tpDrag||tpMulti)return;if(Math.abs(e.clientX-tpDrag.x)+Math.abs(e.clientY-tpDrag.y)>8)tpDrag.moved=true;const o=memoOffAt(e.clientX,e.clientY);
-  if(o!=null){if(tpDrag.s==null)tpDrag.s=o;tpDrag.e=o;}if(e.cancelable)e.preventDefault();
+  tpDrag={s:o,e:o,x:e.clientX,y:e.clientY,moved:false,tp:tp?Number(tp.dataset.tp):null};}
+function memoTapeMove(e){const pt=tpPts.get(e.pointerId);if(!pt)return;pt.y=e.clientY;if(e.cancelable)e.preventDefault();
+  if(tp2&&tpPts.size>1){const y=tpAvg();window.scrollBy(0,tp2.y-y);tp2.y=y;return;}
+  if(!tpDrag||tpMulti)return;if(Math.abs(e.clientX-tpDrag.x)+Math.abs(e.clientY-tpDrag.y)>8)tpDrag.moved=true;const o=memoOffAt(e.clientX,e.clientY);
+  if(o!=null){if(tpDrag.s==null)tpDrag.s=o;tpDrag.e=o;}
   const box=document.getElementById('memoBox'),c=MEMO&&card(memoItem().id);if(tpDrag.moved&&tpDrag.s!=null&&box&&c)box.innerHTML=memoLinesHTML(c,[Math.min(tpDrag.s,tpDrag.e),Math.max(tpDrag.s,tpDrag.e)+1]);}
-function memoTapeUp(e){tpPtr.delete(e&&e.pointerId);if(tpMulti){if(!tpPtr.size)tpMulti=false;return;}
-  const d=tpDrag;tpDrag=null;const c=d&&MEMO&&card(memoItem().id);if(!c)return;
+function memoTapeUp(e){const had=tpPts.delete(e&&e.pointerId);if(tpPts.size<2)tp2=null;
+  if(tpMulti){if(!tpPts.size)tpIdle();return;}
+  if(!had)return;const d=tpDrag;tpDrag=null;const c=d&&MEMO&&card(memoItem().id);if(!c)return;
   if(!d.moved){tpTap=setTimeout(()=>{tpTap=null;memoTapeTap(d);},90);return;}
   if(d.s!=null)memoTapeAdd(c,Math.min(d.s,d.e),Math.max(d.s,d.e)+1);
   render();}
@@ -678,12 +687,10 @@ function memoTapeTap(d){const c=MEMO&&MEMO.edit&&card(memoItem().id);if(!c)retur
 document.addEventListener('pointerdown',memoTapeDown,{passive:false});
 document.addEventListener('pointermove',memoTapeMove,{passive:false});
 document.addEventListener('pointerup',memoTapeUp);
-document.addEventListener('pointercancel',e=>{tpPtr.delete(e.pointerId);if(!tpPtr.size)tpMulti=false;if(!tpDrag)return;tpDrag=null;render();});
-const tpY=t=>(t[0].clientY+t[1].clientY)/2;
-document.addEventListener('touchstart',e=>{if(!e.touches||e.touches.length<2||![...e.touches].some(t=>t.target&&t.target.closest&&t.target.closest('#memoBox.editing')))return;tpCancel();tp2={y:tpY(e.touches)};},{passive:true});
-document.addEventListener('touchmove',e=>{if(!tp2||!e.touches||e.touches.length<2)return;const y=tpY(e.touches);window.scrollBy(0,tp2.y-y);tp2.y=y;if(e.cancelable)e.preventDefault();},{passive:false});
-const tpEnd=e=>{if(!e.touches||e.touches.length<2)tp2=null;if(!e.touches||!e.touches.length){tpPtr.clear();tpMulti=false;}};
-document.addEventListener('touchend',tpEnd);document.addEventListener('touchcancel',tpEnd);
+document.addEventListener('pointercancel',e=>{const had=tpPts.delete(e.pointerId);if(tpPts.size<2)tp2=null;if(!had)return;if(tpDrag){tpDrag=null;tpStale=true;}if(!tpPts.size)tpIdle();});
+/* 손가락을 모두 뗐는데 포인터 끝 이벤트를 못 받은 경우를 위한 정리 */
+document.addEventListener('touchend',e=>{if(e.touches&&e.touches.length||!tpPts.size)return;tpPts.clear();tpDrag=null;tpIdle();});
+document.addEventListener('touchcancel',e=>{if(e.touches&&e.touches.length||!tpPts.size)return;tpPts.clear();tpDrag=null;tpIdle();});
 /* 이어 하기 키: 세트는 memo:set:날짜, 암기 탭은 memo:study(그날 고른 카드 목록째로) */
 function startMemo(o,fresh){
   if(!fresh&&MEMO&&MEMO.key===o.key&&!MEMO.fin){memoStop();return nav('memo');}
