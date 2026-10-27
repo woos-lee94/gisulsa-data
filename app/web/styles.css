@@ -220,9 +220,10 @@ textarea.in{min-height:120px;font-size:.88rem;line-height:1.5;font-family:ui-mon
 /* 테이프: 보일 때는 비치는 마스킹 테이프, 가릴 때는 불투명 테이프. 여러 줄에 걸쳐도 줄마다 이어 붙는다 */
 .memo .tp{border-radius:3px;background:rgba(214,176,98,.30);box-shadow:inset 0 0 0 1px rgba(176,136,60,.38);-webkit-box-decoration-break:clone;box-decoration-break:clone;transition:background .25s,color .25s}
 .memo.hiding .tp{color:transparent;background:repeating-linear-gradient(-45deg,#E7D4A4 0 5px,#DCC58E 5px 10px);box-shadow:0 1px 2px rgba(60,40,10,.18)}
-.memo .tsel{background:color-mix(in srgb,var(--blue) 26%,transparent);border-radius:3px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
-#memoBox.tpoff .tsel{background:none}
-#memoBox.editing{touch-action:none;outline:2px dashed var(--amber);outline-offset:3px;cursor:text}
+#memoBox.editing{position:relative;outline:2px dashed var(--amber);outline-offset:3px;cursor:text}
+#memoBox.drawing{outline-style:solid;outline-color:var(--blue)}
+#memoBox .tsl{position:absolute;inset:0;pointer-events:none}
+#memoBox .tsl i{position:absolute;background:color-mix(in srgb,var(--blue) 26%,transparent);border-radius:3px}
 #memoBox.editing .ml{cursor:text}
 .tapebar{margin-top:10px}.tapebar .btn.sm{flex:0 1 auto}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .memo.hiding .tp{background:repeating-linear-gradient(-45deg,#7C6843 0 5px,#6E5B37 5px 10px)}}

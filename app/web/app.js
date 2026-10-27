@@ -642,14 +642,14 @@ function memoTapeAdd(c,a,b){const full=memoFull(c);a=Math.max(0,a);b=Math.min(fu
 /* 짧게 누른 자리의 낱말(조사·어미는 남겨 힌트로): 음전하를 → 음전하 */
 function memoWordAt(c,k){const full=memoFull(c),isW=ch=>/[가-힣A-Za-z0-9]/.test(ch||'');if(!isW(full[k])&&isW(full[k-1]))k--;if(!isW(full[k]))return null;
   let a=k,b=k;while(a>0&&isW(full[a-1]))a--;while(b<full.length&&isW(full[b]))b++;const st=glStem(full.slice(a,b));return[a,a+(full.slice(a,b).startsWith(st)&&st?st.length:b-a)];}
-/* 줄 글을 테이프·지금 긋는 범위로 나눠 그린다(base: 이 줄이 전체 글에서 시작하는 자리) */
-function memoLineHTML(tx,base,tapes,sel){const cut=new Set([0,tx.length]),add=(a,b)=>{a-=base;b-=base;if(b<=0||a>=tx.length)return;cut.add(Math.max(0,a));cut.add(Math.min(tx.length,b));};
-  tapes.forEach(r=>add(r[0],r[1]));if(sel)add(sel[0],sel[1]);const pt=[...cut].sort((x,y)=>x-y);let h='';
-  for(let i=0;i<pt.length-1;i++){const a=pt[i],b=pt[i+1],g=base+a,k=tapes.findIndex(r=>g>=r[0]&&g<r[1]),sl=sel&&g>=sel[0]&&g<sel[1],seg=esc(tx.slice(a,b));
-    h+=k>=0||sl?`<span class="${k>=0?'tp':''}${sl?' tsel':''}"${k>=0?` data-tp="${k}"`:''}>${seg}</span>`:seg;}
+/* 줄 글을 테이프로 나눠 그린다(base: 이 줄이 전체 글에서 시작하는 자리) */
+function memoLineHTML(tx,base,tapes){const cut=new Set([0,tx.length]),add=(a,b)=>{a-=base;b-=base;if(b<=0||a>=tx.length)return;cut.add(Math.max(0,a));cut.add(Math.min(tx.length,b));};
+  tapes.forEach(r=>add(r[0],r[1]));const pt=[...cut].sort((x,y)=>x-y);let h='';
+  for(let i=0;i<pt.length-1;i++){const a=pt[i],b=pt[i+1],g=base+a,k=tapes.findIndex(r=>g>=r[0]&&g<r[1]),seg=esc(tx.slice(a,b));
+    h+=k>=0?`<span class="tp" data-tp="${k}">${seg}</span>`:seg;}
   return h;}
-function memoLinesHTML(c,sel){const cf=memoCfg(),pk=new Set(memoPicks(c.id)),hs=memoHideSet(c),tp=cf.mode==='tape'?memoTapes(c):[];let o=0;
-  return memoLines(c).map(l=>{const h=`<div class="ml ${l.cls}${cf.mode==='pick'&&pk.has(l.li)?' pk':''}${hs.has(l.li)?' hd':''}" data-act="memo-pick" data-li="${l.li}" data-o="${o}">${memoLineHTML(l.tx,o,tp,sel)}</div>`;o+=l.tx.length+1;return h;}).join('');}
+function memoLinesHTML(c){const cf=memoCfg(),pk=new Set(memoPicks(c.id)),hs=memoHideSet(c),tp=cf.mode==='tape'?memoTapes(c):[];let o=0;
+  return memoLines(c).map(l=>{const h=`<div class="ml ${l.cls}${cf.mode==='pick'&&pk.has(l.li)?' pk':''}${hs.has(l.li)?' hd':''}" data-act="memo-pick" data-li="${l.li}" data-o="${o}">${memoLineHTML(l.tx,o,tp)}</div>`;o+=l.tx.length+1;return h;}).join('');}
 /* 화면 자리 → 전체 글 자리(손가락 밑 글자). 줄 밖이면 null */
 function memoOff(n,k){const el=n&&(n.nodeType===3?n.parentNode:n),ml=el&&el.closest&&el.closest('#memoBox .ml');if(!ml)return null;
   try{const r=document.createRange();r.setStart(ml,0);r.setEnd(n,k);return(Number(ml.dataset.o)||0)+r.toString().length;}catch(e){return null;}}
@@ -657,43 +657,55 @@ function memoOffAt(x,y){let n=null,k=0;if(document.caretRangeFromPoint){const r=
   else if(document.caretPositionFromPoint){const p=document.caretPositionFromPoint(x,y);if(p){n=p.offsetNode;k=p.offset;}}return n?memoOff(n,k):null;}
 /* 테이프 붙이기 켜기: 시간을 멈추고 글을 보이게 */
 function memoEdit(on){if(!MEMO)return;MEMO.edit=!!on;if(on){memoPause();if(MEMO.phase==='hide'){MEMO.phase='show';MEMO.left=null;}}}
-/* 붙이는 중에는 한 손가락으로 글 위를 그으면 그 범위(여러 줄 이어서), 짧게 누르면 그 낱말, 붙은 테이프를 누르면 뗀다. 화면은 줄만 다시 그린다.
-   두 손가락이 닿으면 테이프를 만들지 않고, 두 손가락으로 끌면 화면이 위아래로 움직인다(상자가 touch-action:none이라 직접 스크롤).
-   손가락마다 포인터를 상자에 잡아 두고(setPointerCapture) 두 손가락 움직임도 포인터로 읽는다. 손가락이 닿아 있는 동안에는 줄을 새로 그리지 않는다:
-   iOS는 손가락이 처음 닿은 글자 요소가 바뀌면 그 뒤 터치 이벤트를 문서로 올려 보내지 않아 스크롤이 끊긴다(긋던 범위는 tpoff로 숨겼다가 다 떼면 다시 그림).
-   짧게 누른 것은 90ms 기다렸다 붙여, 두 손가락으로 톡 칠 때 먼저 닿은 손가락이 테이프가 되지 않게 한다 */
-let tpDrag=null,tpMulti=false,tpTap=null,tp2=null,tpStale=false;const tpPts=new Map();
-const tpAvg=()=>{let y=0;tpPts.forEach(p=>{y+=p.y;});return y/tpPts.size;};
-function tpCancel(){tpMulti=true;clearTimeout(tpTap);tpTap=null;if(tpDrag){if(tpDrag.moved){tpStale=true;const box=document.getElementById('memoBox');if(box)box.classList.add('tpoff');}tpDrag=null;}}
-function tpIdle(){tpMulti=false;tp2=null;if(tpStale){tpStale=false;render();}}
-function memoTapeDown(e){const box=e.target&&e.target.closest&&e.target.closest('#memoBox.editing');if(!box||!MEMO)return;if(e.cancelable)e.preventDefault();
-  tpPts.set(e.pointerId,{y:e.clientY});try{box.setPointerCapture(e.pointerId);}catch(_){}
-  if(tpPts.size>1){tpCancel();tp2={y:tpAvg()};return;}
-  if(tpMulti)return;
-  if(tpTap)return tpCancel();
+/* 긋는 범위 표시: 글자 요소는 그대로 두고 상자 위에 덮는 칸(.tsl)으로 그린다(sel: [시작, 끝), 없으면 지움) */
+function memoSelPaint(box,sel){if(!box)return;let ov=box.querySelector('.tsl');if(!sel){if(ov)ov.remove();return;}
+  if(!ov){ov=document.createElement('div');ov.className='tsl';box.appendChild(ov);}
+  const br=box.getBoundingClientRect(),dx=br.left+box.clientLeft,dy=br.top+box.clientTop;let h='';
+  box.querySelectorAll('.ml').forEach(ml=>{let p=Number(ml.dataset.o)||0,n;const tw=document.createTreeWalker(ml,NodeFilter.SHOW_TEXT);
+    while((n=tw.nextNode())){const a=Math.max(sel[0],p),b=Math.min(sel[1],p+n.data.length);
+      if(b>a){const r=document.createRange();r.setStart(n,a-p);r.setEnd(n,b-p);[...(r.getClientRects?r.getClientRects():[])].forEach(q=>{h+=`<i style="left:${q.left-dx}px;top:${q.top-dy}px;width:${q.width}px;height:${q.height}px"></i>`;});}
+      p+=n.data.length;}});
+  ov.innerHTML=h;}
+/* 붙이는 중: 한 손가락으로 그냥 밀면 화면이 평소처럼 움직이고, 0.3초 꾹 눌렀다가 그대로 그으면 그 범위(여러 줄 이어서)가 테이프가 된다(아이폰 글자 고르기처럼).
+   짧게 누르거나 꾹 눌렀다 그냥 떼면 그 낱말, 붙은 테이프를 누르면 뗀다. 마우스는 꾹 누를 것 없이 바로 긋는다. 두 손가락이 닿으면 아무것도 하지 않는다.
+   긋는 동안에만 touchmove를 막아 화면을 세운다. 이 리스너는 처음부터 passive:false로 window에 달아 둬야 WebKit이 따르고,
+   긋는 범위는 덮는 칸으로 그려 손가락 밑 글자 요소를 바꾸지 않는다(iOS는 손가락 밑 요소가 바뀌면 그 뒤 터치 이벤트를 문서로 올려 보내지 않는다).
+   짧게 누른 것은 90ms 기다렸다 붙여 두 손가락으로 톡 친 것이 테이프가 되지 않게 하고, 미끄러지던 화면을 세우려고 누른 것(스크롤 150ms 안)이나 누르는 동안 화면이 움직인 것은 붙이지 않는다 */
+const TP_HOLD=300,TP_SLOP=10;
+let tpDrag=null,tpMulti=false,tpTap=null,tpScrollT=0;const tpPts=new Set();
+function tpEnd(){const d=tpDrag;tpDrag=null;if(d)clearTimeout(d.hold);const box=document.getElementById('memoBox');if(box){box.classList.remove('drawing');memoSelPaint(box,null);}return d;}
+function tpSel(d){return d.s==null?null:[Math.min(d.s,d.e),Math.max(d.s,d.e)+1];}
+function tpDraw(){const d=tpDrag,box=document.getElementById('memoBox');if(!d||d.on||d.dead||!box||!box.classList.contains('editing'))return;
+  d.on=true;try{box.setPointerCapture(d.id);}catch(_){}box.classList.add('drawing');memoSelPaint(box,tpSel(d));}
+function memoTapeDown(e){const box=e.target&&e.target.closest&&e.target.closest('#memoBox.editing');if(!box||!MEMO)return;
+  tpPts.add(e.pointerId);
+  if(tpPts.size>1||tpTap){tpMulti=true;clearTimeout(tpTap);tpTap=null;tpEnd();return;}
   const tp=e.target.closest('.tp'),o=memoOffAt(e.clientX,e.clientY);
-  tpDrag={s:o,e:o,x:e.clientX,y:e.clientY,moved:false,tp:tp?Number(tp.dataset.tp):null};}
-function memoTapeMove(e){const pt=tpPts.get(e.pointerId);if(!pt)return;pt.y=e.clientY;if(e.cancelable)e.preventDefault();
-  if(tp2&&tpPts.size>1){const y=tpAvg();window.scrollBy(0,tp2.y-y);tp2.y=y;return;}
-  if(!tpDrag||tpMulti)return;if(Math.abs(e.clientX-tpDrag.x)+Math.abs(e.clientY-tpDrag.y)>8)tpDrag.moved=true;const o=memoOffAt(e.clientX,e.clientY);
-  if(o!=null){if(tpDrag.s==null)tpDrag.s=o;tpDrag.e=o;}
-  const box=document.getElementById('memoBox'),c=MEMO&&card(memoItem().id);if(tpDrag.moved&&tpDrag.s!=null&&box&&c)box.innerHTML=memoLinesHTML(c,[Math.min(tpDrag.s,tpDrag.e),Math.max(tpDrag.s,tpDrag.e)+1]);}
-function memoTapeUp(e){const had=tpPts.delete(e&&e.pointerId);if(tpPts.size<2)tp2=null;
-  if(tpMulti){if(!tpPts.size)tpIdle();return;}
-  if(!had)return;const d=tpDrag;tpDrag=null;const c=d&&MEMO&&card(memoItem().id);if(!c)return;
-  if(!d.moved){tpTap=setTimeout(()=>{tpTap=null;memoTapeTap(d);},90);return;}
+  tpDrag={id:e.pointerId,s:o,e:o,x:e.clientX,y:e.clientY,sy:window.scrollY,on:false,moved:false,dead:false,stale:Date.now()-tpScrollT<150,tp:tp?Number(tp.dataset.tp):null};
+  if(e.pointerType==='mouse')tpDraw();else tpDrag.hold=setTimeout(tpDraw,TP_HOLD);}
+function memoTapeMove(e){const d=tpDrag;if(!d||d.id!==e.pointerId||d.dead)return;const far=Math.abs(e.clientX-d.x)+Math.abs(e.clientY-d.y)>TP_SLOP;
+  if(!d.on){if(far){d.dead=true;clearTimeout(d.hold);}return;}
+  if(e.cancelable)e.preventDefault();if(far)d.moved=true;const o=memoOffAt(e.clientX,e.clientY);
+  if(o!=null){if(d.s==null)d.s=o;d.e=o;}memoSelPaint(document.getElementById('memoBox'),tpSel(d));}
+function memoTapeUp(e){if(!tpPts.delete(e&&e.pointerId))return;
+  if(tpMulti){if(!tpPts.size)tpMulti=false;return;}
+  if(!tpDrag||tpDrag.id!==e.pointerId)return;const d=tpEnd(),c=MEMO&&MEMO.edit&&card(memoItem().id);if(!c||d.dead)return;
+  if(!d.moved){if(d.on)return memoTapeTap(d);if(d.stale||Math.abs(window.scrollY-d.sy)>2)return;tpTap=setTimeout(()=>{tpTap=null;memoTapeTap(d);},90);return;}
   if(d.s!=null)memoTapeAdd(c,Math.min(d.s,d.e),Math.max(d.s,d.e)+1);
   render();}
 function memoTapeTap(d){const c=MEMO&&MEMO.edit&&card(memoItem().id);if(!c)return;
   if(d.tp!=null){const t=memoTapes(c);t.splice(d.tp,1);memoTapeSet(c,t);toast('테이프를 뗐어요');}else if(d.s!=null){const w=memoWordAt(c,d.s);if(w)memoTapeAdd(c,w[0],w[1]);}
   render();}
-document.addEventListener('pointerdown',memoTapeDown,{passive:false});
+document.addEventListener('pointerdown',memoTapeDown);
 document.addEventListener('pointermove',memoTapeMove,{passive:false});
 document.addEventListener('pointerup',memoTapeUp);
-document.addEventListener('pointercancel',e=>{const had=tpPts.delete(e.pointerId);if(tpPts.size<2)tp2=null;if(!had)return;if(tpDrag){tpDrag=null;tpStale=true;}if(!tpPts.size)tpIdle();});
-/* 손가락을 모두 뗐는데 포인터 끝 이벤트를 못 받은 경우를 위한 정리 */
-document.addEventListener('touchend',e=>{if(e.touches&&e.touches.length||!tpPts.size)return;tpPts.clear();tpDrag=null;tpIdle();});
-document.addEventListener('touchcancel',e=>{if(e.touches&&e.touches.length||!tpPts.size)return;tpPts.clear();tpDrag=null;tpIdle();});
+document.addEventListener('pointercancel',e=>{if(!tpPts.delete(e.pointerId))return;if(tpDrag&&tpDrag.id===e.pointerId)tpEnd();if(!tpPts.size)tpMulti=false;});
+window.addEventListener('touchmove',e=>{if(tpDrag&&tpDrag.on&&e.cancelable)e.preventDefault();},{passive:false});
+window.addEventListener('scroll',()=>{tpScrollT=Date.now();},{passive:true});
+/* 손가락을 모두 뗐는데 포인터 끝 이벤트를 못 받은 경우를 위한 정리(포인터 끝 이벤트가 먼저 오도록 한 박자 늦춤) */
+const tpLost=e=>{if(e.touches&&e.touches.length||!tpPts.size)return;setTimeout(()=>{if(!tpPts.size)return;tpPts.clear();tpMulti=false;tpEnd();},0);};
+document.addEventListener('touchend',tpLost);
+document.addEventListener('touchcancel',tpLost);
 /* 이어 하기 키: 세트는 memo:set:날짜, 암기 탭은 memo:study(그날 고른 카드 목록째로) */
 function startMemo(o,fresh){
   if(!fresh&&MEMO&&MEMO.key===o.key&&!MEMO.fin){memoStop();return nav('memo');}
@@ -749,12 +761,12 @@ function vMemo(){if(!MEMO)return topbar('가리며 외우기')+`<div class="empt
   const how=cf.mode==='pick'?'고른 줄':cf.mode==='rand'?`무작위 ${cf.n}줄`:cf.mode==='tape'?'테이프':'전체';
   return topbar(MEMO.title||'가리며 외우기')+`<div class="prog"><div class="bar"><i style="width:${Math.round((MEMO.i+1)/n*100)}%"></i></div><span>${MEMO.i+1} / ${n}</span></div>
   <div class="mhead" id="memoHead"><div class="mclock" id="memoClock"></div><div class="mbar"><i id="memoBar"></i></div></div>
-  <div class="memo${cf.mode==='tape'?' tape':''}${ed?' editing':''}${MEMO.phase==='hide'&&!MEMO.done?' hiding':''}" id="memoBox">${memoLinesHTML(c,null)}</div>
+  <div class="memo${cf.mode==='tape'?' tape':''}${ed?' editing':''}${MEMO.phase==='hide'&&!MEMO.done?' hiding':''}" id="memoBox">${memoLinesHTML(c)}</div>
   ${cf.mode==='tape'?`<div class="btns tapebar"><button class="btn sm${ed?'':' sec'}" data-act="memo-tape-edit">${ed?'다 붙였어요':'테이프 붙이기'}</button>${tp.length?`<button class="btn sm ghost" data-act="memo-tape-clear">이 카드 테이프 모두 떼기</button>`:''}</div>`
     :`<div class="btns tapebar"><button class="btn sm ghost" data-act="memo-tape-on">손가락으로 그어 테이프로 가리기</button></div>`}
   <div class="btns"><button class="btn" id="memoPlay" data-act="memo-play">시작</button></div>
   <div class="btns sessnav"><button class="btn sec" data-act="memo-prev" ${MEMO.i?'':'disabled'}>‹ 이전</button>${last?'<button class="btn" data-act="memo-finish">완료</button>':'<button class="btn sec" data-act="memo-next">다음 ›</button>'}</div>
-  <p class="note">${cf.mode==='tape'?(ed?'가릴 곳을 한 손가락으로 그으세요. 여러 줄도 이어서 그을 수 있어요. 짧게 누르면 그 낱말, 붙은 테이프를 누르면 떼요. 화면을 움직이려면 두 손가락으로 끌어요.':tp.length?`테이프 ${tp.length}곳만 가려요. 테이프 붙이기를 눌러 더하거나 뗄 수 있어요.`:'아직 테이프가 없어 용어만 남기고 전체를 가려요. 테이프 붙이기를 눌러 가릴 곳을 그으세요.'):cf.mode==='pick'?(pk.size?'노란 테두리 줄만 가려요. 줄을 탭해 더하거나 빼세요.':'가릴 줄을 탭해서 고르세요. 고르기 전에는 전체를 가려요.'):cf.mode==='rand'?`가릴 때마다 정의·키워드 중 ${cf.n}줄을 무작위로 골라 가려요. 줄을 탭하면 고른 줄 가리기로 바뀌어요.`:'용어만 남기고 전체를 가려요. 가리고 싶은 줄을 탭하면 그 줄만 가리기로 바뀌어요.'}</p>
+  <p class="note">${cf.mode==='tape'?(ed?'가릴 곳을 0.3초 꾹 누른 뒤 그대로 그으세요(여러 줄도 이어서). 그냥 밀면 화면이 움직여요. 짧게 누르면 그 낱말, 붙은 테이프를 누르면 떼요.':tp.length?`테이프 ${tp.length}곳만 가려요. 테이프 붙이기를 눌러 더하거나 뗄 수 있어요.`:'아직 테이프가 없어 용어만 남기고 전체를 가려요. 테이프 붙이기를 눌러 가릴 곳을 그으세요.'):cf.mode==='pick'?(pk.size?'노란 테두리 줄만 가려요. 줄을 탭해 더하거나 빼세요.':'가릴 줄을 탭해서 고르세요. 고르기 전에는 전체를 가려요.'):cf.mode==='rand'?`가릴 때마다 정의·키워드 중 ${cf.n}줄을 무작위로 골라 가려요. 줄을 탭하면 고른 줄 가리기로 바뀌어요.`:'용어만 남기고 전체를 가려요. 가리고 싶은 줄을 탭하면 그 줄만 가리기로 바뀌어요.'}</p>
   <details class="d" id="memoCfg"${MEMO.cfgOpen?' open':''}><summary>설정: 보기 ${cf.show}초, 가림 ${cf.hide}초, ${how}, ${cf.reps?cf.reps+'회':'무한 반복'}${cf.reps?(cf.auto?', 다음 카드로':', 멈춤'):''}</summary><div class="in-d">
     <label class="f">보이는 시간</label>${seg('show',MEMO_SHOW,v=>v+'초')}
     <label class="f">가리는 시간</label>${seg('hide',MEMO_HIDE,v=>v+'초')}
