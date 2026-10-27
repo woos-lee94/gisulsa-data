@@ -654,21 +654,36 @@ function memoOffAt(x,y){let n=null,k=0;if(document.caretRangeFromPoint){const r=
   else if(document.caretPositionFromPoint){const p=document.caretPositionFromPoint(x,y);if(p){n=p.offsetNode;k=p.offset;}}return n?memoOff(n,k):null;}
 /* 테이프 붙이기 켜기: 시간을 멈추고 글을 보이게 */
 function memoEdit(on){if(!MEMO)return;MEMO.edit=!!on;if(on){memoPause();if(MEMO.phase==='hide'){MEMO.phase='show';MEMO.left=null;}}}
-/* 붙이는 중에는 글 위를 그으면 그 범위(여러 줄 이어서), 짧게 누르면 그 낱말, 붙은 테이프를 누르면 뗀다. 화면은 줄만 다시 그린다 */
-let tpDrag=null;
-function memoTapeDown(e){const box=e.target&&e.target.closest&&e.target.closest('#memoBox.editing');if(!box||!MEMO)return;const tp=e.target.closest('.tp'),o=memoOffAt(e.clientX,e.clientY);
-  tpDrag={s:o,e:o,x:e.clientX,y:e.clientY,moved:false,tp:tp?Number(tp.dataset.tp):null};if(e.cancelable)e.preventDefault();try{box.setPointerCapture(e.pointerId);}catch(_){}}
-function memoTapeMove(e){if(!tpDrag)return;if(Math.abs(e.clientX-tpDrag.x)+Math.abs(e.clientY-tpDrag.y)>8)tpDrag.moved=true;const o=memoOffAt(e.clientX,e.clientY);
+/* 붙이는 중에는 한 손가락으로 글 위를 그으면 그 범위(여러 줄 이어서), 짧게 누르면 그 낱말, 붙은 테이프를 누르면 뗀다. 화면은 줄만 다시 그린다.
+   두 손가락이 닿으면 테이프를 만들지 않고, 두 손가락으로 끌면 화면이 위아래로 움직인다(상자가 touch-action:none이라 직접 스크롤).
+   짧게 누른 것은 90ms 기다렸다 붙여, 두 손가락으로 톡 칠 때 먼저 닿은 손가락이 테이프가 되지 않게 한다 */
+let tpDrag=null,tpMulti=false,tpTap=null,tp2=null;const tpPtr=new Set();
+function tpCancel(){tpMulti=true;clearTimeout(tpTap);tpTap=null;if(tpDrag){tpDrag=null;const box=document.getElementById('memoBox'),c=MEMO&&card(memoItem().id);if(box&&c)box.innerHTML=memoLinesHTML(c,null);}}
+function memoTapeDown(e){const box=e.target&&e.target.closest&&e.target.closest('#memoBox.editing');if(!box||!MEMO)return;if(e.cancelable)e.preventDefault();
+  tpPtr.add(e.pointerId);if(tpPtr.size>1||tpMulti||tp2)return tpCancel();
+  if(tpTap)return tpCancel();
+  const tp=e.target.closest('.tp'),o=memoOffAt(e.clientX,e.clientY);
+  tpDrag={s:o,e:o,x:e.clientX,y:e.clientY,moved:false,tp:tp?Number(tp.dataset.tp):null};try{box.setPointerCapture(e.pointerId);}catch(_){}}
+function memoTapeMove(e){if(!tpDrag||tpMulti)return;if(Math.abs(e.clientX-tpDrag.x)+Math.abs(e.clientY-tpDrag.y)>8)tpDrag.moved=true;const o=memoOffAt(e.clientX,e.clientY);
   if(o!=null){if(tpDrag.s==null)tpDrag.s=o;tpDrag.e=o;}if(e.cancelable)e.preventDefault();
   const box=document.getElementById('memoBox'),c=MEMO&&card(memoItem().id);if(tpDrag.moved&&tpDrag.s!=null&&box&&c)box.innerHTML=memoLinesHTML(c,[Math.min(tpDrag.s,tpDrag.e),Math.max(tpDrag.s,tpDrag.e)+1]);}
-function memoTapeUp(){const d=tpDrag;tpDrag=null;const c=d&&MEMO&&card(memoItem().id);if(!c)return;
-  if(!d.moved){if(d.tp!=null){const t=memoTapes(c);t.splice(d.tp,1);memoTapeSet(c,t);toast('테이프를 뗐어요');}else if(d.s!=null){const w=memoWordAt(c,d.s);if(w)memoTapeAdd(c,w[0],w[1]);}}
-  else if(d.s!=null)memoTapeAdd(c,Math.min(d.s,d.e),Math.max(d.s,d.e)+1);
+function memoTapeUp(e){tpPtr.delete(e&&e.pointerId);if(tpMulti){if(!tpPtr.size)tpMulti=false;return;}
+  const d=tpDrag;tpDrag=null;const c=d&&MEMO&&card(memoItem().id);if(!c)return;
+  if(!d.moved){tpTap=setTimeout(()=>{tpTap=null;memoTapeTap(d);},90);return;}
+  if(d.s!=null)memoTapeAdd(c,Math.min(d.s,d.e),Math.max(d.s,d.e)+1);
+  render();}
+function memoTapeTap(d){const c=MEMO&&MEMO.edit&&card(memoItem().id);if(!c)return;
+  if(d.tp!=null){const t=memoTapes(c);t.splice(d.tp,1);memoTapeSet(c,t);toast('테이프를 뗐어요');}else if(d.s!=null){const w=memoWordAt(c,d.s);if(w)memoTapeAdd(c,w[0],w[1]);}
   render();}
 document.addEventListener('pointerdown',memoTapeDown,{passive:false});
 document.addEventListener('pointermove',memoTapeMove,{passive:false});
 document.addEventListener('pointerup',memoTapeUp);
-document.addEventListener('pointercancel',()=>{if(!tpDrag)return;tpDrag=null;render();});
+document.addEventListener('pointercancel',e=>{tpPtr.delete(e.pointerId);if(!tpPtr.size)tpMulti=false;if(!tpDrag)return;tpDrag=null;render();});
+const tpY=t=>(t[0].clientY+t[1].clientY)/2;
+document.addEventListener('touchstart',e=>{if(!e.touches||e.touches.length<2||![...e.touches].some(t=>t.target&&t.target.closest&&t.target.closest('#memoBox.editing')))return;tpCancel();tp2={y:tpY(e.touches)};},{passive:true});
+document.addEventListener('touchmove',e=>{if(!tp2||!e.touches||e.touches.length<2)return;const y=tpY(e.touches);window.scrollBy(0,tp2.y-y);tp2.y=y;if(e.cancelable)e.preventDefault();},{passive:false});
+const tpEnd=e=>{if(!e.touches||e.touches.length<2)tp2=null;if(!e.touches||!e.touches.length){tpPtr.clear();tpMulti=false;}};
+document.addEventListener('touchend',tpEnd);document.addEventListener('touchcancel',tpEnd);
 /* 이어 하기 키: 세트는 memo:set:날짜, 암기 탭은 memo:study(그날 고른 카드 목록째로) */
 function startMemo(o,fresh){
   if(!fresh&&MEMO&&MEMO.key===o.key&&!MEMO.fin){memoStop();return nav('memo');}
@@ -729,7 +744,7 @@ function vMemo(){if(!MEMO)return topbar('가리며 외우기')+`<div class="empt
     :`<div class="btns tapebar"><button class="btn sm ghost" data-act="memo-tape-on">손가락으로 그어 테이프로 가리기</button></div>`}
   <div class="btns"><button class="btn" id="memoPlay" data-act="memo-play">시작</button></div>
   <div class="btns sessnav"><button class="btn sec" data-act="memo-prev" ${MEMO.i?'':'disabled'}>‹ 이전</button>${last?'<button class="btn" data-act="memo-finish">완료</button>':'<button class="btn sec" data-act="memo-next">다음 ›</button>'}</div>
-  <p class="note">${cf.mode==='tape'?(ed?'가릴 곳을 손가락으로 그으세요. 여러 줄도 이어서 그을 수 있어요. 짧게 누르면 그 낱말, 붙은 테이프를 누르면 떼요.':tp.length?`테이프 ${tp.length}곳만 가려요. 테이프 붙이기를 눌러 더하거나 뗄 수 있어요.`:'아직 테이프가 없어 용어만 남기고 전체를 가려요. 테이프 붙이기를 눌러 가릴 곳을 그으세요.'):cf.mode==='pick'?(pk.size?'노란 테두리 줄만 가려요. 줄을 탭해 더하거나 빼세요.':'가릴 줄을 탭해서 고르세요. 고르기 전에는 전체를 가려요.'):cf.mode==='rand'?`가릴 때마다 정의·키워드 중 ${cf.n}줄을 무작위로 골라 가려요. 줄을 탭하면 고른 줄 가리기로 바뀌어요.`:'용어만 남기고 전체를 가려요. 가리고 싶은 줄을 탭하면 그 줄만 가리기로 바뀌어요.'}</p>
+  <p class="note">${cf.mode==='tape'?(ed?'가릴 곳을 한 손가락으로 그으세요. 여러 줄도 이어서 그을 수 있어요. 짧게 누르면 그 낱말, 붙은 테이프를 누르면 떼요. 화면을 움직이려면 두 손가락으로 끌어요.':tp.length?`테이프 ${tp.length}곳만 가려요. 테이프 붙이기를 눌러 더하거나 뗄 수 있어요.`:'아직 테이프가 없어 용어만 남기고 전체를 가려요. 테이프 붙이기를 눌러 가릴 곳을 그으세요.'):cf.mode==='pick'?(pk.size?'노란 테두리 줄만 가려요. 줄을 탭해 더하거나 빼세요.':'가릴 줄을 탭해서 고르세요. 고르기 전에는 전체를 가려요.'):cf.mode==='rand'?`가릴 때마다 정의·키워드 중 ${cf.n}줄을 무작위로 골라 가려요. 줄을 탭하면 고른 줄 가리기로 바뀌어요.`:'용어만 남기고 전체를 가려요. 가리고 싶은 줄을 탭하면 그 줄만 가리기로 바뀌어요.'}</p>
   <details class="d" id="memoCfg"${MEMO.cfgOpen?' open':''}><summary>설정: 보기 ${cf.show}초, 가림 ${cf.hide}초, ${how}, ${cf.reps?cf.reps+'회':'무한 반복'}${cf.reps?(cf.auto?', 다음 카드로':', 멈춤'):''}</summary><div class="in-d">
     <label class="f">보이는 시간</label>${seg('show',MEMO_SHOW,v=>v+'초')}
     <label class="f">가리는 시간</label>${seg('hide',MEMO_HIDE,v=>v+'초')}
