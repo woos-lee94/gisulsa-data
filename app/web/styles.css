@@ -437,6 +437,21 @@ table.at td:first-child{white-space:nowrap}
 .afig svg .cj{stroke:var(--red);stroke-width:1.6}
 .afig svg circle{fill:var(--ink3);stroke:none}
 .acap{text-align:center;font-weight:600;font-size:.8rem;margin:4px 0 2px}
+/* 단답 답안지(카드를 1교시 답안지 모양으로): 답안지 폭에 맞춰 글자 크기를 정해 한 줄 약 26자가 꺾이지 않게, 줄 번호 칸은 좁게 */
+.ddwrap{container-type:inline-size}
+.asheet.dd{font-size:clamp(10.5px,calc(100cqw / 31.8),15px)}
+.ddmore{margin:0;padding-left:20px;line-height:1.6;color:var(--ink2)}
+.asheet.dd .ah,.asheet.dd .ar{grid-template-columns:1.5em 2.1em 1fr}
+.asheet.dd .ac{white-space:normal}
+.asheet.dd.over{border-color:var(--red)}
+.ddfig{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:calc(var(--h) * 2.05em);border:1.5px dashed var(--rule);border-radius:8px;color:var(--ink3);font-weight:700;text-align:center}
+.ddfig small{font-weight:500;font-size:.72rem}
+.ddph{color:var(--ink3);font-style:italic}
+.ddend{float:right;padding-left:1em}
+.ddstat{margin:12px 2px 0;font-size:.92rem;color:var(--ink2)}.ddstat b{color:var(--ink);font-size:1.05rem}
+.ddstat.over b{color:var(--red)}
+.ddbreak{margin:10px 2px 0;color:var(--red);font-weight:700;font-size:.86rem}
+.hwrgo{min-height:32px!important;padding:2px 12px!important;font-size:.82rem!important}
 .apg{text-align:center;color:var(--ink3);font-size:.75rem;margin:6px 0 4px}
 .mk{display:inline-block;min-width:3.2em;margin-right:6px;font-weight:800;color:var(--blue-ink)}
 

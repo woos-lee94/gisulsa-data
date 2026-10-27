@@ -334,7 +334,7 @@ function syncLine(){const s=S.sync||{};const n=Object.keys(SETS.sets).length;
 function paintSyncBits(){document.querySelectorAll('[data-syncline]').forEach(el=>el.innerHTML=syncLine());}
 
 /* ════════ 10. 라우터 ════════ */
-const TAB_OF={set:'today',sess:'',memo:'',cal:'today',kichul:'test',mock:'test',guide:'test',admin:'more',plan:'more',schedule:'more',timer:'more',prompts:'more',imp:'more',settings:'more',backup:'more',about:'more',archive:'review',wrong:'review',stats:'test'};
+const TAB_OF={set:'today',sess:'',memo:'',cal:'today',dandap:'',kichul:'test',mock:'test',guide:'test',admin:'more',plan:'more',schedule:'more',timer:'more',prompts:'more',imp:'more',settings:'more',backup:'more',about:'more',archive:'review',wrong:'review',stats:'test'};
 const TABS=['today','review','study','test','more'];
 let R={tab:'today',page:null,a:null,b:null};
 function parseHash(){const h=decodeURIComponent((location.hash||'').replace(/^#\/?/,''));const p=h.split('/');const r={tab:'today',page:null,a:p[1]||null,b:p[2]||null};
@@ -347,7 +347,7 @@ function render(){R=parseHash();document.querySelectorAll('#nav button').forEach
   const v=$('#view');let html='';
   try{
     if(!R.page)html=({today:vToday,review:vReview,study:vStudy,test:vTest,more:vMore}[R.tab]||vToday)();
-    else html=({set:vSet,sess:vSess,memo:vMemo,cal:vCal,kichul:vKichul,mock:vMock,guide:vGuide,admin:vAdmin,plan:vPlan,schedule:vSchedule,timer:vTimer,prompts:vPrompts,imp:vImport,settings:vSettings,backup:vBackup,about:vAbout,archive:vArchive,wrong:vWrong,stats:vStats}[R.page]||vToday)();
+    else html=({set:vSet,sess:vSess,memo:vMemo,cal:vCal,dandap:vDandap,kichul:vKichul,mock:vMock,guide:vGuide,admin:vAdmin,plan:vPlan,schedule:vSchedule,timer:vTimer,prompts:vPrompts,imp:vImport,settings:vSettings,backup:vBackup,about:vAbout,archive:vArchive,wrong:vWrong,stats:vStats}[R.page]||vToday)();
   }catch(e){html=`<div class="empty" style="margin-top:24px"><b>화면을 그리는 중 오류가 났어요</b>${esc(e.message)}</div>`;console.error(e);}
   v.innerHTML=html;paintNavBadges();paintPill();if(R.page==='timer')paintTimer();if(R.page==='memo')paintMemo();
   if(R.page==='sess'&&SES&&!SES.answered&&SES.items[SES.i]&&SES.items[SES.i].type==='fill'){const f=v.querySelector('.fill-in');if(f)try{f.focus({preventScroll:true});}catch(e){}}}
@@ -406,6 +406,7 @@ const HW_HOW={
   fg:'1번째: 보며 크게 그려요(명칭·치수·화살표). 2번째: 안 보고. 3번째: 2분 타이머 안에. 시험장에서는 그림 하나가 설명 몇 줄보다 점수가 커요.',
   qz:'틀린 문제의 해설을 소리 내어 2번 읽고, 왜 틀렸는지 한 줄로 써요(헷갈린 개념, 수치, 함정). 틀린 이유를 쓰면 같은 함정에 다시 안 빠져요.',
   mn:'논술 소제목이나 키워드의 앞글자를 이어 외우기 쉬운 말로 만들어요. 예: 원인·문제점·대책·결론 → "원문대결". 아래에 적어 두면 다음에 다시 볼 수 있어요.',
+  dd:'답안지 버튼으로 모양을 먼저 보고 덮은 뒤, 실제 답안지에 10분 타이머로 써요. 문제 → 답) → Ⅰ. 개요(정의) → Ⅱ. 원리·특징 → 그림 1개 → Ⅲ. 핵심 키워드 → Ⅳ. 결론 → 끝. 1면(22줄) 안에 맞춰 줄이는 게 연습이에요. 다 쓰면 사진을 찍고 첨삭 요청을 복사해 Claude에 올려요.',
   sl:'불 끄기 전 5분, 오늘 용어의 제목만 보고 정의를 머릿속으로 떠올려요. 자는 동안 기억이 굳어요. 막힌 것은 내일 카드 복습에 다시 나와요.',
   x:'이 세트가 따로 준 과제예요.'};
 const HW_RULES=[['보고 베끼기보다 덮고 떠올리기','떠올리려고 애쓴 만큼 오래 남아요(인출 연습).'],['손으로 쓰기','시험은 100분 손글씨예요. 쓰는 손이 기억하고 속도도 붙어요.'],['소리 내어 말하기','말로 설명할 수 있어야 답안에 쓸 수 있어요.'],['나눠서 되풀이','한 번에 4번보다 하루에 나눠 1번씩. 앱이 1·3·7·14·30일 뒤에 다시 불러요.'],['빨간 펜에 시간 쓰기','아는 것은 빨리, 틀린 곳에 시간을 써요.'],['매일 끝까지','하루 숙제를 다 하는 날이 쌓이는 것이 합격선이에요.']];
@@ -422,6 +423,8 @@ function hwItems(d){const s=SETS.sets[d];if(!s)return[];const p=spGet(d),R=hwRul
   if(e&&e.t){if(R.eo)out.push({key:'eo',kind:'essay',t:`논술 목차 옮겨 적기 ${R.eo}번`,sub:e.t,min:R.eo*5,rows:[{c:[['eo','',R.eo]]}],go:[['essay','모범 목차 보기']]});
     if(R.ew)out.push({key:'ew',kind:'essay',t:'논술 실전 쓰기 25분 → 사진 찍어 첨삭',sub:e.t,min:30,done:!!(p.essay&&p.essay.done),go:[['timer','25분 타이머'],['copy-essay','첨삭 요청 복사']]});
     if(e.fig&&R.fg)out.push({key:'fg',kind:'essay',t:`그림·표 그리기 ${R.fg}번`,sub:e.fig,min:R.fg*2,rows:[{c:[['fg','',R.fg]]}]});}
+  if(R.dd){const pool=fresh.concat(rev).map(x=>({x,c:card(x.id)})).filter(o=>o.c).sort((a,b)=>(a.x.sc.ref?1:0)-(b.x.sc.ref?1:0)||((b.c.x||[]).length-(a.c.x||[]).length)||a.x.i-b.x.i).slice(0,R.dd);
+    if(pool.length)out.push({key:'dd',kind:'term',t:`단답 ${pool.length}문제: 답안지에 10분 쓰기 → 첨삭`,min:pool.length*15,rows:pool.map(o=>({t:o.c.t,c:[['dd'+o.x.i,'',1]],go:o.c.id})),go:[['timer1','10분 타이머']]});}
   const qs=s.quiz||[];if(qs.length){const all=qs.every((_,i)=>p.quiz[i]),wr=qs.map((q,i)=>({q,i})).filter(x=>p.quiz[x.i]&&!p.quiz[x.i].ok);
     out.push({key:'qz',kind:'quiz',t:all&&!wr.length?'퀴즈: 모두 맞혔어요':`퀴즈 틀린 문제: 해설 2번 읽고 틀린 이유 한 줄`,min:wr.length*2,pending:!all,
       rows:wr.map(x=>({t:x.q.q,c:[['q'+x.i,'',1]]})),done:all&&!wr.length?true:undefined,go:all?null:[['quiz','퀴즈 먼저 풀기']]});}
@@ -441,12 +444,12 @@ function hwAhead(){const t=todayStr();let w=Math.max(0,weekIndex(t)),terms=0,ess
 function hwCtr(d,k,n,lab,H){const cur=H[k]||0;return`<span class="ctr">${lab?`<small>${lab}</small>`:''}${Array.from({length:n},(_,j)=>`<button class="cc${j<cur?' on':''}" data-act="hw" data-d="${d}" data-k="${k}" data-v="${j+1}" aria-label="${esc(lab||'')} ${j+1}번째">${j+1}</button>`).join('')}</span>`;}
 function vHw(d){const s=SETS.sets[d],p=spGet(d),H=p.hw||{},R=hwRule(d),its=hwItems(d),sm=hwSum(d),ah=hwAhead(),w=s.week!=null?s.week:weekIndex(d);
   const go=([a,l])=>a==='memo-set'||a==='set-flash'?`<button class="btn sm sec" data-act="${a}" data-d="${d}">${l}</button>`:a==='essay'||a==='quiz'?`<button class="btn sm sec" data-act="set-tab" data-d="${d}" data-t="${a}">${l}</button>`
-    :a==='timer'?`<button class="btn sm sec" data-act="timer-go" data-p="one2">${l}</button>`:`<button class="btn sm sec" data-act="copy-essay" data-d="${d}">${l}</button>`;
+    :a==='timer'?`<button class="btn sm sec" data-act="timer-go" data-p="one2">${l}</button>`:a==='timer1'?`<button class="btn sm sec" data-act="timer-go" data-p="one1">${l}</button>`:`<button class="btn sm sec" data-act="copy-essay" data-d="${d}">${l}</button>`;
   return`<div class="hwtop"><div class="hwpg"><b class="num">${sm.done}<small>/${sm.n}</small></b><span>오늘 숙제</span></div><div class="hwtx"><b>${esc(phaseObj(w).n)}</b><p>${esc(R.why||'')}</p><p class="ds">모두 하면 약 ${sm.min}분${sm.done?`, 남은 것 약 ${sm.left}분`:''}</p></div></div>
   <details class="d hwrules"><summary>이렇게 외워요: 숙제 원칙 6가지</summary><div class="in-d"><ol>${HW_RULES.map(([a,b])=>`<li><b>${esc(a)}</b>: ${esc(b)}</li>`).join('')}</ol>
     <p class="note" style="margin:8px 0 0">이 숙제를 시험 전까지 매일 하면 새 용어 약 ${ah.terms}개를 손과 입으로, 논술 약 ${ah.essays}문제의 목차를 손으로 익혀요(평일 세트 기준 어림).</p></div></details>
   ${its.map((it,n)=>`<div class="hw${it.done?' done':''} k-${it.kind}-l"><div class="hwh"><span class="hwn">${it.done?'✓':n+1}</span><div class="hwt"><b>${esc(it.t)}</b>${it.sub?`<span>${esc(it.sub)}</span>`:''}</div><span class="hwm">${it.min?`${it.min}분`:''}</span></div>
-    ${(it.rows||[]).map(r=>`<div class="hwr">${r.t?`<span class="hwl">${esc(r.t)}</span>`:''}<span class="hwc">${r.c.map(([k,l,m])=>hwCtr(d,k,m,l,H)).join('')}</span></div>`).join('')}
+    ${(it.rows||[]).map(r=>`<div class="hwr">${r.t?`<span class="hwl">${esc(r.t)}</span>`:''}<span class="hwc">${r.c.map(([k,l,m])=>hwCtr(d,k,m,l,H)).join('')}${r.go?`<button class="btn sm sec hwrgo" data-act="go" data-h="dandap/${esc(encodeURIComponent(r.go))}">답안지</button>`:''}</span></div>`).join('')}
     ${it.key==='ew'?`<div class="hwr"><span class="hwc"><span class="ctr"><button class="cc${it.done?' on':''}" data-act="hw-ew" data-d="${d}" aria-label="실전 쓰기 다 했어요">1</button><small>${it.done?'다 썼어요':'다 쓰면 누르세요'}</small></span></span></div>`:''}
     ${it.task!=null?`<div class="hwr"><span class="hwc"><span class="ctr"><button class="cc${it.done?' on':''}" data-act="hw-task" data-d="${d}" data-i="${it.task}" aria-label="과제 다 했어요">1</button></span></span></div>`:''}
     ${it.key==='qz'&&it.pending?`<p class="ds hwp">퀴즈를 다 풀면 틀린 문제가 여기 나와요.</p>`:''}
@@ -466,7 +469,7 @@ function vSet(){const d=R.a;const s=SETS.sets[d];
       ${open?`<div class="body">${c?`<p class="defn">${glHTML(c.d,c.id)}</p><ul class="kws">${(c.k||[]).map(k=>`<li><span>${esc(k)}</span></li>`).join('')}</ul>`:`<p class="defn">${glHTML(sc.d||'','')}</p>`}
         ${sc.plus?`<p class="plus">${esc(sc.plus)}</p>`:''}${(sc.field||(c&&c.field))?`<p class="field">현장: ${esc(sc.field||c.field)}</p>`:''}
         ${c&&c.x&&c.x.length?`<p class="xref">기출 <b>${c.x.length}회</b> 출제: ${c.x.map(kLabelShort).join(', ')}</p>`:''}${(sc.basis||(c&&c.basis))?`<p class="xref">근거: ${esc(sc.basis||c.basis)}</p>`:''}
-        ${c?`<div class="btns"><button class="btn sm sec" data-act="star" data-id="${c.id}">${pget(c.id).star?'★ 별표 해제':'☆ 별표'}</button><span class="note" style="margin:auto 0">${unitName(c.u)}</span></div>`:''}</div>`:''}</div>`;}).join('')
+        ${c?`<div class="btns"><button class="btn sm sec" data-act="star" data-id="${c.id}">${pget(c.id).star?'★ 별표 해제':'☆ 별표'}</button><button class="btn sm sec" data-act="go" data-h="dandap/${esc(encodeURIComponent(c.id))}">단답 답안지</button><span class="note" style="margin:auto 0">${unitName(c.u)}</span></div>`:''}</div>`:''}</div>`;}).join('')
       +(fr=>(mr=>`<div class="btns"><button class="btn sec" data-act="set-flash" data-d="${d}">${fr?`카드 넘겨 보기 이어서 (${fr})`:'카드로 넘겨 보며 외우기'}</button><button class="btn sec" data-act="start-fill" data-d="${d}">빈칸 쓰기</button></div><div class="btns" style="margin-top:8px"><button class="btn sec" data-act="memo-set" data-d="${d}">${mr?`가리며 외우기 이어서 (${mr})`:'가리며 외우기(보였다 가렸다 반복)'}</button></div>${fr||mr?`<div class="btns" style="margin-top:4px"><button class="btn ghost" data-act="resume-clear" data-k="flash:${d} memo:set:${d}">이어 하지 않고 처음부터</button></div>`:''}`)(resumeAt('memo:set:'+d)))(resumeAt('flash:'+d))+`<p class="note">펼쳐 읽은 용어는 내일 카드 복습으로 다시 나와요. 모르는 낱말은 꾹 누르면 풀이가 나와요.</p>`;}
   else if(tab==='quiz'){body=(s.quiz||[]).map((q,i)=>quizBlock(d,i,q,p.quiz[i])).join('')||'<div class="empty">이 세트엔 퀴즈가 없어요</div>';
     if(st.qa)body+=`<p class="note">${st.qok}/${st.nq} 정답. 틀린 문제는 오답 노트로 갔어요.</p>`;}
@@ -779,6 +782,7 @@ function vTest(){const rg=S.range||'week';const lm=latestMockDate();const rounds
     ${row({ic:'num',tone:'amber',t:'기준 수치 빈칸 10문',d:'정의 속 수치를 가리고 맞히기',act:'start-cloze'})}
     ${row({ic:'pen',tone:'amber',t:'용어 빈칸 쓰기 10문',d:'정의 속 낱말을 가리고 직접 써 넣기, 난이도 하·중·상',act:'start-fill'})}
     ${row({ic:'pen',t:'논술 목차 5문',d:'문제만 보고 소제목 떠올리기',act:'start-outline'})}
+    ${row({ic:'paper',t:'단답 답안지 1문 (10분)',d:'기출 카드를 1교시 답안지 모양으로 보고 직접 쓰기',act:'dd-rand'})}
   </div>`)}
   ${sec('실전','',`<div class="group">
     ${lm?row({ic:'paper',tone:'amber',t:'이번 주 모의고사',d:esc((SETS.mocks[lm].title||'')+', '+korDate(lm)),act:'go',data:{h:'mock/'+lm}}):row({ic:'paper',tone:'gray',t:'주간 모의고사',d:'토요일 06:50에 만들어져 여기 들어와요'})}
@@ -1012,6 +1016,56 @@ function aSheet(rows,no,full){let n=0,h='';rows.forEach(r=>{if(Array.isArray(r))
     else{const a=n+1;n+=r.h;h+=`<div class="ar blk"><span class="ln">${a}<br>~<br>${n}</span><span class="no"></span><div class="ac">${r.table?aTable(r.table):aFig(r.fig)}</div></div>`;}});
   if(full)while(n<ROWS){n++;h+=aRow(n,'',0,'');}
   return`<div class="asheet"><div class="ah"><span>번호</span><span>답 안 란</span></div>${h}</div>`;}
+/* ════════ 17-3. 단답 답안지: 카드 한 장을 1교시 단답 답안지 모양(22줄 1면)으로 옮겨 보여 준다 ════════
+   내용은 카드 그대로(새로 지어내지 않음): Ⅰ. 개요(정의·원어) → Ⅱ. 주요 내용(키워드를 한 줄에 하나씩, 답안식 짧은 구절) → 그림 칸(직접 그림) → Ⅲ. 결론(현장 문장, 없으면 직접 쓰기) → 끝.
+   정의의 나머지 문장은 답안지 밑 "시간이 남으면 더할 내용"으로. 문장 끝은 답안식 명사형으로(한다 → 함, 이다 → 임).
+   한 줄은 약 26자로 나누고(실제 답안지는 약 30자), 글자 크기를 답안지 폭에 맞춰(.ddwrap 컨테이너) 한 줄이 꺾이지 않게 한다 */
+const DD_W=[26,25,24,23];
+function ddNoun(s){s=String(s||'').trim().replace(/[.。]\s*$/,'');const m=s.match(/([가-힣])다$/);if(!m)return s;
+  const pre=s.slice(0,-2),ch=m[1],code=ch.charCodeAt(0)-0xAC00;if(code<0||code>11171)return s;const jong=code%28,base=code-jong;
+  if(ch==='있'||ch==='없')return pre+ch+'음';if(ch==='이')return pre+'임';if(ch==='는')return pre+'음';
+  if(jong===0||jong===4)return pre+String.fromCharCode(0xAC00+base+16);
+  if(jong===17&&!/[좁넓]/.test(ch))return pre+String.fromCharCode(0xAC00+base)+'움';
+  return pre+ch+'음';}
+function ddW(s){let w=0;for(const ch of s)w+=/[가-힣ㄱ-ㅎ一-鿿①-⑳Ⅰ-Ⅹ〈〉·]/.test(ch)?1:.55;return w;}
+function ddWrap(s,max){const out=[];let line='';String(s).split(/\s+/).filter(Boolean).forEach(tok=>{
+    while(ddW(tok)>max){let k=0,w=0;for(const ch of tok){if(w+ddW(ch)>max-(line?ddW(line)+.55:0))break;w+=ddW(ch);k+=ch.length;}if(!k){out.push(line);line='';continue;}const head=tok.slice(0,k);tok=tok.slice(k);line=line?line+' '+head:head;out.push(line);line='';}
+    if(!tok)return;if(!line)line=tok;else if(ddW(line)+.55+ddW(tok)<=max)line+=' '+tok;else{out.push(line);line=tok;}});
+  if(line)out.push(line);return out;}
+/* 줄 목록: [수준, 글](글의 [[ ]]는 밑줄) 또는 그림 칸 {fig:줄 수, cap} */
+function ddSents(c){return String(c.d||'').replace(/([.。])\s+/g,'$1\n').split('\n').map(x=>x.trim()).filter(Boolean);}
+function ddRows(c){const R=[],add=(lv,mk,text)=>{ddWrap((mk?mk+' ':'')+text,DD_W[lv]).forEach((ln,i)=>R.push([i?Math.min(3,lv+1):lv,ln]));};
+  const tt=String(c.t||''),short=tt.replace(/\s*\(.*?\)\s*/g,' ').trim(),orig=(tt.match(/\(([^)]*[A-Za-z][^)]*)\)/)||[])[1];
+  ddWrap(`${tt}에 대하여 설명하시오.`,DD_W[0]).forEach(ln=>R.push([0,ln]));R.push([0,'답)']);
+  const ds=ddSents(c),ks=c.k||[];
+  R.push([0,'Ⅰ. [[개요]]']);add(1,'1)',ddNoun(ds[0]||short));if(orig)add(1,'2)',`원어: ${orig}`);
+  const body=ks.length?ks:ds.slice(1).map(ddNoun);
+  if(body.length){R.push([0,'Ⅱ. [[주요 내용]]']);body.forEach((x,i)=>add(1,`${i+1}.`,x));}
+  R.push({fig:4,cap:`〈그림 1〉 ${short} 개념도`});
+  R.push([0,`${body.length?'Ⅲ':'Ⅱ'}. [[결론]]`]);
+  if(c.field)add(1,'1)',ddNoun(c.field));else R.push([1,'1) {현장 경험이나 최신 경향 한 줄을 직접 쓰기}']);
+  return R;}
+function ddCount(R){return R.reduce((a,r)=>a+(Array.isArray(r)?1:r.fig+1),0);}
+function ddSheet(c){const R=ddRows(c),n=ddCount(R);let ln=0,h='',pages=[];
+  const row=(no,html)=>{ln++;h+=aRow(ln,no,0,html);};
+  const flush=()=>{pages.push(h);h='';};
+  R.forEach((r,i)=>{if(ln>=ROWS*(pages.length+1))flush();
+    if(Array.isArray(r)){const last=i===R.length-1,txt=ulT(r[1]).replace(/\{(.+?)\}/g,'<span class="ddph">$1</span>');ln++;h+=aRow(ln,i===0?'1':'',r[0],txt+(last?'<span class="ddend">끝</span>':''));}
+    else{const end=ROWS*(pages.length+1);if(ln+r.fig+1>end&&ln<end){while(ln<end){ln++;h+=aRow(ln,'',0,'');}flush();}const a=ln+1;ln+=r.fig+1;h+=`<div class="ar blk"><span class="ln">${a}<br>~<br>${ln}</span><span class="no"></span><div class="ac"><div class="ddfig" style="--h:${r.fig}">그림 칸<small>원리, 단면, 순서도 중 하나를 직접 그리기</small></div><p class="acap">${esc(r.cap)}</p></div></div>`;}});
+  while(ln<ROWS*(pages.length+1)){ln++;h+=aRow(ln,'',0,'');}flush();
+  return{n,html:pages.map((p,i)=>`${i?`<p class="ddbreak">여기서부터 2면: 1면(22줄)을 넘친 줄이에요</p>`:''}<div class="asheet dd${i?' over':''}"><div class="ah"><span>번호</span><span>답 안 란</span></div>${p}</div>`).join('')};}
+function vDandap(){const c=card(R.a);if(!c)return topbar('단답 답안지')+'<div class="empty" style="margin-top:20px"><b>카드를 찾을 수 없어요</b></div>';
+  const sh=ddSheet(c),tip=(PE_TIPS[0]||{}).d||'';
+  return topbar('단답 답안지')+`<h1 class="ptitle">${esc(c.t)}</h1><p class="lsub">카드 내용을 1교시 단답 답안지 모양으로 옮겼어요. 모양을 익힌 뒤 덮고, 실제 답안지에 10분 안에 써 보세요.</p>
+  <p class="ddstat${sh.n>ROWS?' over':''}"><b>${sh.n}줄</b> / 1면 22줄${sh.n>ROWS?` · ${sh.n-ROWS}줄 넘쳐요. 정의나 결론을 한 줄씩 줄여 1면에 맞추는 게 연습이에요`:' · 1면 안에 들어가요'}</p>
+  <div class="ddwrap">${sh.html}</div>
+  ${(c.k||[]).length&&ddSents(c).length>1?`<details class="d" style="margin-top:12px"><summary>시간이 남으면 더할 내용(카드의 나머지 설명)</summary><div class="in-d"><ol class="ddmore">${ddSents(c).slice(1).map(x=>`<li>${esc(ddNoun(x))}</li>`).join('')}</ol></div></details>`:''}
+  <div class="btns" style="margin-top:14px"><button class="btn" data-act="timer-go" data-p="one1">10분 타이머</button><button class="btn sec" data-act="copy-dd" data-id="${esc(c.id)}">첨삭 요청 복사</button></div>
+  <details class="d" style="margin-top:10px"><summary>10분 쓰는 순서</summary><div class="in-d"><p style="margin:0;color:var(--ink2)">${esc(tip)}</p></div></details>
+  <p class="note">한 줄을 26자 안팎으로 나눴어요(실제 답안지는 약 30자라 손으로 쓰면 조금 덜 차요). 주요 내용은 카드의 키워드를 한 줄씩 옮긴 거라, 쓸 때는 키워드마다 이유나 수치를 한두 마디 붙이면 좋아요. 그림 칸에는 원리, 단면, 순서도 중 하나를 직접 그리고, 결론은 현장 경험이나 최신 경향 한 줄로 바꿔 쓰면 점수가 올라요.</p>`;}
+/* 테스트 탭: 범위 안에서 기출에 나온 카드를 먼저 골라 답안지로 */
+function ddRandom(){const pool=deck().filter(rangeFilter(S.range||'week'));if(!pool.length)return toast('이 범위에 카드가 없어요');
+  const kx=pool.filter(c=>c.x&&c.x.length),pick=(kx.length?kx:pool)[Math.floor(Math.random()*(kx.length?kx:pool).length)];nav('dandap/'+encodeURIComponent(pick.id));}
 function vGuide(){const G=window.PE_GUIDE;if(!G)return topbar('답안 작성 요령')+'<div class="empty" style="margin-top:20px"><b>작성 요령을 불러오지 못했어요</b></div>';
   const tab=SV.guide||'how',X=G.example;const tabs=[['how','쓰는 법'],['ex','모범 답안'],['chk','점검표']];let body='';
   if(tab==='how')body=sec('답안지 생김새','',`<div class="group" style="padding:4px 8px"><table class="t">${G.cover.map(c=>`<tr><th style="width:34%">${esc(c[0])}</th><td>${esc(c[1])}</td></tr>`).join('')}</table></div>
@@ -1079,7 +1133,7 @@ function vTimer(){return topbar('타이머')+`<h1 class="ptitle">교시 타이�
 function openModal(html){$('#modal-wrap').innerHTML=`<div class="modal" data-act="modal-close"><div class="msheet" data-stop="1"><div class="grab"></div>${html}</div></div>`;}
 function closeModal(){$('#modal-wrap').innerHTML='';}
 function cardModal(c){const p=pget(c.id);return`<div class="sheet" style="margin-top:4px"><p class="sheet-k">${esc(unitName(c.u))}${p.seen?`, 다음 복습 ${esc(p.due||'—')}`:', 아직 학습 전'}</p><h3>${esc(c.t)}</h3><p class="defn ruled" style="margin-top:10px">${glHTML(c.d,c.id)}</p><ul class="kws">${(c.k||[]).map(k=>`<li><span>${esc(k)}</span></li>`).join('')}</ul>${c.x&&c.x.length?`<p class="xref">기출: ${c.x.map(kLabelShort).join(', ')}</p>`:''}${c.basis?`<p class="xref">근거: ${esc(c.basis)}</p>`:''}</div>
-  <div class="btns"><button class="btn sec" data-act="star" data-id="${c.id}">${p.star?'★ 별표 해제':'☆ 별표'}</button>${p.seen?'':`<button class="btn" data-act="introduce" data-id="${c.id}">암기에 넣기</button>`}</div><div class="btns"><button class="btn ghost" data-act="hide-card" data-id="${c.id}">이 카드 숨기기</button></div>`;}
+  <div class="btns"><button class="btn sec" data-act="star" data-id="${c.id}">${p.star?'★ 별표 해제':'☆ 별표'}</button>${p.seen?'':`<button class="btn" data-act="introduce" data-id="${c.id}">암기에 넣기</button>`}</div><div class="btns"><button class="btn sec" data-act="go" data-h="dandap/${esc(encodeURIComponent(c.id))}">단답 답안지로 보기</button></div><div class="btns"><button class="btn ghost" data-act="hide-card" data-id="${c.id}">이 카드 숨기기</button></div>`;}
 function kqModal(id){const q=kq()[id];if(!q)return;let html=`<p class="qnum">제${q.r}회 ${q.p}교시 ${q.n}번, ${esc(unitName(q.u))}</p><p class="qtext">${esc(q.t)}</p>`;
   if(q.p===1){const cs=cardsForK(id);html+=cs.length?cs.map(cardModal).join(''):`<div class="empty"><b>아직 카드가 없어요</b>매일 세트가 기출 미수록 용어를 우선 다뤄요. 지금 필요하면 프롬프트 3으로 만들어 가져오기 하세요.</div>`;}
   else{const es=essaysForK(id);html+=es.length?es.map(e=>`<div class="qcard" style="margin-top:8px"><p class="qnum">모범 목차${e.src==='set'?', '+esc(korDate(e.date))+' 세트':''}</p><ol style="margin:0 0 0 20px;padding:0;line-height:1.75">${e.o.map(o=>`<li>${esc(String(o).replace(/^\d+\.\s*/,''))}</li>`).join('')}</ol>${e.p?`<p class="plus">${esc(e.p)}</p>`:''}</div>`).join(''):`<div class="empty"><b>아직 모범 목차가 없어요</b>세트·모의고사에서 이 문제를 다루면 여기에 채워져요.</div><div class="btns"><button class="btn sec" data-act="copy-outline-req" data-id="${id}">Claude에 목차 요청 복사</button></div>`;}
@@ -1141,6 +1195,8 @@ document.addEventListener('click',e=>{
   case'cal-day':{SV.calD=D.d;render();return openModal(`<p class="sheet-k">${D.d===todayStr()?'오늘':'그날'} 끝낸 공부</p><h2 class="cmh">${esc(korDate(D.d,true))}</h2>${calDayBody(D.d)}<div class="btns"><button class="btn sec" data-act="cal-close">닫기</button></div>`);}
   case'cal-today':SV.calM=null;SV.calD=null;return render();
   case'cal-close':closeModal();return;
+  case'dd-rand':return ddRandom();
+  case'copy-dd':{const c=card(D.id);if(!c)return;return copy(promptWith('p2','(여기에 용어를 적는다)',c.t),'첨삭 요청을 복사했어요. 답안 사진과 함께 Claude 프로젝트에 붙여 넣으세요');}
   case'resume-clear':{String(D.k).split(' ').forEach(k=>{delete S.resume[k];if(MEMO&&MEMO.key===k){memoStop();MEMO=null;}if(SES&&SES.rkey===k)SES=null;});save();toast('처음부터 시작해요');return render();}
   case'set-quiz':{const d=D.d,i=Number(D.i),k=Number(D.k);const q=SETS.sets[d].quiz[i];const p=sp(d);if(p.quiz[i])return;const ok=k===q.a;p.quiz[i]={pick:k,ok};const key='Q:'+d+':'+i;const qp=S.qp[key]||(S.qp[key]={ok:0,ng:0});ok?qp.ok++:qp.ng++;qp.last=todayStr();if(!ok)markWrong(key,'quiz');touchDay();const st=setStatus(d);calMark('quiz:'+d,'quiz',`${korDate(d)} 세트 퀴즈 ${st.qa}/${st.nq}문 풂(정답 ${st.qok})`);save();return render();}
   case'set-eo':SV[D.d+':eo']=1;return render();
@@ -1270,5 +1326,5 @@ window.addEventListener('online',()=>sync(true));
 PE_IO.init({toast});recalcPlan();applyLook();setPreset('essay');R=parseHash();
 if(!location.hash)history.replaceState(null,'','#today');
 calOpen();render();sync(true);
-window.__pe={S:()=>S,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,render,invalidate,startSession};
+window.__pe={S:()=>S,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession};
 })();

@@ -110,6 +110,8 @@ function open(opt = {}) {
   await A.go('#set/2026-10-19'); A.click('[data-act="set-tab"][data-t="essay"]'); await sleep(20);
   A.click('[data-act="copy-essay"]'); await sleep(30);
   ok(/제방 누수/.test(dev.clip) && /\[답안 형식 점검표/.test(dev.clip) && /이하 여백/.test(dev.clip) && /형식 첨삭/.test(dev.clip) && !/\{답안형식\}/.test(dev.clip), '논술 첨삭 요청에 문제 + 형식 점검표');
+  { const c = A.pe.deck().find(x => x.x && x.x.length); await A.go('#dandap/' + encodeURIComponent(c.id)); A.click('[data-act="copy-dd"]'); await sleep(30);
+    ok(dev.clip && dev.clip.includes('[용어] ' + c.t) && /단답형 손글씨 답안/.test(dev.clip) && !/여기에 용어를 적는다/.test(dev.clip), '단답 답안지 첨삭 요청에 그 용어'); }
   await A.go('#mock/2026-10-24'); A.click('[data-act="copy-mock"]'); await sleep(30);
   ok(/■ 1교시/.test(dev.clip) && /\[모범 답안 뼈대/.test(dev.clip) && /형식 지적 1개/.test(dev.clip) && !/\{답안형식\}/.test(dev.clip), '모의고사 채점 요청에 문제 목록 + 형식 점검표');
   await A.go('#backup');
