@@ -93,7 +93,34 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   click('[data-act="set-eo"]'); await sleep(20);
   ok(/침윤선/.test(txt()), '논술 목차 힌트 열림');
   click('[data-act="set-tab"][data-t="tasks"]'); await sleep(20);
-  ok(view().querySelectorAll('[data-act="set-task"]').length === 3 && /확인이 필요한 부분/.test(txt()), '과제 3개 + 확인 필요');
+  // 숙제: 세트 내용과 학습 단계로 앱이 정한다(몇 번, 어떻게)
+  const hws = () => [...view().querySelectorAll('.hw')], hwOf = k => view().querySelector(`.hw [data-k="${k}"]`) && view().querySelector(`.hw [data-k="${k}"]`).closest('.hw');
+  const hp = () => (S().sp['2026-10-19'].hw || {});
+  ok(/확인이 필요한 부분/.test(txt()) && /오늘 숙제/.test(txt()) && /준비 주/.test(txt()) && /이렇게 외워요/.test(txt()), '숙제 탭: 단계 설명·원칙·확인 필요');
+  ok(/새 용어 4개: 안 보고 쓰기 2번, 소리 내어 말하기 4번/.test(txt()) && view().querySelectorAll('.hw [data-k="w0"]').length === 2 && view().querySelectorAll('.hw [data-k="s0"]').length === 4, '새 용어: 낱말마다 쓰기 2·말하기 4 동그라미');
+  ok(/복습 용어 6개: 제목만 보고 키워드 백지 복원/.test(txt()) && /논술 목차 옮겨 적기 4번/.test(txt()) && view().querySelectorAll('.hw [data-k="eo"]').length === 4 && /그림·표 그리기 3번/.test(txt()) && /논술 실전 쓰기 25분/.test(txt()), '복습 용어·논술 목차 4번·실전 쓰기·그림 3번');
+  ok(/퀴즈를 다 풀면 틀린 문제가 여기/.test(txt()) && /앞글자로 외우기/.test(txt()) && /자기 전 5분/.test(txt()), '퀴즈 오답(다 풀기 전)·앞글자·자기 전 떠올리기');
+  ok(!/새 용어 4개를 소리 내어 30초씩/.test(txt()) && hws().length === 8, '예약 작업의 공통 과제는 숙제가 대신함(세트만의 과제만 남김)');
+  ok(view().querySelectorAll('.hw .how').length === hws().length && /빨간 펜/.test(hwOf('w0').querySelector('.how').textContent), '항목마다 요령');
+  const tabLabel = () => view().querySelector('[data-act="set-tab"][data-t="tasks"]').textContent;
+  ok(/숙제 0\/8/.test(tabLabel()), '탭에 숙제 수');
+  click('[data-act="hw"][data-k="w0"][data-v="2"]'); await sleep(10);
+  ok(hp().w0 === 2 && view().querySelectorAll('.hw [data-k="w0"].on').length === 2, '두 번째 동그라미를 누르면 2번 한 것으로');
+  click('[data-act="hw"][data-k="w0"][data-v="2"]'); await sleep(10);
+  ok(hp().w0 === 1, '같은 동그라미를 다시 누르면 하나 뺌');
+  for (let i = 0; i < 4; i++) { click(`[data-act="hw"][data-k="w${i}"][data-v="2"]`); await sleep(5); click(`[data-act="hw"][data-k="s${i}"][data-v="4"]`); await sleep(5); }
+  ok(hwOf('w0').classList.contains('done') && /숙제 1\/8/.test(tabLabel()), '새 용어를 다 하면 그 숙제 끝');
+  click('[data-act="hw"][data-k="eo"][data-v="4"]'); await sleep(10);
+  click('[data-act="hw-ew"]'); await sleep(10);
+  ok(S().sp['2026-10-19'].essay.done && hwOf('eo').classList.contains('done') && /숙제 3\/8/.test(tabLabel()), '목차 4번, 실전 쓰기(논술 탭 손글씨와 같은 기록)');
+  view().querySelector('#hwMn').value = '침윤선 누수 파이핑 → 침누파'; click('[data-act="hw-mn"]'); await sleep(10);
+  ok(hp().mn === '침윤선 누수 파이핑 → 침누파' && view().querySelector('#hwMn').value === hp().mn && /숙제 4\/8/.test(tabLabel()), '앞글자 외우기를 적어 둠');
+  click('[data-act="hw-ew"]'); await sleep(10);
+  ok(!S().sp['2026-10-19'].essay.done && /숙제 3\/8/.test(tabLabel()), '실전 쓰기를 다시 누르면 취소');
+  click('[data-act="set-tab"][data-t="essay"]'); await sleep(20); click('[data-act="set-essay-done"]'); await sleep(20); click('[data-act="set-tab"][data-t="tasks"]'); await sleep(20);
+  ok(/숙제 4\/8/.test(tabLabel()), '논술 탭에서 손글씨 체크해도 숙제에 반영');
+  click('[data-act="hw-ew"]'); await sleep(10);
+  ok(!S().sp['2026-10-19'].essay.done && /숙제 3\/8/.test(tabLabel()), '(되돌림) 실전 쓰기 취소');
 
   // 카드로 넘겨 보기 세션
   await go('#set/2026-10-19'); click('[data-act="set-tab"][data-t="cards"]'); await sleep(20);
@@ -490,7 +517,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(S().cal[tdy] && S().cal[tdy].in.length >= 1 && /^\d\d:\d\d$/.test(S().cal[tdy].in[0]), '앱을 열면 접속 시각을 적음');
     await go('#set/2026-10-19'); click('[data-act="set-tab"][data-t="essay"]'); await sleep(20);
     click('[data-act="set-essay-done"]'); await sleep(20);
-    click('[data-act="set-tab"][data-t="tasks"]'); await sleep(20); click('[data-act="set-task"][data-i="0"]'); await sleep(20);
+    click('[data-act="set-tab"][data-t="tasks"]'); await sleep(20); click('[data-act="hw"][data-k="sl"][data-v="1"]'); await sleep(20);
     // 홈 화면 왼쪽 위 달력 아이콘: 이달·오늘 날짜와 오늘 끝낸 공부 점, 누르면 학습 달력
     await go('#today');
     const ib = view().querySelector('.ltitle .ltl > .calbtn:first-child');
@@ -507,12 +534,12 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(['term', 'essay', 'quiz', 'todo'].every(k => cell().querySelector('.dots .k-' + k)), '오늘 칸: 용어·논술·퀴즈·할 일 동그라미');
     ok(['용어', '논술', '퀴즈·테스트', '모의고사', '할 일', '접속'].every(x => view().querySelector('.callg').textContent.includes(x)) && /접속 \d+일/.test(view().querySelector('.callg').textContent), '색 설명과 이달 날 수');
     ok(/접속 \d+번 \d\d:\d\d/.test(txt()) && /세트 논술 손글씨/.test(txt()) && /세트 퀴즈 \d+\/\d+문 풂/.test(txt()) && /카드 \d+장 매김/.test(txt()) && /가리며 외우기 완료/.test(txt()), '고른 날: 접속 시각과 끝낸 공부 목록');
-    ok(/10월 19일 세트 과제 1\/3/.test(txt()), '세트 과제 → 할 일(보라)');
+    ok(/10월 19일 숙제 \d+\/8/.test(txt()) && /10월 19일 숙제\(용어\) \d+\/\d+/.test(txt()) && /10월 19일 숙제\(논술\)/.test(txt()), '숙제 → 할 일(보라)·용어·논술로 달력에');
     ok(!view().querySelector('[data-act="cal-mon"][data-v="1"]').disabled, '앞으로 올 달도 볼 수 있음');
     await go('#set/2026-10-19'); click('[data-act="set-tab"][data-t="essay"]'); await sleep(20);
     click('[data-act="set-essay-done"]'); await sleep(20);
     await go('#cal');
-    ok(!cell().querySelector('.k-essay') && !/세트 논술 손글씨/.test(txt()), '논술 체크를 풀면 달력에서도 빠짐');
+    ok(!/세트 논술 손글씨/.test(txt()) && /숙제\(논술\) 1\/3/.test(txt()), '논술 체크를 풀면 달력에서도 빠짐(목차 옮겨 적기 숙제는 남음)');
     // 예전 기록(카드 매김·테스트·오늘 할 일)도 보임
     const old = (d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'))(new w.Date(new w.Date().getFullYear(), new w.Date().getMonth() - 1, 15));
     S().daily[old] = { newSeen: 2, graded: 7, active: true }; S().log.push({ d: old, type: 'outline', total: 5, ok: 3 });

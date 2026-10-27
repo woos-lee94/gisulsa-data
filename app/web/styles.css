@@ -228,6 +228,36 @@ textarea.in{min-height:120px;font-size:.88rem;line-height:1.5;font-family:ui-mon
 :root[data-theme="dark"] .memo.hiding .tp{background:repeating-linear-gradient(-45deg,#7C6843 0 5px,#6E5B37 5px 10px)}
 .sessnav .btn{min-height:44px}
 .lnk{color:var(--blue);font:inherit;font-weight:700;padding:0 2px}
+/* 세트 숙제: 항목마다 몇 번 했는지 동그라미(누른 번째까지 칠함), 종류 색 띠, 요령 펼치기 */
+.hwtop{display:flex;gap:14px;align-items:center;background:var(--sheet);border-radius:var(--r-lg);padding:14px 16px}
+.hwpg{flex:none;text-align:center;line-height:1.05}
+.hwpg b{display:block;font-size:1.9rem;font-weight:800;color:var(--blue)}.hwpg b small{font-size:1rem;color:var(--ink2)}
+.hwpg span{font-size:.76rem;font-weight:700;color:var(--ink2)}
+.hwtx p{margin:0;font-size:.92rem;line-height:1.5}.hwtx .ds{margin-top:4px}
+.hwrules{margin-top:10px}.hwrules ol{margin:0;padding-left:20px;line-height:1.6;color:var(--ink2)}.hwrules b{color:var(--ink)}
+.hw{background:var(--sheet);border-radius:var(--r-md);border-left:4px solid var(--rule);padding:12px 14px 6px;margin-top:10px}
+.hw.done{opacity:.72}
+.hwh{display:flex;align-items:flex-start;gap:10px}
+.hwn{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--paper);font-weight:800;font-size:.86rem;color:var(--ink2)}
+.hw.done .hwn{background:var(--ok);color:#fff}
+.hwt{flex:1;min-width:0}.hwt b{display:block;line-height:1.4}.hwt span{display:block;color:var(--ink2);font-size:.86rem;line-height:1.4;margin-top:2px}
+.hwm{flex:none;color:var(--ink3);font-size:.8rem;font-weight:700;padding-top:2px}
+.hwr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:8px 0 4px 36px;border-top:1px solid var(--rule2);margin-top:8px}
+.hwr+.hwr{margin-top:0}
+.hwl{flex:1 1 150px;font-weight:600;font-size:.94rem;line-height:1.35}
+.hwc{flex:0 1 auto;display:flex;flex-wrap:wrap;gap:6px 14px}
+.hwtx b{display:block;font-size:.8rem;color:var(--ink2);margin-bottom:2px}
+.ctr{display:inline-flex;align-items:center;gap:5px}.ctr small{font-size:.78rem;font-weight:700;color:var(--ink2);margin-right:2px}
+.cc{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;border:2px solid var(--rule);background:transparent;color:var(--ink3);font-size:.78rem;font-weight:800;font-variant-numeric:tabular-nums}
+.cc.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.hw.k-term-l .cc.on{background:var(--red);border-color:var(--red)}.hw.k-essay-l .cc.on{background:var(--blue);border-color:var(--blue)}
+.hw.k-quiz-l .cc.on{background:var(--ok);border-color:var(--ok)}.hw.k-todo-l .cc.on{background:var(--violet);border-color:var(--violet)}
+.hwp{padding-left:36px;margin:6px 0 0}
+.hwin{display:flex;gap:8px;padding:8px 0 2px 36px}.hwin input{flex:1;min-width:0;min-height:40px;border:1px solid var(--rule);border-radius:10px;padding:6px 10px;background:var(--paper)}
+.hwgo{padding-left:36px;margin-top:8px;flex-wrap:wrap}.hwgo .btn.sm{flex:0 1 auto}
+.how{margin:6px 0 4px 36px}.how summary{cursor:pointer;color:var(--blue);font-weight:700;font-size:.86rem;padding:4px 0;list-style:none}
+.how summary::-webkit-details-marker{display:none}.how summary::before{content:"▸ "}.how[open] summary::before{content:"▾ "}
+.how p{margin:2px 0 6px;color:var(--ink2);font-size:.88rem;line-height:1.6}
 /* 학습 달력: 접속한 날은 숫자에 회색 원, 끝낸 공부는 종류별 점(빨강 용어·파랑 논술·초록 퀴즈·주황 모의·보라 할 일) */
 .k-term{background:var(--red)}.k-essay{background:var(--blue)}.k-quiz{background:var(--ok)}.k-mock{background:var(--amber)}.k-todo{background:var(--violet)}
 .cdot{display:inline-block;width:12px;height:12px;border-radius:50%;flex:none}
