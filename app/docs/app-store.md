@@ -1,6 +1,6 @@
 # App Store Connect 등록 문구
 
-기술사 6개월(번들 ID `io.github.wooslee94.gisulsa`). 2.3.0 첫 출시, 2.3.1 업데이트(숙제, 학습 달력, 가리며 외우기 테이프). 붙여 넣는 문구는 특수문자 없이 썼다(앱등록질문 스킬 규칙). 문구를 고치면 이 파일도 함께 고친다.
+기술사 6개월(번들 ID `io.github.wooslee94.gisulsa`). 2.3.0 첫 출시, 2.3.1 업데이트(숙제, 학습 달력, 가리며 외우기 테이프), 2.3.2 업데이트(용어 퀴즈, 복습 탭의 외우기 도구). 붙여 넣는 문구는 특수문자 없이 썼다(앱등록질문 스킬 규칙). 문구를 고치면 이 파일도 함께 고친다.
 
 ## 부제 (23자 / 30자)
 
@@ -10,10 +10,10 @@
 
 대안: `토목시공기술사 필기를 매일 세트로`(18자), `토목시공기술사 기출, 암기, 논술 연습`(21자)
 
-## 프로모션 텍스트 (108자 / 170자)
+## 프로모션 텍스트 (111자 / 170자)
 
 ```
-토목시공기술사 필기를 혼자 준비하는 사람을 위한 학습 앱입니다. 평일마다 용어, 퀴즈, 논술 세트와 몇 번 어떻게 외울지 정해 주는 숙제가 들어오고, 학습 달력으로 매일 끝낸 공부를 확인합니다.
+토목시공기술사 필기를 혼자 준비하는 사람을 위한 학습 앱입니다. 평일마다 용어, 퀴즈, 논술 세트와 숙제가 들어오고, 그날 용어로 만든 용어 퀴즈 약 150문과 가리며 외우기로 복습까지 이어 갑니다.
 ```
 
 ## 설명 (2166자 / 4,000자)
@@ -100,7 +100,7 @@ https://github.com/woos-lee94/gisulsa-data/blob/main/app/docs/privacy.md
 - 기본: 교육. 토목시공기술사 필기 시험 공부가 핵심 기능
 - 추가: 참고. 기출 문제 요지와 용어 카드를 찾아보는 용도
 
-## 앱 심사 메모 (3939자 / 4,000자)
+## 앱 심사 메모 (3984자 / 4,000자)
 
 ```
 OVERVIEW
@@ -124,7 +124,7 @@ DATA SOURCES
 Past-exam question summaries for rounds 116 to 140 (2018 to 2026) of the written exam administered by HRD Korea. They are summaries written by the developer, not the original wording. Study cards, the glossary, essay outlines, daily sets and weekly mock exams were written by the developer with the help of an AI assistant (Claude by Anthropic) and partly checked against Korean design and construction standards (KDS and KCS) and laws. Items the developer could not confirm are listed in each set under "확인이 필요한 부분" (Needs checking). Sources are described under "더보기" > "콘텐츠 출처" (Content sources).
 
 METHOD
-No AI runs inside the app. Spaced repetition, weekly planning and exam dates are rule-based and computed on the device. Copy buttons give prompt text the user may paste into an AI assistant of their choice to get feedback on a handwritten answer; the app sends nothing to any AI service.
+No AI runs inside the app. Spaced repetition, weekly planning, exam dates and the term quizzes (built from the card text) are rule-based and computed on the device. Copy buttons give prompt text the user may paste into an AI assistant of their choice to get feedback on a handwritten answer; the app sends nothing to any AI service.
 
 PRIVACY
 No ads, analytics or tracking. Study records stay on the device. For access control the app uses Firebase Anonymous Authentication and Cloud Firestore to store only the chosen ID, a random account number, the approval status and timestamps; no name, email or phone number. The account key is kept in the device keychain. Other network requests are HTTPS GET requests for public JSON files on raw.githubusercontent.com that carry no user data. In the word lookup, the "국어사전" and "지식백과" buttons open a Naver search for that word in Safari. The only permission is notifications.
@@ -144,46 +144,51 @@ The app is an independent study aid and is not affiliated with HRD Korea or any 
 
 ## 이 버전의 새로운 기능
 
-업데이트마다 바로 전 출시 버전과 비교해 바뀐 것만 쓴다. 2.3.0은 첫 출시라 비웠다.
+업데이트마다 바로 전 출시 버전과 비교해 바뀐 것만 쓴다. 2.3.0은 첫 출시라 비웠고, 2.3.1은 숙제·학습 달력·가리며 외우기(무작위 줄, 테이프, 완료, 이어 하기)·단답 답안지·카드 넘겨 보기 이어 하기였다(git 기록).
 
-2.3.1 (1147자 / 4,000자):
+2.3.2 (641자 / 4,000자):
 
 ```
-매일 숙제와 학습 달력, 세트마다 용어 퀴즈 150문을 새로 더하고, 가리며 외우기를 더 편하게 바꿨습니다.
-
-세트 숙제
-세트의 숙제 탭이 그날 용어와 논술에 맞춰 몇 번, 어떻게 할지 알려 줍니다.
-새 용어는 안 보고 쓰기와 소리 내어 말하기, 논술은 목차 옮겨 적기와 25분 실전 쓰기, 그림 그리기 횟수를 학습 단계에 맞춰 정해 줍니다.
-한 번 할 때마다 동그라미를 누르면 기록되고, 항목마다 요령과 예상 시간이 함께 나옵니다.
-
-학습 달력
-홈 화면 왼쪽 위 달력 아이콘을 누르면 오늘 끝낸 공부가 바로 보입니다.
-앱을 연 날과 시각, 그날 끝낸 공부를 용어, 논술, 퀴즈, 모의고사별 색 동그라미로 보여 줍니다.
-달력을 옆으로 밀면 이전 달과 다음 달로 넘어가고, 공휴일은 빨간 날로 표시됩니다.
-
-가리며 외우기
-가릴 곳을 살짝 꾹 눌렀다가 그으면 마스킹 테이프처럼 가려 줍니다. 여러 줄도 이어서 그을 수 있고, 그냥 밀면 화면이 움직입니다.
-가릴 때마다 2줄에서 5줄을 무작위로 골라 가리는 방식을 더했습니다.
-마지막 카드에서 완료를 눌러 마치고, 중간에 나갔다 와도 보던 카드부터 이어집니다.
-남은 시간 막대를 덜 눈에 띄게 바꾸고, 마지막 카드에서 진행 막대가 끝까지 차도록 고쳤습니다.
+세트마다 용어 퀴즈 약 150문을 새로 더하고, 복습 탭에서도 가리며 외우기 같은 외우기 도구를 바로 쓰게 했습니다.
 
 용어 퀴즈
-세트의 퀴즈 탭에서 그날 용어 10개로 만든 문제 약 150개를 풉니다. 15문씩 10회로 나눠 정의와 키워드로 용어 고르기부터 OX, 빈칸, 키워드 아닌 것 고르기까지 뒤로 갈수록 어려워집니다.
-회차마다 점수가 남고 중간에 나갔다 와도 안 푼 문제부터 이어지며, 틀린 문제는 오답 노트로 모입니다.
+세트의 퀴즈 탭 맨 위에서 그날 용어 10개로 만든 문제 약 150개를 풉니다.
+15문씩 10회로 나눠, 정의와 키워드를 보고 용어 고르기부터 OX, 빈칸, 키워드가 아닌 것 고르기까지 뒤로 갈수록 어려워집니다.
+회차마다 점수가 남고, 중간에 나갔다 와도 안 푼 문제부터 이어 풉니다.
+틀린 문제는 오답 노트에 모이고, 틀린 문제만 다시 풀 수도 있습니다.
+풀이 아래 카드 보기를 누르면 그 용어 카드가 바로 열립니다.
 
-복습에서도 같은 외우기 도구
-복습 탭에서 다시 볼 세트를 누르면 카드와 퀴즈, 가리며 외우기, 카드 넘겨 보기, 빈칸 쓰기, 용어 퀴즈 가운데 골라 복습합니다. 지난 세트도 여기서 다시 열 수 있습니다.
-오답 카드와 별표 카드, 카드 넘겨 보기와 테스트 중에 본 카드도 바로 가리며 외우기로 이어집니다.
+복습 탭
+다시 볼 세트를 누르면 카드와 퀴즈, 가리며 외우기, 카드 넘겨 보기, 빈칸 쓰기, 용어 퀴즈 가운데 골라 복습합니다.
+복습 날에는 어느 방법이든 끝까지 하면 그 날 복습으로 기록됩니다.
+지난 세트 다시 외우기에서 최근 세트를 다시 열 수 있습니다.
+오답 카드와 별표 카드도 가리며 외우기로 바로 외울 수 있습니다.
 
-단답 답안지
-카드를 1교시 단답 답안지 모양으로 바로 볼 수 있습니다. 개요, 주요 내용, 그림 칸, 결론 순서로 22줄 한 면에 맞춰 보여 줍니다.
-10분 타이머와 단답 첨삭 요청 복사가 함께 있고, 숙제와 테스트 탭에서도 단답 1문제 쓰기로 이어집니다.
-
-카드 넘겨 보기
-중간에 나갔다 다시 열어도 보던 카드부터 이어집니다.
+가리며 외우기로 이어 가기
+카드 넘겨 보기 중에 이 카드부터 가리며 외우기를 누르면 같은 카드들을 보였다 가렸다 외웁니다.
+퀴즈와 테스트가 끝나면 틀리거나 애매한 카드, 방금 본 카드를 바로 가리며 외우기로 이어 갑니다.
+카드 창에도 가리며 외우기 버튼이 생겼습니다.
 ```
 
-2.3.1을 낼 때 함께: 프로모션 텍스트와 설명은 위 문구로 바꾼다(숙제, 학습 달력, 가리며 외우기). 키워드와 심사 메모는 그대로다. 심사용 초대 코드는 새로 만들어 심사 메모의 `INVITE_CODE` 자리와 로그인 정보 암호 칸에 넣고, 승인 관리에 지난 심사의 `apple_review` 아이디가 남아 있으면 승인 취소 → 지우기로 먼저 지운다(같은 아이디를 다시 만들 수 있게).
+2.3.1 빌드가 테이프 꾹 눌렀다 긋기(2026-10-27 커밋 7c4d00e)보다 먼저였다면 끝에 덧붙인다:
+
+```
+가리며 외우기 테이프
+가릴 곳을 살짝 꾹 눌렀다가 그으면 테이프가 붙고, 그냥 밀면 화면이 움직이도록 바꿨습니다.
+```
+
+## 2.3.2 심사 제출 순서
+
+1. 빌드: `eas build -p ios --profile production --auto-submit`. App Store Connect에 2.3.2 빌드가 올라오고 처리될 때까지(보통 10~30분, 메일이 온다) 기다린다.
+2. 앱에서 심사 준비: 더보기 → 승인 관리에서 지난 심사의 `apple_review` 아이디가 남아 있으면 승인 취소 → 지우기. 초대 코드 만들기로 새 6자리 코드를 만든다(`docs/firebase-setup.md` 6).
+3. App Store Connect → 앱 → iOS 앱 옆 더하기(버전 추가) → `2.3.2`.
+4. 빌드 칸에서 2.3.2 빌드를 고른다. 수출 규정은 지난번과 같다(HTTPS만, 자체 암호화 없음).
+5. 이 버전의 새로운 기능: 위 2.3.2 문구.
+6. 프로모션 텍스트와 설명: 이 파일의 문구로 바꾼다(용어 퀴즈와 복습 문장이 더해졌다). 부제·키워드·지원 URL·개인정보 처리방침 URL·저작권·카테고리는 그대로 둔다. 스크린샷은 지난 버전 것이 그대로 따라온다.
+7. 앱 심사 정보: 로그인 필요 체크, 사용자 이름 `apple_review`, 암호 칸에 2번의 초대 코드. 메모는 위 앱 심사 메모를 붙이고 `INVITE_CODE`를 같은 코드로 바꾼다. 연락처(이름·전화·메일)는 그대로 둔다.
+8. App Privacy는 바꾸지 않는다(용어 퀴즈 기록도 기기에만 둔다).
+9. 버전 출시는 수동 또는 자동 중 고르고, 저장 → 심사에 추가 → 심사에 제출.
+10. 심사가 끝나면 승인 관리에서 `apple_review`를 승인 취소 → 지우고, 쓴 초대 코드도 지운다.
 
 ## App Privacy(참고)
 
