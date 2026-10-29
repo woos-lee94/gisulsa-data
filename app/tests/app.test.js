@@ -207,6 +207,94 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   await go('#review');
   ok(/일 차/.test(txt()), '세트 다시 보기 대상 표시');
 
+  // 용어 퀴즈: 세트 용어로 앱이 만든 문제(용어당 15문, 15문씩 회차, 쉬운 것부터)
+  {
+    const D0 = '2026-10-19', L = pe.gqList(D0);
+    ok(L && L.items.length >= 120 && L.items.length <= 150, `용어 퀴즈 ${L && L.items.length}문(용어 10개)`);
+    ok(L.items.every(q => q.q && (q.o.length === 4 || q.o.length === 2) && new Set(q.o).size === q.o.length && q.a >= 0 && q.a < q.o.length), '보기 2·4개, 겹침 없음, 정답 자리 유효');
+    ok(pe.gqBuild(D0).sig === L.sig && JSON.stringify(pe.gqBuild(D0).items) === JSON.stringify(L.items), '같은 세트는 늘 같은 문제·같은 보기 순서');
+    const ks = new Set(L.items.map(q => q.k)); ok(['def', 'kw', 'ox', 'blank', 'notkw'].every(k => ks.has(k)), '문제 종류: ' + [...ks].join(','));
+    ok(L.items.filter(q => ['def', 'field', 'plus'].includes(q.k)).every(q => !q.t.includes(q.o[q.a])), '설명 보고 고르는 문제에는 정답 용어 이름이 안 보임');
+    const per = {}; L.items.forEach(q => { per[q.id] = (per[q.id] || 0) + 1; }); ok(Object.values(per).every(n => n <= 15), '용어당 15문 이하');
+    const r1 = L.items.slice(0, 15).map(q => q.k), r9 = L.items.slice(-30).map(q => q.k);
+    ok(r1.filter(k => k === 'def' || k === 'kw').length > r9.filter(k => k === 'def' || k === 'kw').length, '앞 회차는 정의·키워드 위주, 뒤로 갈수록 어려움');
+    ok(L.items.filter(q => q.k === 'blank').every(q => (q.t.match(/\{_\}/g) || []).length === 1), '빈칸 문제는 빈칸 하나');
+    ok(pe.jo('모래다짐말뚝', '은는') === '은' && pe.jo('동다짐', '과와') === '과' && pe.jo('액상화', '이가') === '가' && pe.jo('CPT', '은는') === '은(는)', '받침에 맞는 조사');
+    const alt = pe.gqNumAlt('1.0', () => 0.3); ok(alt.length === 3 && alt.every(a => /^\d\.\d$/.test(a) && a !== '1.0'), '수치 보기는 같은 자릿수: ' + alt);
+    ok(pe.gqNumAlt('25', () => 0.6).every(a => /^\d+$/.test(a)), '정수 수치는 정수 보기');
+    ok(pe.gqNumAlt('2023', () => 0.5).every(a => Math.abs(Number(a) - 2023) <= 3), '연도는 앞뒤 몇 해');
+    await go('#set/' + D0); click('[data-act="set-tab"][data-t="quiz"]'); await sleep(20);
+    ok(/용어 퀴즈/.test(txt()) && view().querySelectorAll('.gqc').length === Math.ceil(L.items.length / 15) && /세트 퀴즈/.test(txt()) && view().querySelectorAll('.qcard').length === 5, '퀴즈 탭: 용어 퀴즈 회차 칸과 세트 퀴즈');
+    click('[data-act="gq-go"][data-r="next"]'); await sleep(40);
+    ok(pe.SES() && pe.SES().items.length === 15 && pe.SES().items.every((it, i) => it.type === 'gq' && it.n === i), '1회: 1~15번 세션');
+    const q0 = L.items[0], q1 = L.items[1];
+    ok(view().querySelector('.qtext') && view().querySelectorAll('.opt').length === q0.o.length, '문제와 보기');
+    click(`[data-act="sess-pick"][data-k="${q0.a}"]`); await sleep(20);
+    ok(view().querySelector('.opt.right') && /정답/.test(view().querySelector('.ex').textContent) && view().querySelector('[data-act="card-modal"]'), '맞히면 정답·풀이와 카드 보기');
+    click('[data-act="sess-next"]'); await sleep(20);
+    click(`[data-act="sess-pick"][data-k="${(q1.a + 1) % q1.o.length}"]`); await sleep(20);
+    const wk = Object.keys(S().wrong).find(k => k.startsWith('G:' + D0 + ':1:'));
+    ok(view().querySelector('.opt.wrong') && wk && pe.gqRec(D0).slice(0, 3) === '10-', '틀리면 오답 노트로, 문제마다 기록');
+    ok(Object.values(S().cal).some(x => x.x && x.x['gq:' + D0] && /용어 퀴즈 2\/\d+문/.test(x.x['gq:' + D0][1])), '달력에 용어 퀴즈');
+    click('[data-act="card-modal"]'); await sleep(10);
+    const mw = () => d.querySelector('#modal-wrap');
+    ok(mw().querySelector('h3') && mw().querySelector('[data-act="memo-one"]'), '카드 보기 창: 가리며 외우기 버튼');
+    click('[data-act="memo-one"]', mw()); await sleep(30);
+    ok(w.location.hash === '#memo' && !mw().innerHTML && pe.MEMO().items.length === 1 && pe.MEMO().items[0].id === q1.id, '카드 한 장 가리며 외우기(창 닫힘)');
+    click('[data-act="back"]'); await sleep(60);
+    ok(w.location.hash === '#sess' && pe.SES().i === 1, '닫으면 퀴즈로 돌아옴');
+    await go('#set/' + D0); await sleep(10);
+    ok(/이어 풀기: 1회/.test(txt()) && /틀린 문제만 \(1\)/.test(txt()) && view().querySelector('.gqc.part'), '나갔다 오면 이어 풀기·틀린 문제만');
+    click('[data-act="gq-go"][data-r="next"]'); await sleep(40);
+    ok(pe.SES().i === 2 && pe.SES().items[2].n === 2, '반쯤 푼 회차는 안 푼 문제부터');
+    await go('#set/' + D0); click('[data-act="gq-go"][data-r="wrong"]'); await sleep(40);
+    ok(pe.SES().items.length === 1 && pe.SES().items[0].n === 1, '틀린 문제만 다시');
+    await go('#set/' + D0); click('[data-act="gq-go"][data-r="2"]'); await sleep(40);
+    ok(pe.SES().items[0].n === 30 && /3회/.test(pe.SES().title), '회차 칸을 누르면 그 회차');
+    await go('#review');
+    ok(/용어 퀴즈 1/.test(txt()), '복습 탭 오답 노트에 용어 퀴즈');
+    await go('#wrong'); ok(/용어 퀴즈, 1번 틀림/.test(txt()), '오답 노트 목록');
+    await go('#review'); click('[data-act="start-wrong"]'); await sleep(40);
+    ok(pe.SES().items.some(it => it.type === 'gq' && it.n === 1 && it.wrongKey === wk), '오답 다시 풀기에 용어 퀴즈');
+    // 오답 카드 가리며 외우기
+    await go('#review'); click('[data-act="memo-wrong"]'); await sleep(30);
+    ok(pe.MEMO() && pe.MEMO().key === 'memo:wrong' && pe.MEMO().items.some(x => x.id === q1.id), '오답 카드 가리며 외우기(용어 퀴즈에서 틀린 용어 포함)');
+    click('[data-act="back"]'); await sleep(60);
+    // 다시 볼 세트를 누르면 외우기 방법을 고른다
+    const read0 = JSON.stringify(S().sp[D0].read || {});
+    await go('#review'); click('[data-act="rev-open"][data-d="' + D0 + '"]'); await sleep(20);
+    ok(['start-setrev', 'memo-set', 'set-flash', 'start-fill', 'gq-go'].every(a => mw().querySelector(`[data-act="${a}"]`)) && /어느 방법이든 끝까지 하면 오늘 복습/.test(mw().textContent), '다시 볼 세트: 카드·퀴즈, 가리며 외우기, 넘겨 보기, 빈칸 쓰기, 용어 퀴즈');
+    click('[data-act="memo-set"]', mw()); await sleep(30);
+    ok(w.location.hash === '#memo' && !mw().innerHTML && pe.MEMO().setD === D0 && /가리며 외우기/.test(txt()), '창에서 가리며 외우기(창 닫힘)');
+    while (pe.MEMO().i + 1 < pe.MEMO().items.length) { click('[data-act="memo-next"]'); await sleep(5); }
+    click('[data-act="memo-finish"]'); await sleep(10);
+    ok(Object.keys(S().sp[D0].rev || {}).length > 0, '가리며 외우기를 끝내도 그 날 복습으로 침');
+    click('[data-act="memo-close"]'); await sleep(30);
+    await go('#review');
+    ok(!/일 차/.test(txt()) && view().querySelector('[data-act="rev-open"][data-d="' + D0 + '"]') && /지난 세트 다시 외우기/.test(txt()), '복습을 마친 세트는 지난 세트에서 다시 열기');
+    S().sp[D0].rev = {}; S().resume = {}; pe.render();
+    // 세션 중·끝에 가리며 외우기
+    await go('#study'); click('[data-act="start-free"]'); await sleep(40);
+    const ses = pe.SES(); click('[data-act="sess-flip"]'); await sleep(10); click('[data-act="sess-grade"][data-g="0"]'); await sleep(10);
+    click('[data-act="sess-skip"]'); await sleep(10);
+    ok(view().querySelector('[data-act="memo-sess"]'), '카드 넘겨 보기 중 가리며 외우기 버튼');
+    click('[data-act="memo-sess"]'); await sleep(30);
+    ok(pe.MEMO().key === 'memo:sess' && pe.MEMO().i === 2 && pe.MEMO().items.length === ses.items.length && pe.MEMO().items[2].id === ses.items[2].id, '이 카드부터 가리며 외우기(세션 카드 그대로)');
+    click('[data-act="back"]'); await sleep(60);
+    ok(w.location.hash === '#sess' && pe.SES() === ses && ses.i === 2, '닫으면 보던 카드로');
+    ses.i = ses.items.length; pe.render(); await sleep(10);
+    ok(/틀리거나 애매한 카드 가리며 외우기 \(1장\)/.test(txt()) && new RegExp(`방금 본 카드 가리며 외우기 \\(${ses.items.length}장\\)`).test(txt()), '끝 화면: 틀린 카드만·모두 가리며 외우기');
+    click('[data-act="memo-sess"][data-only="miss"]'); await sleep(30);
+    ok(pe.MEMO().items.length === 1 && pe.MEMO().items[0].id === ses.items[0].id, '틀리거나 애매한 카드만');
+    click('[data-act="back"]'); await sleep(60); click('[data-act="sess-close"]'); await sleep(20);
+    // 별표 카드 가리며 외우기
+    pe.S().cards[q1.id] = Object.assign(pe.S().cards[q1.id] || {}, { star: true }); await go('#review');
+    const hasStar = !!view().querySelector('[data-act="memo-stars"]'); if (hasStar) { click('[data-act="memo-stars"]'); await sleep(30); }
+    ok(hasStar && pe.MEMO().key === 'memo:stars' && pe.MEMO().items.some(x => x.id === q1.id), '별표 카드 가리며 외우기');
+    click('[data-act="back"]'); await sleep(60); delete pe.S().cards[q1.id].star;
+    Object.keys(S().wrong).filter(k => k.startsWith('G:')).forEach(k => delete S().wrong[k]); delete S().sp[D0].gq; S().sp[D0].read = JSON.parse(read0); S().resume = {}; pe.render();
+  }
+
   // 수치 빈칸
   await go('#test');
   click('[data-act="start-cloze"]'); await sleep(40);

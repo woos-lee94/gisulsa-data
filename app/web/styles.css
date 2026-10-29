@@ -341,6 +341,14 @@ textarea.in{min-height:120px;font-size:.88rem;line-height:1.5;font-family:ui-mon
 .ex b{font-weight:800}
 .ex.ok b{color:var(--ok)} .ex.no b{color:var(--red)}
 .cloze{display:inline-block;min-width:3.2em;border-bottom:2.5px solid var(--red);text-align:center;color:var(--red);font-weight:800}
+/* 용어 퀴즈: 문제 글 상자, 회차 칸 */
+.gqt{margin:-4px 0 14px;padding:11px 13px;border-radius:12px;background:var(--paper);border-left:3px solid var(--blue);line-height:1.68;font-weight:500}
+.gqg{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:8px 0 4px}
+.gqc{display:flex;flex-direction:column;align-items:center;gap:1px;padding:8px 2px 7px;border-radius:12px;background:var(--sheet);border:1.5px solid var(--rule);font:inherit;color:var(--ink);cursor:pointer}
+.gqc b{font-size:.9rem;font-weight:700}.gqc small{font-size:.72rem;color:var(--ink2);font-variant-numeric:tabular-nums}
+.gqc.part{border-color:var(--amber)}
+.gqc.mid{background:color-mix(in srgb,var(--amber) 13%,var(--sheet));border-color:var(--amber)}
+.gqc.ok{background:color-mix(in srgb,var(--ok) 13%,var(--sheet));border-color:var(--ok)}
 
 /* ── 기출 ── */
 .paper-q{display:flex;gap:10px;padding:12px 16px;position:relative}

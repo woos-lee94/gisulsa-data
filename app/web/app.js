@@ -122,7 +122,7 @@ function kLabelShort(id){const a=String(id).split('-');return a.length===3?a[0]+
 /* ════════ 4. 덱(카드)·논술 ════════ */
 const normTerm=t=>String(t||'').replace(/\([^)]*\)/g,'').replace(/[\s·・,.\-–—_/()（）\[\]'"“”‘’:;]/g,'').toLowerCase();
 let _deck=null,_byId=null,_byNorm=null,_kxRev=null,_essays=null,_lex=null,_gl=null;
-function invalidate(){_deck=_byId=_byNorm=_kxRev=_essays=null;_kq=null;_lex=null;_gl=null;}
+function invalidate(){_deck=_byId=_byNorm=_kxRev=_essays=null;_kq=null;_lex=null;_gl=null;_gq={};}
 function buildDeck(){
   const patch=window.PE_PATCH||{},kx=window.PE_KX||{},kx2=(SETS.kichul&&SETS.kichul.kx)||{};const list=[];_byId={};_byNorm={};
   const add=c=>{if(_byId[c.id])return;_byId[c.id]=c;const n=normTerm(c.t);if(n&&!_byNorm[n])_byNorm[n]=c.id;list.push(c);};
@@ -179,6 +179,7 @@ function wrongItem(key){const w=S.wrong[key];if(!w)return null;const a=key.split
   if(a[0]==='C'){const c=card(a[1]);return c?{type:'card',id:c.id,key,label:c.t}:null;}
   if(a[0]==='Q'){const s=SETS.sets[a[1]];const q=s&&s.quiz&&s.quiz[Number(a[2])];return q?{type:'quiz',d:a[1],i:Number(a[2]),key,label:q.q}:null;}
   if(a[0]==='F'){const c=card(a[1]);return c?{type:'fill',id:c.id,key,label:c.t}:null;}
+  if(a[0]==='G'){const L=gqList(a[1]),n=Number(a[2]),q=L&&L.sig===a[3]&&L.items[n];return q?{type:'gq',d:a[1],n,key,label:(q.q+(q.t?' '+q.t.replace('{_}','(　)'):'')).slice(0,90)}:null;}
   if(a[0]==='Z'){const c=card(a[1]);const toks=c?clozeTokens(c.d):[];const tk=toks[Number(a[2])];return(c&&tk)?{type:'cloze',id:c.id,k:Number(a[2]),key,label:c.t+' — '+tk.s}:null;}
   return null;}
 function wrongList(){return Object.keys(S.wrong).map(k=>{const it=wrongItem(k);return it?Object.assign(it,{w:S.wrong[k]}):null;}).filter(Boolean).sort((a,b)=>(b.w.last||'')<(a.w.last||'')?-1:1);}
@@ -232,7 +233,7 @@ function fillLvHTML(d){return`<p class="qnum">용어 빈칸 쓰기${d?', '+esc(k
 function fillCheck(giveup){const it=SES&&SES.items[SES.i];if(!it||it.type!=='fill'||SES.answered)return;const c=card(it.id);if(!c)return;
   const ins=document.querySelectorAll('.fill-in');const vals=it.b.map((_,k)=>giveup?'':((ins[k]&&ins[k].value)||'').trim());
   const res=it.b.map((bk,k)=>fillJudge(vals[k],c.d.substr(bk.i,bk.len)));const all=res.every(r=>r.ok);const key='F:'+c.id;const prev=S.wrong[key]?Object.assign({},S.wrong[key]):null;const p=prog(c.id);
-  if(all){SES.stats.ok++;p.ok++;rightOnWrong(key);}else{SES.stats.no++;p.ng++;markWrong(key,'fill');}
+  if(all){SES.stats.ok++;p.ok++;rightOnWrong(key);}else{SES.stats.no++;p.ng++;markWrong(key,'fill');sessMiss(c.id);}
   SES.answered={vals,res,all,prev};touchDay();save();render();}
 
 /* ════════ 7-3. 어려운 낱말 형광펜(설명 속 다른 카드 용어, 꾹 누르면 그 카드) ════════ */
@@ -339,7 +340,7 @@ const TABS=['today','review','study','test','more'];
 let R={tab:'today',page:null,a:null,b:null};
 function parseHash(){const h=decodeURIComponent((location.hash||'').replace(/^#\/?/,''));const p=h.split('/');const r={tab:'today',page:null,a:p[1]||null,b:p[2]||null};
   if(TABS.includes(p[0]))r.tab=p[0];else if(p[0]&&TAB_OF[p[0]]!==undefined){r.page=p[0];r.tab=TAB_OF[p[0]]||(SES&&SES.from)||'today';}return r;}
-function nav(h){if(('#'+h)===location.hash)render();else location.hash=h;}
+function nav(h){closeModal();if(('#'+h)===location.hash)render();else location.hash=h;}
 function back(){if(history.length>1&&document.referrer!==undefined&&R.page){history.back();}else nav(R.tab||'today');}
 window.addEventListener('hashchange',()=>{R=parseHash();if(R.page!=='sess')SES_SAVE();if(R.page!=='memo')memoStop();render();window.scrollTo(0,0);});
 let SES=null;function SES_SAVE(){/* 세션은 메모리에만 */}
@@ -457,6 +458,98 @@ function vHw(d){const s=SETS.sets[d],p=spGet(d),H=p.hw||{},R=hwRule(d),its=hwIte
     ${it.go?`<div class="btns hwgo">${it.go.map(go).join('')}</div>`:''}
     <details class="how"><summary>요령</summary><p>${esc(HW_HOW[it.task!=null?'x':it.key])}</p></details></div>`).join('')}
   ${sm.done===sm.n&&sm.n?`<p class="note" style="color:var(--ok);font-weight:700">오늘 숙제를 모두 했어요. 이런 날이 쌓이면 합격이에요.</p>`:''}`;}
+/* ════════ 11-3. 용어 퀴즈(세트 용어로 앱이 만드는 4지선다·OX, 용어당 15문, 15문씩 회차) ════════
+   세트 카드 내용만으로 만든다(덱 전체를 쓰지 않아 새 세트가 와도 문제와 순서가 그대로). 같은 세트는 늘 같은 문제·같은 보기 순서(날짜로 정한 난수).
+   용어마다 쉬운 것부터: 정의 보고 용어 → 키워드 보고 용어 → OX → 빈칸 → 키워드 아닌 것 → 현장·원어. 회차가 뒤로 갈수록 어려워진다.
+   기록은 sp(d).gq = {s: 문제 서명, r: 문제마다 '1' 맞힘 '0' 틀림 '-' 안 풂}. 카드 글이 바뀌어 서명이 달라지면 새로 센다. 틀린 문제는 오답 노트 G:날짜:번호:서명 */
+const GQ_PER=15,GQ_ROUND=15,GQ_KIND={def:'정의 보고 용어',kw:'키워드 보고 용어',ox:'OX',blank:'빈칸',notkw:'키워드 아닌 것',kwpick:'키워드 고르기',field:'현장 내용 보고 용어',plus:'보충 설명 보고 용어',eng:'원어 보고 용어'};
+const GQ_OX=['맞다','틀리다'];
+function strHash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+function seedRnd(s){let a=strHash(String(s));return()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const shufR=(a,rnd)=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+/* 받침에 맞는 조사(은/는, 이/가, 과/와). 한글이 아닌 끝은 은(는)처럼 둘 다 */
+function jo(w,p){const ch=String(w).trim().slice(-1),k=ch.charCodeAt(0)-0xAC00;if(k>=0&&k<11172)return p[k%28?0:1];const dg='013678'.includes(ch)?0:'2459'.includes(ch)?1:-1;return dg>=0?p[dg]:p[0]+'('+p[1]+')';}
+function gqMain(c){return String(c.t||'').replace(/\s*[(（][^)）]*[)）]\s*/g,' ').replace(/\s+/g,' ').trim()||String(c.t||'');}
+function gqEng(c){const m=String(c.t||'').match(/[(（]([^)）]+)[)）]/);return m&&!/[가-힣]/.test(m[1])&&/[A-Za-z]{4,}/.test(m[1])?m[1].trim():'';}
+function gqSents(t){return String(t||'').replace(/([.。])\s+/g,'$1\n').split('\n').map(x=>x.trim()).filter(x=>x.length>=15);}
+/* 문장 속 용어 이름을 ○○로(이름이 그대로 남으면 null) */
+function gqMask(s,c){const main=gqMain(c);let out=s;[main].concat(glNames(c.t).filter(n=>/[가-힣]/.test(n))).sort((a,b)=>b.length-a.length).forEach(n=>{if(n)out=out.split(n).join('○○');});return out.includes(main)?null:out;}
+/* 수치 보기: 같은 자릿수로 2배·절반·1.5배·한 칸 위아래 */
+function gqNumAlt(tok,rnd){const nums=tok.match(/\d+(?:[.,]\d+)?/g);if(!nums||/\d,\d/.test(tok)||nums.some(m=>!(parseFloat(m)>0)))return[];
+  if(nums.length===1&&/^(19|20)\d\d$/.test(nums[0]))return shufR([-3,-2,-1,1,2,3],rnd).slice(0,3).map(f=>tok.replace(nums[0],String(Number(nums[0])+f)));
+  const dec=Math.max(...nums.map(m=>(m.split('.')[1]||'').length)),fmt=x=>dec?x.toFixed(dec):String(x),out=[];
+  shufR(nums.length===1?[2,0.5,1.5,'+','-',3]:[2,0.5,1.5,3],rnd).forEach(f=>{if(out.length>=3)return;let bad=false;
+    const alt=tok.replace(/\d+(?:\.\d+)?/g,m=>{const x=parseFloat(m),stp=dec?5*Math.pow(10,-dec):x>=20?5:1,y=f==='+'?x+stp:f==='-'?x-stp:x*f,t=fmt(y);if(!(y>0)||(dec?Math.abs(parseFloat(t)-y)>1e-9:!Number.isInteger(y)))bad=true;return t;});
+    if(!bad&&alt!==tok&&!out.includes(alt))out.push(alt);});
+  return out.length===3?out:[];}
+/* 세트 카드 [{c, sc}] → 문제 목록 */
+function gqBuild(d){const s=SETS.sets[d];if(!s)return null;const cs=[];(s.cards||[]).forEach((sc,i)=>{const id=setCardId(d,i),c=id&&card(id);if(c)cs.push({c,sc});});if(!cs.length)return null;
+  const rnd=seedRnd('gq:'+d+':'+cs.map(x=>x.c.id).join(',')),mains=cs.map(x=>gqMain(x.c));
+  const label=c=>{const m=gqMain(c);return mains.filter(x=>x===m).length>1?c.t:m;};
+  const pool=[];cs.forEach(x=>{if(!pool.includes(x.c))pool.push(x.c);});
+  if(pool.length<4){const u=new Set(pool.map(c=>Number(c.u)));deck().filter(c=>u.has(Number(c.u))&&!pool.includes(c)).sort((a,b)=>a.id<b.id?-1:1).slice(0,4-pool.length).forEach(c=>pool.push(c));}
+  const text=c=>[c.d].concat(c.k||[]).join(' ');
+  const lex=[];cs.forEach(x=>{[x.c.t].concat(x.c.k||[]).forEach(t=>fillFrags(t).forEach(f=>lex.push(f)));(x.c.k||[]).forEach(k=>String(k).split(/[·,=()<>↑↓/+×~:]/).forEach(y=>{y=y.trim();if(y.length>=3&&y.length<=14)lex.push(y);}));});
+  const lexU=uniq(lex);
+  const opt4=(right,wrongs)=>{const o=shufR([right].concat(wrongs.slice(0,3)),rnd);return{o,a:o.indexOf(right)};};
+  const termQ=(c,k,q,t,ex)=>{const ws=shufR(pool.filter(o=>o!==c&&label(o)!==label(c)),rnd).map(label);if(ws.length<3)return null;return Object.assign({k,id:c.id,q,t,ex},opt4(label(c),ws));};
+  const per=cs.map(({c,sc},ci)=>{const main=gqMain(c),others=cs.filter(x=>x.c!==c).map(x=>x.c),kws=(c.k||[]).filter(k=>String(k).length>=3),L={};const add=(k,q)=>{if(q)(L[k]=L[k]||[]).push(q);};
+    const kw3=kws.slice(0,3).join(', ');
+    gqSents(c.d).forEach(st=>{const m=!/^(이때|이 때|이는|이를|이러한|이런|그|또한|따라서|즉|다만|한편|반면)/.test(st)&&gqMask(st,c);if(m&&(m.includes('○○')||!others.some(o=>gqMain(o).length>=2&&m.includes(gqMain(o)))))add('def',termQ(c,'def','다음 설명에 해당하는 용어는?',m,`정답은 ${main}. 키워드: ${kw3}`));});
+    kws.forEach(k=>{if(String(k).includes(main)||others.some(o=>text(o).includes(k)||String(k).includes(gqMain(o))))return;add('kw',termQ(c,'kw','다음 키워드와 짝이 되는 용어는?',k,`"${k}"${jo(k,'은는')} ${main}의 키워드예요.`));});
+    /* OX: 맞는 문장 그대로, 틀린 문장은 수치를 바꾸거나 다른 용어 이름으로 바꾼 것 */
+    const sents=gqSents(c.d);shufR(sents,rnd).slice(0,2).forEach(st=>add('oxo',{k:'ox',id:c.id,q:`${main}에 대한 설명이 맞으면 O, 틀리면 X`,t:st,o:GQ_OX,a:0,ex:'맞는 설명이에요.'}));
+    sents.forEach(st=>{const tk=clozeTokens(st);if(!tk.length)return;const t0=tk[Math.floor(rnd()*tk.length)],alt=gqNumAlt(t0.s,rnd)[0];if(!alt)return;
+      add('oxx',{k:'ox',id:c.id,q:`${main}에 대한 설명이 맞으면 O, 틀리면 X`,t:st.slice(0,t0.i)+alt+st.slice(t0.i+t0.s.length),o:GQ_OX,a:1,ex:`"${alt}"${jo(alt,'이가')} 아니라 "${t0.s}"${jo(t0.s,'이에')=='이'?'이에요':'예요'}.`});});
+    const jm=sents[0]&&sents[0].startsWith(main)&&sents[0].slice(main.length).match(/^(은|는|이란|란|이|가)\s/);
+    if(jm){const bi=t=>{const b=new Set();for(let i=0;i<t.length-1;i++)b.add(t.substr(i,2));return b;},mb=bi(main);
+      const o=shufR(others.filter(o=>!gqMain(o).includes(main)&&!main.includes(gqMain(o))),rnd).map(o=>({o,n:[...bi(gqMain(o))].filter(x=>mb.has(x)).length})).sort((a,b)=>b.n-a.n)[0];
+      if(o){const on=gqMain(o.o),j=/은|는/.test(jm[1])?jo(on,'은는'):/이|가/.test(jm[1])&&jm[1].length===1?jo(on,'이가'):jm[1];
+        add('oxx',{k:'ox',id:c.id,q:`${on}에 대한 설명이 맞으면 O, 틀리면 X`,t:on+j+sents[0].slice(main.length+jm[1].length),o:GQ_OX,a:1,ex:`${main}의 설명이에요. ${on}${jo(on,'과와')} 헷갈리지 않게 비교해 두세요.`});}}
+    /* 빈칸: 키워드 구절 > 수치 > 세트 낱말 순으로 한 문장에 하나 */
+    sents.forEach(st=>{const cand=[];const has=w=>st.indexOf(w)>=0&&st.indexOf(w)===st.lastIndexOf(w)&&!main.includes(w);
+      kws.forEach(k=>String(k).split(/[·,=()<>↑↓/+×~:]/).map(y=>y.trim()).forEach(ph=>{if(ph.length>=3&&has(ph))cand.push({w:ph,p:3,num:/\d/.test(ph)});}));
+      clozeTokens(st).forEach(t=>{if(has(t.s))cand.push({w:t.s,p:2,num:1});});
+      lexU.forEach(w=>{const i=st.indexOf(w);if(w.length>=3&&!/\d/.test(w)&&has(w)&&!(i&&/[가-힣A-Za-z0-9]/.test(st.charAt(i-1))))cand.push({w,p:1});});
+      const best=shufR(cand,rnd).sort((a,b)=>b.p-a.p);for(const x of best){
+        const ws=x.num?gqNumAlt(x.w,rnd):shufR(lexU.filter(w=>w!==x.w&&!/\d/.test(w)&&!st.includes(w)&&!w.includes(x.w)&&!x.w.includes(w)&&/[가-힣]/.test(w)===/[가-힣]/.test(x.w)&&Math.abs(w.length-x.w.length)<=3),rnd).slice(0,3);
+        if(ws.length<3)continue;const i=st.indexOf(x.w);add('blank',Object.assign({k:'blank',id:c.id,q:`${main}: 빈칸에 알맞은 말은?`,t:st.slice(0,i)+'{_}'+st.slice(i+x.w.length),ex:`정답은 "${x.w}".`},opt4(x.w,ws)));break;}});
+    /* 키워드 아닌 것 / 키워드 고르기 */
+    const okw=shufR([].concat(...others.map(o=>(o.k||[]).filter(k=>String(k).length>=3&&!text(c).includes(k)).map(k=>({k,o})))),rnd);
+    if(kws.length>=3)okw.slice(0,2).forEach(x=>{const own=shufR(kws,rnd).slice(0,3);add('notkw',Object.assign({k:'notkw',id:c.id,q:`${main}의 키워드가 아닌 것은?`,t:'',ex:`"${x.k}"${jo(x.k,'은는')} ${gqMain(x.o)}의 키워드예요.`},opt4(x.k,own)));});
+    if(kws.length&&okw.length>=3)add('kwpick',Object.assign({k:'kwpick',id:c.id,q:`${main}의 키워드는?`,t:'',ex:`${main}의 키워드: ${kw3}`},opt4(shufR(kws,rnd)[0],okw.slice(2,5).map(x=>x.k))));
+    const fd=sc.field||c.field,pl=sc.plus||c.plus,en=gqEng(c);
+    if(fd){const m=gqMask(fd,c);if(m)add('field',termQ(c,'field','다음 현장 내용과 관계 깊은 용어는?',m,`정답은 ${main}.`));}
+    if(pl){const m=gqMask(pl,c);if(m)add('plus',termQ(c,'plus','다음 보충 설명이 가리키는 용어는?',m,`정답은 ${main}.`));}
+    if(en)add('eng',termQ(c,'eng',`원어 "${en}"에 해당하는 용어는?`,'',`${en} = ${main}`));
+    /* 쉬운 것부터 차례로 뽑아 용어당 GQ_PER개 */
+    const order=['def','kw','oxo','blank','def','kw','notkw','field','blank','oxx','def','kw','kwpick','eng','blank','oxx','def','kw','plus','notkw','oxo','def','kw','blank','def','kw'];
+    const take={},out=[];order.forEach(k=>{if(out.length>=GQ_PER)return;const a=L[k]||[],j=take[k]||0;if(a[j]){out.push(a[j]);take[k]=j+1;}});
+    Object.keys(L).forEach(k=>{(L[k]||[]).slice(take[k]||0).forEach(q=>{if(out.length<GQ_PER)out.push(q);});});
+    return out;});
+  /* 차례(순위)별로 용어를 고루 섞어 15문씩 회차, 회차 안에서는 섞는다 */
+  const flat=[];for(let r=0;r<GQ_PER;r++)shufR(per.map((a,i)=>i),rnd).forEach(i=>{if(per[i][r])flat.push(per[i][r]);});
+  const items=[];for(let i=0;i<flat.length;i+=GQ_ROUND)shufR(flat.slice(i,i+GQ_ROUND),rnd).forEach(q=>items.push(q));
+  return{items,sig:strHash(items.map(q=>q.q+q.t+q.o.join('/')).join('|')).toString(36)};}
+var _gq={};
+function gqList(d){if(!_gq[d])_gq[d]=gqBuild(d);return _gq[d];}
+function gqRec(d){const L=gqList(d);if(!L)return null;const p=spGet(d);const g=p.gq&&p.gq.s===L.sig?p.gq.r:'';return(g+'-'.repeat(L.items.length)).slice(0,L.items.length);}
+function gqSet(d,n,ok){const L=gqList(d);if(!L)return;const p=sp(d);const r=gqRec(d).split('');r[n]=ok?'1':'0';p.gq={s:L.sig,r:r.join('')};}
+function gqStat(d){const r=gqRec(d);if(r==null)return null;const n=r.length,a=n-(r.match(/-/g)||[]).length,ok=(r.match(/1/g)||[]).length;return{n,a,ok,no:a-ok,rounds:Math.ceil(n/GQ_ROUND)};}
+/* 회차 r(0부터) 또는 'next'(안 푼 문제가 있는 첫 회차, 다 풀었으면 1회), 'wrong'(틀린 문제만). 반쯤 푼 회차는 안 푼 문제부터 */
+function startGq(d,mode){const L=gqList(d);if(!L||!L.items.length)return toast('이 세트로는 용어 퀴즈를 만들 수 없어요');const r=gqRec(d),nR=Math.ceil(L.items.length/GQ_ROUND);let ns=[],title,at=0;
+  if(mode==='wrong'){ns=[...r].map((x,i)=>x==='0'?i:-1).filter(i=>i>=0);title='틀린 문제';if(!ns.length)return toast('틀린 문제가 없어요');}
+  else{let k=Number(mode);if(mode==='next'||isNaN(k)){k=0;for(let j=0;j<nR;j++)if(r.slice(j*GQ_ROUND,(j+1)*GQ_ROUND).includes('-')){k=j;break;}}
+    for(let n=k*GQ_ROUND;n<Math.min(L.items.length,(k+1)*GQ_ROUND);n++)ns.push(n);title=(k+1)+'회';const f=ns.findIndex(n=>r[n]==='-');at=f>0?f:0;}
+  startSession({title:`${korDate(d)} 용어 퀴즈 ${title}`,items:ns.map(n=>({type:'gq',d,n})),revD:d,i:at});}
+function gqSection(d){const L=gqList(d);if(!L||!L.items.length)return'';const r=gqRec(d),st=gqStat(d),nR=st.rounds,nc=uniq(L.items.map(q=>q.id)).length;
+  let next=-1;for(let j=0;j<nR;j++)if(r.slice(j*GQ_ROUND,(j+1)*GQ_ROUND).includes('-')){next=j;break;}
+  const chips=Array.from({length:nR},(_,k)=>{const x=gqRoundStat(r,k),cls=x.a===x.n?(x.ok>=Math.ceil(x.n*0.8)?'ok':'mid'):x.a?'part':'';
+    return`<button class="gqc ${cls}" data-act="gq-go" data-d="${d}" data-r="${k}"><b>${k+1}회</b><small>${x.a?`${x.ok}/${x.n}`:`${x.n}문`}</small></button>`;}).join('');
+  return sec('용어 퀴즈',`${st.a}/${st.n}문`,`<p class="note" style="margin-top:0">이 세트 용어 ${nc}개로 앱이 만든 문제 ${st.n}개예요. ${GQ_ROUND}문씩 ${nR}회, 뒤로 갈수록 어려워요(정의·키워드 보고 용어 → OX·빈칸 → 키워드 아닌 것). 틀린 문제는 오답 노트로 가요.</p>
+    <div class="gqg">${chips}</div><div class="btns"><button class="btn" data-act="gq-go" data-d="${d}" data-r="next">${next<0?'1회부터 다시 풀기':st.a?`이어 풀기: ${next+1}회`:'1회부터 풀기'}</button>${st.no?`<button class="btn sec" data-act="gq-go" data-d="${d}" data-r="wrong">틀린 문제만 (${st.no})</button>`:''}</div>`);}
+function gqRoundStat(r,k){const s=r.slice(k*GQ_ROUND,(k+1)*GQ_ROUND);return{n:s.length,a:s.length-(s.match(/-/g)||[]).length,ok:(s.match(/1/g)||[]).length};}
+
 /* ════════ 12. 화면: 세트 ════════ */
 const SV={};
 function vSet(){const d=R.a;const s=SETS.sets[d];
@@ -471,8 +564,8 @@ function vSet(){const d=R.a;const s=SETS.sets[d];
         ${c&&c.x&&c.x.length?`<p class="xref">기출 <b>${c.x.length}회</b> 출제: ${c.x.map(kLabelShort).join(', ')}</p>`:''}${(sc.basis||(c&&c.basis))?`<p class="xref">근거: ${esc(sc.basis||c.basis)}</p>`:''}
         ${c?`<div class="btns"><button class="btn sm sec" data-act="star" data-id="${c.id}">${pget(c.id).star?'★ 별표 해제':'☆ 별표'}</button><button class="btn sm sec" data-act="go" data-h="dandap/${esc(encodeURIComponent(c.id))}">단답 답안지</button><span class="note" style="margin:auto 0">${unitName(c.u)}</span></div>`:''}</div>`:''}</div>`;}).join('')
       +(fr=>(mr=>`<div class="btns"><button class="btn sec" data-act="set-flash" data-d="${d}">${fr?`카드 넘겨 보기 이어서 (${fr})`:'카드로 넘겨 보며 외우기'}</button><button class="btn sec" data-act="start-fill" data-d="${d}">빈칸 쓰기</button></div><div class="btns" style="margin-top:8px"><button class="btn sec" data-act="memo-set" data-d="${d}">${mr?`가리며 외우기 이어서 (${mr})`:'가리며 외우기(보였다 가렸다 반복)'}</button></div>${fr||mr?`<div class="btns" style="margin-top:4px"><button class="btn ghost" data-act="resume-clear" data-k="flash:${d} memo:set:${d}">이어 하지 않고 처음부터</button></div>`:''}`)(resumeAt('memo:set:'+d)))(resumeAt('flash:'+d))+`<p class="note">펼쳐 읽은 용어는 내일 카드 복습으로 다시 나와요. 모르는 낱말은 꾹 누르면 풀이가 나와요.</p>`;}
-  else if(tab==='quiz'){body=(s.quiz||[]).map((q,i)=>quizBlock(d,i,q,p.quiz[i])).join('')||'<div class="empty">이 세트엔 퀴즈가 없어요</div>';
-    if(st.qa)body+=`<p class="note">${st.qok}/${st.nq} 정답. 틀린 문제는 오답 노트로 갔어요.</p>`;}
+  else if(tab==='quiz'){const qb=(s.quiz||[]).map((q,i)=>quizBlock(d,i,q,p.quiz[i])).join('');
+    body=gqSection(d)+(qb?sec('세트 퀴즈',`${st.qa}/${st.nq}문`,qb+(st.qa?`<p class="note">${st.qok}/${st.nq} 정답. 틀린 문제는 오답 노트로 갔어요.</p>`:'')):'')||'<div class="empty">이 세트엔 퀴즈가 없어요</div>';}
   else if(tab==='essay'){const e=s.essay;if(!e)body='<div class="empty">이 세트엔 논술 문제가 없어요</div>';else{const show=SV[d+':eo'];
     body=`<div class="qcard"><p class="qnum">${unitName(e.u)}${e.x?', 기출 '+esc([].concat(e.x).map(kLabelShort).join(', ')):''}</p><p class="qtext">${esc(e.t)}</p>
       ${show?`<ol style="margin:0 0 0 20px;padding:0;line-height:1.75">${(e.o||[]).map(o=>`<li>${esc(String(o).replace(/^\d+\.\s*/,''))}</li>`).join('')}</ol>${e.fig?`<p class="plus">그림·표: ${esc(e.fig)}</p>`:''}${e.p?`<p class="field">채점 포인트: ${esc(e.p)}</p>`:''}`:`<button class="btn sec" data-act="set-eo" data-d="${d}">목차 힌트 보기</button><p class="note">먼저 소제목 5~7개를 스스로 정한 뒤 열어 보세요.</p>`}</div>
@@ -491,21 +584,38 @@ function quizBlock(d,i,q,ans){const opts=q.o||[];const answered=ans!=null;
   ${answered?`<div class="ex ${ans.ok?'ok':'no'}"><b>${ans.ok?'정답':'오답'}</b> ${esc(q.ex||'')}</div>`:''}</div>`;}
 
 /* ════════ 13. 화면: 복습 ════════ */
+function setIds(d){const s=SETS.sets[d];return uniq(((s&&s.cards)||[]).map((_,i)=>setCardId(d,i)).filter(Boolean));}
+function wrongCardIds(){return uniq(wrongList().map(w=>w.type==='gq'?sessItemCard(w):w.id).filter(id=>id&&card(id)));}
+/* 세트 하나를 다시 볼 때 고르는 방법(복습 탭의 다시 볼 세트·지난 세트). 복습 날이면 어느 것이든 끝까지 하면 그 날 복습으로 친다 */
+function revSheet(d){const s=SETS.sets[d];if(!s)return'';const step=reviewDue(d),n=setIds(d).length,nq=(s.quiz||[]).length,gs=gqStat(d),mr=resumeAt('memo:set:'+d),fr=resumeAt('flash:'+d);
+  return`<p class="qnum">${esc(korDate(d,true))} 세트${step?`, ${step}일 차 다시 보기`:''}</p><h3 style="margin:4px 0 12px">${esc(s.title||'')}</h3>
+  <div class="group">${row({ic:'redo',tone:'red',t:'카드·퀴즈로 다시 보기',d:`용어 ${n}장을 앞뒤로 넘기며 앎·모름 고르기${nq?`, 세트 퀴즈 ${nq}문`:''}`,act:'start-setrev',data:{d}})}
+    ${row({ic:'layers',t:'가리며 외우기',d:mr?`이어서 (${mr})`:'보였다 가렸다 반복. 고른 줄·무작위 줄·테이프로 가리기',act:'memo-set',data:{d}})}
+    ${row({ic:'cards',t:'카드 넘겨 보기',d:fr?`이어서 (${fr})`:'뒷면을 보고 앎·애매·모름 고르기',act:'set-flash',data:{d}})}
+    ${row({ic:'num',t:'빈칸 쓰기',d:'정의 속 낱말·수치를 직접 써 넣기',act:'start-fill',data:{d}})}
+    ${gs?row({ic:'check',t:'용어 퀴즈',d:`${gs.a}/${gs.n}문 풂${gs.no?`, 틀린 문제 ${gs.no}`:''}`,act:'gq-go',data:{d,r:'next'}}):''}
+    ${row({ic:'paper',tone:'gray',t:'세트 열기',d:'용어·퀴즈·논술·숙제 전체',act:'go',data:{h:'set/'+d}})}</div>
+  <p class="note">${step?'어느 방법이든 끝까지 하면 오늘 복습으로 쳐요.':'1·3·7·14·30일 복습 날에 끝까지 하면 그 날 복습으로 쳐요.'}</p>`;}
 function vReview(){const rv=dueSetReviews(),wl=wrongList(),stars=deck().filter(c=>pget(c.id).star);
-  const byT={card:0,quiz:0,cloze:0,fill:0};wl.forEach(w=>byT[w.type]++);
+  const byT={card:0,quiz:0,cloze:0,fill:0,gq:0};wl.forEach(w=>byT[w.type]++);const rvIds=uniq([].concat(...rv.map(x=>setIds(x.d)))),wIds=wrongCardIds();
+  const past=Object.keys(SETS.sets).filter(d=>d<=todayStr()&&!rv.some(x=>x.d===d)).sort().reverse().slice(0,5);
   return`<div class="ltitle"><div><h1>복습</h1><p class="lsub">잊기 직전에 다시 꺼내 보는 곳</p></div></div>
-  ${sec('다시 볼 세트',rv.length?rv.length+'개':'',rv.length?`<div class="group">${rv.map(x=>{const s=SETS.sets[x.d];return row({ic:'redo',t:esc(korDate(x.d))+' 세트, '+x.step+'일 차',d:esc(s.title||''),act:'start-setrev',data:{d:x.d}});}).join('')}</div>
-    ${rv.length>1?`<div class="btns"><button class="btn" data-act="start-setrev-all">${rv.length}개 이어서 복습</button></div>`:''}`
+  ${sec('다시 볼 세트',rv.length?rv.length+'개':'',rv.length?`<div class="group">${rv.map(x=>{const s=SETS.sets[x.d];return row({ic:'redo',t:esc(korDate(x.d))+' 세트, '+x.step+'일 차',d:esc(s.title||''),act:'rev-open',data:{d:x.d}});}).join('')}</div>
+    ${rv.length>1?`<div class="btns"><button class="btn" data-act="start-setrev-all">${rv.length}개 이어서 복습</button></div>`:''}
+    ${rvIds.length?`<div class="btns"${rv.length>1?' style="margin-top:8px"':''}><button class="btn sec" data-act="memo-rev">${(mr=>mr?`가리며 외우기 이어서 (${mr})`:`${rv.length>1?'모두 ':''}가리며 외우기 (${rvIds.length}장)`)(resumeAt('memo:rev'))}</button></div>`:''}
+    <p class="note">세트를 누르면 카드·퀴즈, 가리며 외우기, 넘겨 보기, 빈칸 쓰기, 용어 퀴즈 가운데 골라요.</p>`
     :`<div class="empty"><b>오늘 다시 볼 세트가 없어요</b>세트를 연 날로부터 1·3·7·14·30일 뒤에 여기로 돌아와요. 카드 복습과 퀴즈를 짧게 다시 합니다.</div>`)}
-  ${sec('오답 노트',wl.length?`${wl.length}개`:'',wl.length?`<div class="group">${row({ic:'x',tone:'red',t:'오답만 다시 풀기',d:`카드 ${byT.card}, 퀴즈 ${byT.quiz}, 수치 ${byT.cloze}${byT.fill?`, 빈칸 ${byT.fill}`:''}. 두 번 연속 맞히면 빠져요`,act:'start-wrong'})}${row({ic:'list',tone:'gray',t:'목록 보기',act:'go',data:{h:'wrong'}})}</div>`
+  ${past.length?sec('지난 세트 다시 외우기','',`<div class="group">${past.map(d=>{const s=SETS.sets[d],st=setStatus(d);return row({ic:'paper',tone:'gray',t:esc(korDate(d,true))+' 세트',d:esc(s.title||''),v:st&&st.done?'완료':'',act:'rev-open',data:{d}});}).join('')}</div>`):''}
+  ${sec('오답 노트',wl.length?`${wl.length}개`:'',wl.length?`<div class="group">${row({ic:'x',tone:'red',t:'오답만 다시 풀기',d:`카드 ${byT.card}, 퀴즈 ${byT.quiz}, 수치 ${byT.cloze}${byT.fill?`, 빈칸 ${byT.fill}`:''}${byT.gq?`, 용어 퀴즈 ${byT.gq}`:''}. 두 번 연속 맞히면 빠져요`,act:'start-wrong'})}${wIds.length?row({ic:'layers',tone:'red',t:'오답 카드 가리며 외우기',d:(mr=>mr?`이어서 (${mr})`:`틀린 용어 ${wIds.length}장을 보였다 가렸다`)(resumeAt('memo:wrong')),act:'memo-wrong'}):''}${row({ic:'list',tone:'gray',t:'목록 보기',act:'go',data:{h:'wrong'}})}</div>`
     :`<div class="empty"><b>오답이 없어요</b>퀴즈·테스트에서 틀리거나 카드에서 "모름"을 고르면 여기 모여요.</div>`)}
   ${sec('기준 수치 빈칸','',`<div class="group">${row({ic:'num',tone:'amber',t:'수치만 가려 놓고 맞히기',d:'정의 속 기준값(%, MPa, 일, m…)을 빈칸으로. 10문',act:'start-cloze'})}</div><p class="note">범위는 테스트 탭에서 고른 단원을 따라가요. 지금 범위: ${esc(rangeLabel(S.range||'week'))}</p>`)}
   ${sec('모아 보기','',`<div class="group">
     ${row({ic:'star',tone:'amber',t:'별표 카드',v:stars.length,zero:!stars.length,act:stars.length?'start-stars':'',d:stars.length?'어려운 카드만 모아서':'카드에서 ☆를 누르면 모여요'})}
+    ${stars.length?row({ic:'layers',tone:'amber',t:'별표 카드 가리며 외우기',d:(mr=>mr?`이어서 (${mr})`:`${stars.length}장을 보였다 가렸다`)(resumeAt('memo:stars')),act:'memo-stars'}):''}
     ${row({ic:'box',tone:'gray',t:'세트 보관함',d:`받은 세트 ${Object.keys(SETS.sets).length}개, 모의고사 ${Object.keys(SETS.mocks).length}개`,act:'go',data:{h:'archive'}})}
   </div>`)}`;}
 
-function vWrong(){const wl=wrongList();const nm={card:'카드',quiz:'퀴즈',cloze:'수치',fill:'빈칸 쓰기'};
+function vWrong(){const wl=wrongList();const nm={card:'카드',quiz:'퀴즈',cloze:'수치',fill:'빈칸 쓰기',gq:'용어 퀴즈'};
   return topbar('오답 노트')+`<h1 class="ptitle">오답 노트</h1><p class="lsub">${wl.length}개. 다시 풀어서 두 번 연속 맞히면 빠져요.</p>
   ${wl.length?`<div class="btns"><button class="btn" data-act="start-wrong">오답만 다시 풀기</button></div><div class="group" style="margin-top:14px">${wl.map(w=>`<div class="row noic"><span class="tx"><span class="tt">${esc(w.label)}</span><span class="ds">${nm[w.type]}, ${w.w.n}번 틀림, 마지막 ${esc(md(w.w.last||w.w.since))}</span></span><button class="btn sm ghost" data-act="wrong-del" data-k="${esc(w.key)}">빼기</button></div>`).join('')}</div>`:`<div class="empty" style="margin-top:14px"><b>비어 있어요</b>틀린 문제가 생기면 여기에 모여요.</div>`}`;}
 
@@ -545,7 +655,8 @@ function vSess(){if(!SES)return topbar('학습')+`<div class="empty" style="marg
       :`<div class="term">${esc(c.t)}</div><p class="hint">정의, 원리, 특징, 유의사항을 30초 안에 말해 보고 탭하세요</p>`}</div>
     ${SES.back?`<div class="grade3">${[[0,'모름'],[1,'애매'],[2,'앎']].map(([g,l])=>`<button class="g${g}${gotG===g?' on':''}" data-act="sess-grade" data-g="${g}">${l}<small>${gotG===g?'고른 것':nextLabel(c.id,g)}</small></button>`).join('')}</div>${gotG!=null?'<p class="note" style="text-align:center">다시 고르면 바꿔요</p>':''}`
       :`<div class="btns"><button class="btn" data-act="sess-flip">뒷면 보기</button></div>`}
-    <div class="btns sessnav"><button class="btn sec" data-act="sess-prev" ${SES.i?'':'disabled'}>‹ 이전</button><button class="btn sec" data-act="sess-skip">${SES.i+1<n?'다음 ›':'끝내기'}</button></div>`;}
+    <div class="btns sessnav"><button class="btn sec" data-act="sess-prev" ${SES.i?'':'disabled'}>‹ 이전</button><button class="btn sec" data-act="sess-skip">${SES.i+1<n?'다음 ›':'끝내기'}</button></div>
+    <div class="btns"><button class="btn ghost" data-act="memo-sess">이 카드부터 가리며 외우기${sessCardIds().length>1?` (${sessCardIds().length}장)`:''}</button></div>`;}
   if(it.type==='mcq'){const c=card(it.id);const ans=SES.answered;
     return head+`<div class="qcard"><p class="qnum">이 설명에 맞는 용어는?${c.x&&c.x.length?' (기출 '+c.x.length+'회)':''}</p><p class="qtext" style="font-weight:500">${esc(c.d)}</p>
       ${it.opts.map((oid,k)=>{const o=card(oid);let cls='';if(ans!=null){if(oid===c.id)cls='right';else if(ans===k)cls='wrong';}return`<button class="opt ${cls}" data-act="sess-pick" data-k="${k}" ${ans!=null?'disabled':''}><span class="ab">${'①②③④'.charAt(k)}</span><span>${esc(o?o.t:'')}</span></button>`;}).join('')}
@@ -555,6 +666,11 @@ function vSess(){if(!SES)return topbar('학습')+`<div class="empty" style="marg
     return head+`<div class="qcard"><p class="qnum">${esc(korDate(it.d))} 세트 퀴즈${q.u?', '+esc(unitShort(q.u)):''}</p><p class="qtext">${esc(q.q)}</p>
       ${opts.map((o,k)=>{let cls='';if(ans!=null){if(k===q.a)cls='right';else if(ans===k)cls='wrong';}return`<button class="opt ${cls}" data-act="sess-pick" data-k="${k}" ${ans!=null?'disabled':''}><span class="ab">${opts.length===2?(k?'X':'O'):'①②③④⑤'.charAt(k)}</span><span>${esc(o)}</span></button>`;}).join('')}
       ${ans!=null?`<div class="ex ${ans===q.a?'ok':'no'}"><b>${ans===q.a?'정답':'오답'}</b> ${esc(q.ex||'')}</div>`:''}</div>
+    ${ans!=null?`<div class="btns"><button class="btn" data-act="sess-next">${SES.i+1<n?'다음':'결과 보기'}</button></div>`:''}`;}
+  if(it.type==='gq'){const L=gqList(it.d),q=L&&L.items[it.n];if(!q)return head+skipBtn();const ans=SES.answered,c=card(q.id);
+    return head+`<div class="qcard"><p class="qnum">${it.n+1}번, ${esc(GQ_KIND[q.k]||'')}</p><p class="qtext">${esc(q.q)}</p>${q.t?`<p class="gqt">${esc(q.t).replace('{_}','<span class="cloze">？</span>')}</p>`:''}
+      ${q.o.map((o,k)=>{let cls='';if(ans!=null){if(k===q.a)cls='right';else if(ans===k)cls='wrong';}return`<button class="opt ${cls}" data-act="sess-pick" data-k="${k}" ${ans!=null?'disabled':''}><span class="ab">${q.o.length===2?(k?'X':'O'):'①②③④'.charAt(k)}</span><span>${esc(o)}</span></button>`;}).join('')}
+      ${ans!=null?`<div class="ex ${ans===q.a?'ok':'no'}"><b>${ans===q.a?'정답':'오답'}</b> ${esc(q.ex||'')}</div>${c?`<div class="btns"><button class="btn sm ghost" data-act="card-modal" data-id="${esc(c.id)}">카드 보기: ${esc(gqMain(c))}</button></div>`:''}`:''}</div>
     ${ans!=null?`<div class="btns"><button class="btn" data-act="sess-next">${SES.i+1<n?'다음':'결과 보기'}</button></div>`:''}`;}
   if(it.type==='cloze'){const c=card(it.id);const tok=clozeTokens(c?c.d:'')[it.k];if(!c||!tok)return head+skipBtn();
     return head+`<div class="qcard"><p class="qnum">빈칸에 들어갈 수치는? ${esc(unitShort(c.u))}</p><p class="qtext" style="font-size:1.15rem">${esc(c.t)}</p><p class="defn ruled">${SES.back?clozeRevealHTML(c.d,tok):clozeHTML(c.d,tok)}</p></div>
@@ -571,14 +687,22 @@ function vSess(){if(!SES)return topbar('학습')+`<div class="empty" style="marg
     ${SES.back?`<div class="grade3" style="grid-template-columns:1fr 1fr"><button class="g0" data-act="sess-self" data-g="0">부족했어요<small>다시 나와요</small></button><button class="g2" data-act="sess-self" data-g="2">잘 떠올렸어요<small>다음</small></button></div>`
       :`<div class="btns"><button class="btn" data-act="sess-flip">모범 목차 보기</button></div>`}`;}
   return head+skipBtn();}
+/* 이 세션의 카드(세트 퀴즈·논술 목차는 카드가 없어 뺀다)와 틀리거나 모름·애매로 고른 카드 */
+function sessItemCard(it){if(!it)return null;if(it.type==='gq'){const L=gqList(it.d),q=L&&L.items[it.n];return q?q.id:null;}return/^(card|mcq|fill|cloze)$/.test(it.type)&&card(it.id)?it.id:null;}
+function sessCardIds(){return SES?uniq(SES.items.map(sessItemCard).filter(Boolean)):[];}
+function sessMiss(id){if(SES&&id)(SES.miss||(SES.miss=[])).includes(id)||SES.miss.push(id);}
 function skipBtn(){return`<div class="empty"><b>이 항목을 찾을 수 없어요</b><div class="btns"><button class="btn" data-act="sess-skip">건너뛰기</button></div></div>`;}
 function sessDone(){const s=SES.stats,n=s.ok+s.mid+s.no;
   if(SES.onDone&&!SES.doneRan){SES.doneRan=true;try{SES.onDone(SES);}catch(e){}}
   if(SES.rkey&&!SES.calDone){SES.calDone=1;resumeSet(SES.rkey,0,0);if(SES.setD)calMark('flash:'+SES.setD,'term',`${korDate(SES.setD)} 세트 카드 넘겨 보기 끝(${SES.items.length}장)`);}
+  const rd=SES.revD||SES.setD;if(rd&&!SES.revRan){SES.revRan=1;const st=reviewDue(rd);if(st)markReviewed(rd,st);}
+  const ids=sessCardIds(),miss=(SES.miss||[]).filter(id=>card(id));
   return topbar(SES.title||'학습')+`<div class="sheet" style="margin-top:18px"><p class="sheet-k">끝</p><h3>${esc(SES.title||'학습')} 완료</h3>
   <ul class="steps"><li><span class="dot on"></span><span class="k">맞힘·앎</span><span class="v">${s.ok}</span></li>${s.mid?`<li><span class="dot half"></span><span class="k">애매</span><span class="v">${s.mid}</span></li>`:''}<li><span class="dot"></span><span class="k">틀림·모름</span><span class="v">${s.no}</span></li></ul>
   <p class="ds" style="margin:6px 0 12px">${n&&s.no?'틀린 것은 오답 노트에 모였어요. 두 번 연속 맞히면 빠집니다.':'좋아요. 간격이 벌어진 만큼 다음 복습 날짜가 뒤로 갔어요.'}</p>
-  <button class="btn" data-act="sess-close">돌아가기</button></div>`;}
+  <button class="btn" data-act="sess-close">돌아가기</button>
+  ${miss.length?`<div class="btns"><button class="btn sec" data-act="memo-sess" data-only="miss">틀리거나 애매한 카드 가리며 외우기 (${miss.length}장)</button></div>`:''}
+  ${ids.length?`<div class="btns"><button class="btn sec" data-act="memo-sess">방금 본 카드 가리며 외우기 (${ids.length}장)</button></div>`:''}</div>`;}
 function sessAdvance(){SES.i++;SES.back=false;SES.answered=null;if(SES.rkey)resumeSet(SES.rkey,SES.i,SES.items.length);render();window.scrollTo(0,0);}
 /* 카드 넘겨 보기: 이전 카드로(이미 매긴 카드는 뒷면부터), 세트 카드는 뒷면을 본 것만 읽음 */
 function sessPrev(){if(!SES||SES.i<=0)return;SES.i--;SES.back=!!(SES.graded&&SES.graded[SES.i]!=null);SES.answered=null;if(SES.rkey)resumeSet(SES.rkey,SES.i,SES.items.length);render();window.scrollTo(0,0);}
@@ -603,9 +727,9 @@ function startFree(){startSession({title:'자유 복습',items:cardItems(shuffle
 function setReviewItems(d){const s=SETS.sets[d];const items=[];(s.cards||[]).forEach((_,i)=>{const id=setCardId(d,i);if(id)items.push({type:'card',id});});(s.quiz||[]).forEach((_,i)=>items.push({type:'quiz',d,i}));return items;}
 function startSetReview(d){const step=reviewDue(d)||1;startSession({title:korDate(d)+' 세트 다시 보기',items:setReviewItems(d),onDone:()=>{markReviewed(d,step);}});}
 function startSetReviewAll(){const rv=dueSetReviews();let items=[];rv.forEach(x=>{items=items.concat(setReviewItems(x.d));});startSession({title:'세트 다시 보기',items,onDone:()=>rv.forEach(x=>markReviewed(x.d,x.step))});}
-function startWrong(){const wl=wrongList();startSession({title:'오답 다시 풀기',items:shuffle(wl.map(w=>w.type==='card'?{type:'card',id:w.id,wrongKey:w.key}:w.type==='quiz'?{type:'quiz',d:w.d,i:w.i,wrongKey:w.key}:w.type==='fill'?Object.assign(fillItem(card(w.id),S.fillLv||'중')||{type:'card',id:w.id},{wrongKey:w.key}):{type:'cloze',id:w.id,k:w.k,wrongKey:w.key}))});}
+function startWrong(){const wl=wrongList();startSession({title:'오답 다시 풀기',items:shuffle(wl.map(w=>w.type==='card'?{type:'card',id:w.id,wrongKey:w.key}:w.type==='quiz'?{type:'quiz',d:w.d,i:w.i,wrongKey:w.key}:w.type==='fill'?Object.assign(fillItem(card(w.id),S.fillLv||'중')||{type:'card',id:w.id},{wrongKey:w.key}):w.type==='gq'?{type:'gq',d:w.d,n:w.n,wrongKey:w.key}:{type:'cloze',id:w.id,k:w.k,wrongKey:w.key}))});}
 function startFill(lv,d){let pool;if(d){const s=SETS.sets[d];pool=((s&&s.cards)||[]).map((_,i)=>card(setCardId(d,i))).filter(Boolean);}else{pool=deck().filter(rangeFilter(S.range));const seen=pool.filter(c=>pget(c.id).seen>0);if(seen.length>=10)pool=seen;}
-  const items=shuffle(pool).slice(0,10).map(c=>fillItem(c,lv)).filter(Boolean);startSession({title:'용어 빈칸 쓰기'+(d?', '+korDate(d)+' 세트':''),items,log:'fill'});}
+  const items=shuffle(pool).slice(0,10).map(c=>fillItem(c,lv)).filter(Boolean);startSession({title:'용어 빈칸 쓰기'+(d?', '+korDate(d)+' 세트':''),items,log:'fill',revD:d||null});}
 function startCloze(){const f=rangeFilter(S.range);let pool=deck().filter(f).filter(c=>clozeTokens(c.d).length);const seen=pool.filter(c=>pget(c.id).seen>0);if(seen.length>=10)pool=seen;
   const items=shuffle(pool).slice(0,10).map(c=>{const toks=clozeTokens(c.d);return{type:'cloze',id:c.id,k:Math.floor(Math.random()*toks.length)};});startSession({title:'기준 수치 빈칸',items,log:'cloze'});}
 function startStars(){startSession({title:'별표 카드',items:cardItems(shuffle(deck().filter(c=>pget(c.id).star)).map(c=>c.id))});}
@@ -706,7 +830,8 @@ window.addEventListener('scroll',()=>{tpScrollT=Date.now();},{passive:true});
 const tpLost=e=>{if(e.touches&&e.touches.length||!tpPts.size)return;setTimeout(()=>{if(!tpPts.size)return;tpPts.clear();tpMulti=false;tpEnd();},0);};
 document.addEventListener('touchend',tpLost);
 document.addEventListener('touchcancel',tpLost);
-/* 이어 하기 키: 세트는 memo:set:날짜, 암기 탭은 memo:study(그날 고른 카드 목록째로) */
+/* 이어 하기 키: 세트는 memo:set:날짜, 그 밖(암기 탭 memo:study, 복습 탭 memo:rev·memo:wrong·memo:stars)은 그날 카드 목록째로.
+   세션에서 넘어온 것(memo:sess)과 카드 한 장(memo:one)은 늘 새로 */
 function startMemo(o,fresh){
   if(!fresh&&MEMO&&MEMO.key===o.key&&!MEMO.fin){memoStop();return nav('memo');}
   memoStop();const r=fresh?null:resumeGet(o.key);if(r&&r.ids)o.items=r.ids.map(id=>({id}));
@@ -721,7 +846,7 @@ function memoAwake(on){PE_IO.keepAwake(on||(typeof TM!=='undefined'&&TM.running)
 function memoSeen(){const it=memoItem();if(!it)return;MEMO.rnd=null;MEMO.rndShown=false;
   if(MEMO.setD&&it.si!=null){const p=sp(MEMO.setD);if(!p.read[it.si]){p.read[it.si]=1;introduce(it.id);touchDay();calSetRead(MEMO.setD);}}
   const n=MEMO.items.length;MEMO.max=Math.max(MEMO.max||0,MEMO.i);
-  resumeSet(MEMO.key,MEMO.i,n,MEMO.key==='memo:study'?MEMO.items.map(x=>x.id):null);
+  resumeSet(MEMO.key,MEMO.i,n,/^memo:set:/.test(MEMO.key)?null:MEMO.items.map(x=>x.id));
   calMark(MEMO.key,'term',`가리며 외우기: ${MEMO.label} ${MEMO.max+1}/${n}장`);}
 function memoGo(i){if(!MEMO||MEMO.fin||i<0||i>=MEMO.items.length)return;MEMO.i=i;MEMO.cnt=0;MEMO.phase='show';MEMO.done=false;MEMO.left=null;MEMO.t0=Date.now();memoSeen();render();window.scrollTo(0,0);}
 function memoPlay(){if(!MEMO)return;if(MEMO.done){MEMO.done=false;MEMO.cnt=0;MEMO.phase='show';MEMO.left=null;}
@@ -730,7 +855,8 @@ function memoPause(){if(!MEMO||!MEMO.run)return;MEMO.left=Math.max(0,memoDur()-(
 function memoStop(){clearInterval(memoIv);memoIv=null;if(MEMO&&MEMO.run){MEMO.left=Math.max(0,memoDur()-(Date.now()-MEMO.t0));MEMO.run=false;memoAwake(false);}}
 /* 끝까지 가서 "완료": 달력에 남기고 이어 하기 자리를 지운다 */
 function memoFinish(){if(!MEMO||MEMO.fin)return;memoStop();MEMO.fin=Date.now();const n=MEMO.items.length;
-  resumeSet(MEMO.key,0,0);calUnmark(MEMO.key);calMark(MEMO.key+':fin','term',`가리며 외우기 완료: ${MEMO.label} ${n}장`);touchDay();save();render();window.scrollTo(0,0);}
+  resumeSet(MEMO.key,0,0);calUnmark(MEMO.key);calMark(MEMO.key+':fin','term',`가리며 외우기 완료: ${MEMO.label} ${n}장`);
+  [MEMO.setD].concat(MEMO.revSets||[]).forEach(d=>{const st=d&&reviewDue(d);if(st)markReviewed(d,st);});touchDay();save();render();window.scrollTo(0,0);}
 /* 한 바퀴 = 보기 → 가림. 정한 횟수를 다 돌면 다음 카드로(또는 멈춤), "무한"이면 계속 */
 function memoTick(){if(!MEMO||!MEMO.run)return;const now=Date.now();if(now-MEMO.t0<memoDur())return paintMemo();
   if(MEMO.phase==='show'){MEMO.phase='hide';MEMO.t0=now;if(memoCfg().mode==='rand'){const c=card(memoItem().id);if(c){memoRoll(c,MEMO.rndShown);MEMO.rndShown=true;}}return paintMemo();}
@@ -1145,7 +1271,7 @@ function vTimer(){return topbar('타이머')+`<h1 class="ptitle">교시 타이�
 function openModal(html){$('#modal-wrap').innerHTML=`<div class="modal" data-act="modal-close"><div class="msheet" data-stop="1"><div class="grab"></div>${html}</div></div>`;}
 function closeModal(){$('#modal-wrap').innerHTML='';}
 function cardModal(c){const p=pget(c.id);return`<div class="sheet" style="margin-top:4px"><p class="sheet-k">${esc(unitName(c.u))}${p.seen?`, 다음 복습 ${esc(p.due||'—')}`:', 아직 학습 전'}</p><h3>${esc(c.t)}</h3><p class="defn ruled" style="margin-top:10px">${glHTML(c.d,c.id)}</p><ul class="kws">${(c.k||[]).map(k=>`<li><span>${esc(k)}</span></li>`).join('')}</ul>${c.x&&c.x.length?`<p class="xref">기출: ${c.x.map(kLabelShort).join(', ')}</p>`:''}${c.basis?`<p class="xref">근거: ${esc(c.basis)}</p>`:''}</div>
-  <div class="btns"><button class="btn sec" data-act="star" data-id="${c.id}">${p.star?'★ 별표 해제':'☆ 별표'}</button>${p.seen?'':`<button class="btn" data-act="introduce" data-id="${c.id}">암기에 넣기</button>`}</div><div class="btns"><button class="btn sec" data-act="go" data-h="dandap/${esc(encodeURIComponent(c.id))}">단답 답안지로 보기</button></div><div class="btns"><button class="btn ghost" data-act="hide-card" data-id="${c.id}">이 카드 숨기기</button></div>`;}
+  <div class="btns"><button class="btn sec" data-act="star" data-id="${c.id}">${p.star?'★ 별표 해제':'☆ 별표'}</button>${p.seen?'':`<button class="btn" data-act="introduce" data-id="${c.id}">암기에 넣기</button>`}</div><div class="btns"><button class="btn sec" data-act="memo-one" data-id="${c.id}">가리며 외우기</button><button class="btn sec" data-act="go" data-h="dandap/${esc(encodeURIComponent(c.id))}">단답 답안지로 보기</button></div><div class="btns"><button class="btn ghost" data-act="hide-card" data-id="${c.id}">이 카드 숨기기</button></div>`;}
 function kqModal(id){const q=kq()[id];if(!q)return;let html=`<p class="qnum">제${q.r}회 ${q.p}교시 ${q.n}번, ${esc(unitName(q.u))}</p><p class="qtext">${esc(q.t)}</p>`;
   if(q.p===1){const cs=cardsForK(id);html+=cs.length?cs.map(cardModal).join(''):`<div class="empty"><b>아직 카드가 없어요</b>매일 세트가 기출 미수록 용어를 우선 다뤄요. 지금 필요하면 프롬프트 3으로 만들어 가져오기 하세요.</div>`;}
   else{const es=essaysForK(id);html+=es.length?es.map(e=>`<div class="qcard" style="margin-top:8px"><p class="qnum">모범 목차${e.src==='set'?', '+esc(korDate(e.date))+' 세트':''}</p><ol style="margin:0 0 0 20px;padding:0;line-height:1.75">${e.o.map(o=>`<li>${esc(String(o).replace(/^\d+\.\s*/,''))}</li>`).join('')}</ol>${e.p?`<p class="plus">${esc(e.p)}</p>`:''}</div>`).join(''):`<div class="empty"><b>아직 모범 목차가 없어요</b>세트·모의고사에서 이 문제를 다루면 여기에 채워져요.</div><div class="btns"><button class="btn sec" data-act="copy-outline-req" data-id="${id}">Claude에 목차 요청 복사</button></div>`;}
@@ -1228,10 +1354,19 @@ document.addEventListener('click',e=>{
   case'start-study':return startStudy();
   case'start-free':return startFree();
   case'memo-set':{const s=SETS.sets[D.d];const items=(s.cards||[]).map((_,i)=>({id:setCardId(D.d,i),si:i})).filter(x=>x.id);return startMemo({key:'memo:set:'+D.d,label:korDate(D.d)+' 세트',title:korDate(D.d)+' 가리며 외우기',items,setD:D.d});}
+  case'memo-rev':{const rv=dueSetReviews(),ids=uniq([].concat(...rv.map(x=>setIds(x.d))));return startMemo({key:'memo:rev',label:'세트 다시 보기',title:'세트 다시 보기: 가리며 외우기',items:ids.map(id=>({id})),revSets:rv.map(x=>x.d)});}
+  case'memo-wrong':return startMemo({key:'memo:wrong',label:'오답 카드',title:'오답 카드 가리며 외우기',items:wrongCardIds().map(id=>({id}))});
+  case'memo-stars':return startMemo({key:'memo:stars',label:'별표 카드',title:'별표 카드 가리며 외우기',items:deck().filter(c=>pget(c.id).star).map(c=>({id:c.id}))});
+  case'memo-sess':{if(!SES)return;const ids=D.only==='miss'?(SES.miss||[]).filter(id=>card(id)):sessCardIds(),cur=sessItemCard(SES.items[SES.i]);
+    return startMemo({key:'memo:sess',label:SES.title||'학습',title:(SES.title||'학습')+': 가리며 외우기',items:ids.map(id=>({id})),i:Math.max(0,ids.indexOf(cur))},true);}
+  case'memo-one':{const c=card(D.id);if(!c)return;return startMemo({key:'memo:one',label:gqMain(c),title:gqMain(c)+': 가리며 외우기',items:[{id:c.id}]},true);}
+  case'gq-go':return startGq(D.d,D.r);
+  case'card-modal':{const c=card(D.id);if(c)openModal(cardModal(c));return;}
+  case'rev-open':return openModal(revSheet(D.d));
   case'memo-study':return startMemo({key:'memo:study',label:'암기 탭',title:'가리며 외우기',items:memoStudyIds().map(id=>({id}))});
   case'memo-finish':return memoFinish();
   case'memo-close':{const f=MEMO&&MEMO.from;MEMO=null;return nav(f?f.replace(/^#/,''):'study');}
-  case'memo-again':{if(!MEMO)return;const o={key:MEMO.key,label:MEMO.label,title:MEMO.title,items:MEMO.items,setD:MEMO.setD,from:MEMO.from};MEMO=null;return startMemo(o,true);}
+  case'memo-again':{if(!MEMO)return;const o={key:MEMO.key,label:MEMO.label,title:MEMO.title,items:MEMO.items,setD:MEMO.setD,revSets:MEMO.revSets,from:MEMO.from};MEMO=null;return startMemo(o,true);}
   case'memo-play':if(MEMO&&MEMO.edit){MEMO.edit=false;render();}return MEMO&&MEMO.run?memoPause():memoPlay();
   case'memo-prev':return MEMO&&memoGo(MEMO.i-1);
   case'memo-next':return MEMO&&memoGo(MEMO.i+1);
@@ -1269,16 +1404,18 @@ document.addEventListener('click',e=>{
   case'sess-flip':{if(e.target.closest('[data-act="star"]'))return;SES.back=!SES.back;if(SES.back)sessMarkRead(SES.items[SES.i]);return render();}
   case'sess-grade':{const it=SES.items[SES.i];const g=Number(D.g);const gd=SES.graded||(SES.graded={}),sn=SES.snap||(SES.snap={});const prev=gd[SES.i];
     if(prev!=null){if(prev===g)return sessAdvance();sessUngrade(it,sn[SES.i],prev);}else sn[SES.i]=sessSnap(it);
-    grade(it.id,g);if(it.wrongKey&&g===2)rightOnWrong(it.wrongKey);SES.stats[gradeKey(g)]++;gd[SES.i]=g;sessMarkRead(it);
+    grade(it.id,g);if(it.wrongKey&&g===2)rightOnWrong(it.wrongKey);SES.stats[gradeKey(g)]++;gd[SES.i]=g;sessMarkRead(it);if(g<2)sessMiss(it.id);
     if(g===0&&SES.requeue&&prev!==0)SES.items.push({type:'card',id:it.id});return sessAdvance();}
   case'sess-prev':return sessPrev();
   case'sess-pick':{if(SES.answered!=null)return;const it=SES.items[SES.i],k=Number(D.k);SES.answered=k;
-    if(it.type==='mcq'){const ok=it.opts[k]===it.id;const p=prog(it.id);if(ok){p.ok++;SES.stats.ok++;rightOnWrong('C:'+it.id);}else{p.ng++;SES.stats.no++;markWrong('C:'+it.id,'card');}save();}
+    if(it.type==='mcq'){const ok=it.opts[k]===it.id;const p=prog(it.id);if(ok){p.ok++;SES.stats.ok++;rightOnWrong('C:'+it.id);}else{p.ng++;SES.stats.no++;markWrong('C:'+it.id,'card');sessMiss(it.id);}save();}
+    else if(it.type==='gq'){const L=gqList(it.d),q=L&&L.items[it.n];if(!q)return render();const ok=k===q.a,key='G:'+it.d+':'+it.n+':'+L.sig,p=prog(q.id);gqSet(it.d,it.n,ok);
+      if(ok){p.ok++;SES.stats.ok++;rightOnWrong(key);}else{p.ng++;SES.stats.no++;markWrong(key,'gq');sessMiss(q.id);}const st=gqStat(it.d);calMark('gq:'+it.d,'quiz',`${korDate(it.d)} 용어 퀴즈 ${st.a}/${st.n}문 풂(정답 ${st.ok})`);touchDay();save();}
     else if(it.type==='quiz'){const q=SETS.sets[it.d].quiz[it.i];const ok=k===q.a;const key='Q:'+it.d+':'+it.i;const qp=S.qp[key]||(S.qp[key]={ok:0,ng:0});qp.last=todayStr();if(ok){qp.ok++;SES.stats.ok++;rightOnWrong(key);}else{qp.ng++;SES.stats.no++;markWrong(key,'quiz');}save();}
     return render();}
   case'sess-next':return sessAdvance();
   case'sess-self':{const it=SES.items[SES.i];const g=Number(D.g);
-    if(it.type==='cloze'){const key='Z:'+it.id+':'+it.k;if(g===2){SES.stats.ok++;rightOnWrong(key);}else{SES.stats.no++;markWrong(key,'cloze');}}
+    if(it.type==='cloze'){const key='Z:'+it.id+':'+it.k;if(g===2){SES.stats.ok++;rightOnWrong(key);}else{SES.stats.no++;markWrong(key,'cloze');sessMiss(it.id);}}
     if(it.type==='outline'){const st=S.essayStat[it.id]||(S.essayStat[it.id]={good:0,weak:0});if(g===2){st.good++;SES.stats.ok++;}else{st.weak++;SES.stats.no++;}st.last=todayStr();save();}
     return sessAdvance();}
   case'sess-skip':return sessAdvance();
@@ -1338,5 +1475,5 @@ window.addEventListener('online',()=>sync(true));
 PE_IO.init({toast});recalcPlan();applyLook();setPreset('essay');R=parseHash();
 if(!location.hash)history.replaceState(null,'','#today');
 calOpen();render();sync(true);
-window.__pe={S:()=>S,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession};
+window.__pe={S:()=>S,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession};
 })();
