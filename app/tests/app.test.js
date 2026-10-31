@@ -60,15 +60,19 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   ok(pe.deck().find(c => c.id === 'K04').x.includes('141-1-01'), '저장소 연결표(kx)가 K04에 반영');
   ok(pe.kq()['141-1-01'], '제141회 문항 조회');
 
-  // 오늘
+  // 오늘(오늘 몫): 머리(달력 아이콘·D-day) → 상태 줄 → 블록마다 번호 줄(파란 버튼 하나) 또는 할 몫 없음 카드 → 이번 주. 체크리스트는 없음.
+  // 진짜 날짜로 도는 검사라 줄 수·내용은 tests/plan.test.js(시계 고정)가 보고, 여기서는 생김새만 본다(가짜 저장소는 10/19 세트·10/24 모의뿐이라 대개 할 몫 없음 카드)
   await go('#today');
   const todayStr = new Date(); const ymd = todayStr.getFullYear() + '-' + String(todayStr.getMonth() + 1).padStart(2, '0') + '-' + String(todayStr.getDate()).padStart(2, '0');
-  if (ymd === '2026-10-19') {
-    ok(/댐·하천 맛보기/.test(txt()), '오늘 화면에 세트 제목');
-    ok(view().querySelectorAll('.steps li').length === 4, '세트 단계 4줄');
-  } else console.log('   (오늘 날짜가 2026-10-19가 아니라 세트 대기 화면)');
+  const todayShape = () => { const pr = view().querySelectorAll('.plan .prow'), nr = view().querySelector('.norows'), np = view().querySelectorAll('.btn:not(.sec):not(.ghost)').length; return { pr: pr.length, nr: !!nr, np }; };
+  ok(view().querySelector('.ltitle .ltl > .calbtn:first-child'), '오늘 머리: 달력 아이콘이 맨 앞');
   ok(/D-\d+/.test(view().querySelector('.dday').textContent), 'D-day 표시 ' + view().querySelector('.dday').textContent.trim());
-  ok(view().querySelectorAll('.check').length >= 3, '오늘 할 일 체크리스트');
+  ok(view().querySelector('.daysum') && /오늘 몫|남은/.test(view().querySelector('.daysum').textContent) && view().querySelector('.daysum [data-act="cap"]'), '상태 줄: 오늘 몫 n개 · 오늘 시간');
+  { const sh = todayShape(); ok((sh.pr > 0 || sh.nr) && sh.np <= 1 && sh.np === 1, `오늘 몫 줄(${sh.pr}) 또는 할 몫 없음 카드, 파란 버튼은 하나(${sh.np})`); }
+  ok(view().querySelectorAll('.wkstrip .wkd').length === 7 && /이번 주/.test(txt()), '이번 주: 월~일 띠 7칸');
+  ok(!view().querySelector('[data-act="chk"]') && !view().querySelector('.check'), '오늘에 체크리스트 없음');
+  if (ymd === '2026-10-19') ok(view().querySelector('[data-task="set.read:2026-10-19"]') && view().querySelectorAll('.plan .prow').length >= 4, '오늘 세트(10/19): 용어 읽기 줄과 4줄 이상');
+  else console.log('   (오늘 날짜가 2026-10-19가 아니라 세트 줄 없이)');
 
   // 세트 화면
   await go('#set/2026-10-19');
@@ -944,15 +948,17 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     for (let k = 0; k < 2; k++) { click('[data-act="sess-flip"]'); click('[data-act="sess-grade"][data-g="2"]'); }
     ok(S().tk['cards:' + T0] === T0, '카드 복습 k장을 다 매기면 오늘 카드 복습 할 일로 남음(S.tk)');
     // 오늘 화면 "카드 복습" 수는 카드 복습 세션과 같은 목록(오늘 매긴 카드는 뺌). 빈 세션을 눌러도 하던 세션은 그대로
-    const dueRow = () => { const r = [...view().querySelectorAll('[data-act="start-due"]')].find(x => /카드 복습/.test(x.textContent)); const v = r && r.querySelector('.val'); return v ? Number(v.textContent) : NaN; };
+    const cardsRow = () => view().querySelector(`[data-task="cards:${T0}"]`);
+    const dueRow = () => { const r = cardsRow(); if (!r || r.classList.contains('done')) return 0; const m = /카드 복습 (\d+)장/.exec(r.textContent); return m ? Number(m[1]) : NaN; };
     Object.values(S().cards).forEach(p => { p.due = '2099-01-01'; }); const dz = pe.deck().slice(0, 3).map(c => c.id);
     dz.forEach(id => { S().cards[id] = { box: 2, due: '2000-01-01', seen: 2, ok: 1, ng: 0, star: false, last: '2000-01-01' }; });
-    await go('#today'); const dn0 = dueRow(); click('[data-act="start-due"]'); await sleep(20);
-    ok(dn0 === 3 && pe.SES().kind === 'cards' && pe.SES().items.length === 3, '오늘 카드 복습 3 = 카드 복습 세션 3장');
+    delete S().tk['cards:' + T0];   // 바로 위에서 다 한 카드 복습 할 일을 지워 오늘 몫 줄이 남은 일로 보이게
+    await go('#today'); const dn0 = dueRow(); click(`[data-task="cards:${T0}"]`); await sleep(20);
+    ok(dn0 === 3 && pe.SES().kind === 'cards' && pe.SES().items.length === 3, '오늘 몫 "카드 복습 3장" = 카드 복습 세션 3장');
     for (let k = 0; k < 3; k++) { click('[data-act="sess-flip"]'); click('[data-act="sess-grade"][data-g="0"]'); }
     const live = pe.SES(); await go('#today');
-    ok(dueRow() === 0 && /오늘 복습할 카드를 다 했어요/.test(txt()), 'E1: 오늘 모름으로 매긴 카드는 오늘 화면 카드 복습 수에서도 빠짐');
-    click('[data-act="start-due"]'); await sleep(20);
+    ok(dueRow() === 0 && (!cardsRow() || cardsRow().classList.contains('done')), 'E1: 오늘 모름으로 매긴 카드는 오늘 화면 카드 복습 수에서도 빠짐(줄이 끝으로)');
+    if (cardsRow()) click(`[data-task="cards:${T0}"]`); else pe.startDueAll(); await sleep(20);
     ok(pe.SES() === live && live.i === 3 && w.location.hash === '#today' && /이 범위에 문제가 없어요/.test(toastTxt()), '카드 복습할 카드가 없을 때 눌러도 하던 세션은 그대로');
 
     // T3: 테스트 기록은 끝 화면에서 한 번 남는다(돌아가기를 누르지 않고 뒤로 가도)
@@ -1026,11 +1032,12 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     S().wk = { [ago(0)]: { cut: false, cph: 1 } }; S().settings.budget = { wd: 150, sat: 300, sun: 240 };
     const bk = JSON.parse(JSON.stringify({ state: S(), sets: pe.SETS() }));
     ok(bk.state.tk['x.book:' + T0] === T0 && bk.state.today && bk.state.today.rows[0].m === 10 && bk.state.wk[ago(0)].cph === 1 && bk.state.settings.budget.wd === 150, '백업 JSON에 S.tk·S.today·S.wk·하루 공부 시간이 그대로');
-    await go('#backup'); d.querySelector('#restoreText').value = JSON.stringify(bk); click('[data-act="restore"]'); await sleep(40);
-    ok(S().tk['x.book:' + T0] === T0 && S().today === null && S().wk[ago(0)].cph === 1 && S().settings.budget.wd === 150, '복원: 할 일·주간 기록·공부 시간은 그대로, 오늘 몫은 새로 짬(S.today=null)');
+    await go('#backup'); d.querySelector('#restoreText').value = JSON.stringify(bk); click('[data-act="restore"]'); const rT = S().today; await sleep(40);
+    ok(S().tk['x.book:' + T0] === T0 && rT === null && S().wk[ago(0)].cph === 1 && S().settings.budget.wd === 150, '복원: 할 일·주간 기록·공부 시간은 그대로, 오늘 몫은 새로 짬(S.today=null)');
+    ok(!S().today || S().today.sig !== 'x', '복원 뒤 오늘 화면은 백업의 고정 목록이 아니라 새로 짠 오늘 몫');
     const old = JSON.parse(JSON.stringify(bk)); delete old.state.tk; delete old.state.today; delete old.state.wk; delete old.state.settings.budget;
-    await go('#backup'); d.querySelector('#restoreText').value = JSON.stringify(old); click('[data-act="restore"]'); await sleep(40);
-    ok(JSON.stringify(S().tk) === '{}' && S().today === null && JSON.stringify(S().wk) === '{}' && JSON.stringify(S().settings.budget) === '{"wd":180,"sat":300,"sun":240}' && Object.keys(S().cards).length === Object.keys(bk.state.cards).length && JSON.stringify(S().sp) === JSON.stringify(bk.state.sp), '예전 백업(새 열쇠 없음)을 복원하면 tk·today·wk·공부 시간은 기본값, 나머지 기록은 그대로');
+    await go('#backup'); d.querySelector('#restoreText').value = JSON.stringify(old); click('[data-act="restore"]'); const oT = S().today, oW = JSON.stringify(S().wk), oK = JSON.stringify(S().tk); await sleep(40);
+    ok(oK === '{}' && oT === null && oW === '{}' && JSON.stringify(S().settings.budget) === '{"wd":180,"sat":300,"sun":240}' && Object.keys(S().cards).length === Object.keys(bk.state.cards).length && JSON.stringify(S().sp) === JSON.stringify(bk.state.sp), '예전 백업(새 열쇠 없음)을 복원하면 tk·today·wk·공부 시간은 기본값, 나머지 기록은 그대로');
     const K = JSON.parse(keep); Object.keys(K).forEach(k => { S()[k] = K[k]; }); pe.render(); await go('#today');
   }
 
@@ -1048,7 +1055,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     const edge = async (x0, x1, dy, el) => { el = el || view(); const a = new w.Event('touchstart', { bubbles: true }); a.touches = [{ clientX: x0, clientY: 300 }]; el.dispatchEvent(a); const b = new w.Event('touchend', { bubbles: true }); b.changedTouches = [{ clientX: x1, clientY: 300 + (dy || 0) }]; el.dispatchEvent(b); await sleep(60); };
     const emptyFlow = () => /진행 중인 (학습이|외우기가) 없어요/.test(txt()), focus = () => d.body.classList.contains('focus');
     const primaries = () => view().querySelectorAll('.btn:not(.sec):not(.ghost)').length;
-    const toSet = async () => { await tab('today'); await tap(`#view [data-act="go"][data-h="set/${D0}"]`); };
+    const toSet = async () => { await tab('today'); pe.go('set/' + D0); await sleep(60); };   // 오늘 몫 줄의 "시작"과 같은 길(오늘에서 세트로)
     const cardsTab = async () => { click('[data-act="set-tab"][data-t="cards"]'); await sleep(20); if (view().querySelector('[data-act="resume-clear"]')) await tap('[data-act="resume-clear"]'); };
 
     // 탭은 바꿔 쓰기만 해서 쌓이지 않고(T7), 탭 첫 화면에서 가장자리를 밀어도 아무 데도 가지 않는다(I)
@@ -1290,6 +1297,82 @@ const go = async h => { w.location.hash = h; await sleep(30); };
 
     const K = JSON.parse(keep); S().settings.memo = K.memoCfg || undefined; delete K.memoCfg; if (!S().settings.memo) delete S().settings.memo;
     Object.keys(K).forEach(k => { S()[k] = K[k]; }); pe.render(); await go('#today');
+  }
+
+  // 오늘 몫·이번 주 화면(진짜 날짜): 이번 주(#week) 점수 카드·약속 줄, 손으로 친 일(S.tk)과 연속 학습·백업 → 복원, 오늘 시간, 통계·주간 리포트,
+  // 모의고사 채점 기록, 설정의 하루 공부 시간, 마지막 백업, 이어서(Q). 줄 내용·수는 시계를 고정한 tests/plan.test.js가 본다
+  {
+    const ymdOf = x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
+    const T0 = ymdOf(new w.Date()), W = pe.wkStart(T0), mw = () => d.querySelector('#modal-wrap'), toastTxt = () => d.querySelector('#toast').textContent;
+    const keep = JSON.stringify({ tk: S().tk, daily: S().daily, mockp: S().mockp, budget: S().settings.budget, today: S().today });
+    await go('#today'); await go('#week');
+    const sc = view().querySelector('.score'), cl = [...view().querySelectorAll('.qline')].filter(q => !/^ql-(applychk|notice|carry\.mock)$/.test(q.id));
+    ok(sc && /다 하면 \d+%|시험 주/.test(sc.textContent) && /남은 필수|이번 주 필수를 다 했어요/.test(sc.textContent), '이번 주: 점수 카드(남은 필수 / 남은 시간 → 다 하면 n%)');
+    ok(cl.length >= 1 && cl.length <= 7 && view().querySelectorAll('.qline').length <= 9, `이번 주: 일요일까지 끝낼 것 ${cl.length}줄(7줄 이하, 날짜 일·넘어온 것까지 9줄 이하)`);
+    ok(view().querySelectorAll('.drow').length === 7 && view().querySelectorAll('.btn:not(.sec):not(.ghost)').length === 1 && /‹?\s*오늘/.test(d.querySelector('.topbar [data-act="back"]').textContent), '이번 주: 날마다 7줄, 파란 버튼 하나(다음), 위쪽은 "오늘"');
+    // 손으로 친 일(이번 주 목표): S.tk에 남고, 그것 하나뿐인 날도 연속 학습으로 센다(touchDay)
+    const gid = 'goal:' + W + ':0', dl0 = S().daily[T0], ck0 = S().checks[T0]; delete S().tk[gid]; delete S().daily[T0]; delete S().checks[T0]; pe.render();
+    const s0 = pe.streak(); click(`[data-act="tk"][data-id="${gid}"]`); await sleep(20);
+    ok(S().tk[gid] === T0 && S().daily[T0] && S().daily[T0].active && pe.streak() === s0 + 1 && view().querySelector(`[data-act="tk"][data-id="${gid}"] .tkc.on`), '이번 주 목표를 손으로 치면 S.tk, 그것뿐인 날도 연속 학습(+1일)');
+    if (dl0) S().daily[T0] = Object.assign(dl0, { active: true }); if (ck0) S().checks[T0] = ck0;
+    const bk3 = JSON.stringify({ state: S(), sets: pe.SETS() }); delete S().tk[gid];
+    await go('#backup'); d.querySelector('#restoreText').value = bk3; click('[data-act="restore"]'); await sleep(80);
+    ok(S().tk[gid] === T0 && w.location.hash === '#today', '손으로 친 기록은 백업 → 복원에도 남음');
+    await go('#week'); click(`[data-act="tk"][data-id="${gid}"]`); await sleep(20);
+    ok(!S().tk[gid], '다시 누르면 되돌림');
+    // 오늘 시간: 30분 · 1시간 · 1시간 30분 · 평소대로. 고르면 그날만 다시 짠다
+    await go('#today'); const ds0 = view().querySelector('.daysum').textContent;
+    click('[data-act="cap"]'); await sleep(10);
+    ok(mw().querySelectorAll('[data-act="cap-set"]').length === 4 && /30분 · 최소 몫/.test(mw().textContent) && /평소대로 · /.test(mw().textContent) && /최소 몫\(용어 읽기 · 세트 퀴즈 · 단답 1문 · 자기 전 5분\)은 늘 남아요/.test(mw().textContent), '오늘 시간 창: 30분 · 최소 몫 / 1시간 / 1시간 30분 / 평소대로');
+    click('#modal-wrap [data-act="cap-set"][data-m="60"]'); await sleep(30);
+    const late = (x => x.getHours() * 60 + x.getMinutes() >= 22 * 60 + 30)(new w.Date()), ds1 = view().querySelector('.daysum').textContent;
+    ok(S().today && S().today.d === T0 && S().today.user === 60 && !mw().innerHTML && (ds1 !== ds0 || late) && /오늘 시간 (1시간|\d+분)/.test(ds1), `오늘 시간 1시간: S.today.user = 60, 상태 줄이 바뀜(${ds1.trim()})`);
+    click('[data-act="cap"]'); await sleep(10); click('#modal-wrap [data-act="cap-set"][data-m="0"]'); await sleep(30);
+    ok(S().today && S().today.user === null, '평소대로: S.today.user = null');
+    { const sh = todayShape(); ok((sh.pr > 0 || sh.nr) && sh.np === 1, '다시 짜도 파란 버튼은 하나'); }
+    // 통계·주간 리포트: "이번 주 필수 n%"(이번 주 화면과 같은 수), 이번 주 월요일부터. 토·일요일에 복사해야 이번 주 리포트로 친다
+    let copied = ''; const cp0 = w.PE_IO.copy; w.PE_IO.copy = x => { copied = x; return Promise.resolve(); };
+    await go('#stats');
+    ok(/이번 주 필수/.test(txt()) && /핵심 끝낸 세트/.test(txt()) && /주간 기록/.test(txt()) && !/7일 체크/.test(txt()), '통계: 이번 주 필수 n%, 핵심 끝낸 세트, 주간 기록(7일 체크 달성은 없음)');
+    const rk = 'report:' + W, rk0 = S().tk[rk], dw = new w.Date().getDay(); delete S().tk[rk];
+    click(`[data-act="report"][data-w="${W}"]`); await sleep(20);
+    ok(/이번 주 필수 \d+%|시험이 든 주/.test(copied) && copied.indexOf(`] ${W} ~ `) > 0 && (dw === 0 || dw === 6 ? S().tk[rk] === T0 : !S().tk[rk] && /토·일요일에 복사하면 이번 주 리포트로 쳐요/.test(toastTxt())), '주간 리포트: "이번 주 필수", 이번 주 월요일부터, 토·일요일에만 이번 주 리포트로 침');
+    if (rk0) S().tk[rk] = rk0; else delete S().tk[rk];
+    // 백업: 마지막 백업 날짜
+    delete S().tk.backup; await go('#backup'); ok(/아직 백업한 적이 없어요/.test(txt()), '백업: 아직 백업한 적이 없어요');
+    click('[data-act="backup-copy"]'); await sleep(20);
+    ok(S().tk.backup === T0 && /마지막 백업/.test(txt()) && /백업을 복사했어요/.test(toastTxt()), '백업 복사 → 마지막 백업 날짜(S.tk.backup)');
+    w.PE_IO.copy = cp0;
+    // 모의고사: 채점 받았어요(되돌리기)와 점수 칸
+    await go('#mock/2026-10-24');
+    click('[data-act="mock-graded"][data-d="2026-10-24"]'); await sleep(10);
+    ok(S().mockp['2026-10-24'] && S().mockp['2026-10-24'].g === T0 && /채점 받았어요 ✓/.test(txt()) && view().querySelector('[data-act="copy-mock"]'), '모의고사: 채점 받았어요 → S.mockp[D].g(채점 요청 복사는 그대로)');
+    const si = view().querySelector('[data-act="mock-score"][data-k="p1"]'); si.value = '62'; si.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(10);
+    ok(S().mockp['2026-10-24'].sc && S().mockp['2026-10-24'].sc.p1 === 62 && view().querySelector('[data-act="mock-score"][data-k="p1"]').value === '62', '점수 칸: 1교시 62점 → S.mockp[D].sc');
+    click('[data-act="mock-graded"][data-d="2026-10-24"]'); await sleep(10);
+    ok(!S().mockp['2026-10-24'].g, '채점 받았어요 되돌리기');
+    // 설정: 하루 공부 시간(평일·토요일·일요일과 공휴일), 시험 일정 줄은 더보기에만
+    await go('#settings');
+    ok(view().querySelectorAll('[data-act="budget"]').length === 12 && !view().querySelector('[data-h="schedule"]') && /오늘 몫과 '이번 주' 계산이 이 시간을 써요/.test(txt()), '설정: 하루 공부 시간 3줄, 시험 일정 줄 없음');
+    click('[data-act="budget"][data-k="wd"][data-v="150"]'); await sleep(10);
+    ok(S().settings.budget.wd === 150 && S().settings.budget.sat === 300 && S().tk.budget === T0 && view().querySelector('[data-act="budget"][data-k="wd"][data-v="150"].on') && pe.budgetOf('2026-11-02') === 150, '하루 공부 시간 평일 2시간 30분 → S.settings.budget, S.tk.budget, 계산에 바로');
+    // 다음 주 단원 기출(토·일요일에 열면 이번 주 "다음 주 단원 기출 훑기"로 친다, 그리는 것만으로는 쓰지 않음)
+    { const nu = (pe.weekObj(pe.weekIndex(pe.wkStart(T0)) + 1).u || [])[0], kk = 'kichul:' + W; delete S().tk[kk];
+      if (nu) { await go('#kichul/u/' + nu); ok((dw === 0 || dw === 6) ? S().tk[kk] === T0 : !S().tk[kk], `다음 주 단원(${nu}) 기출을 ${dw === 0 || dw === 6 ? '주말에 열면 침' : '평일에 열면 치지 않음'}`); pe.render(); ok(((dw === 0 || dw === 6) ? S().tk[kk] === T0 : !S().tk[kk]), '같은 화면을 다시 그려도 그대로'); } }
+    // Q: 세트 → 카드 넘겨 보기 → 2장 뒤집고 닫기 → 오늘에 "이어서 · 10/19 세트 카드 넘겨 보기 n/10"(세션은 그대로), 누르면 같은 세션
+    await go('#set/2026-10-19'); click('[data-act="set-tab"][data-t="cards"]'); await sleep(10);
+    if (view().querySelector('[data-act="resume-clear"]')) { click('[data-act="resume-clear"]'); await sleep(10); }
+    click('[data-act="set-flash"]'); await sleep(60); const sQ = pe.SES();
+    click('[data-act="sess-flip"]'); await sleep(5); click('[data-act="sess-skip"]'); await sleep(5); click('[data-act="sess-flip"]'); await sleep(5);
+    click('.topbar [data-act="back"]'); await sleep(60);
+    ok(w.location.hash === '#set/2026-10-19' && pe.SES() === sQ && sQ.i === 1, 'Q: 카드 넘겨 보기 가운데서 닫기 → 세트 화면(세션 그대로)');
+    await go('#today'); const rs = view().querySelector('.resume'), own = view().querySelector('.prow.now .btn');
+    ok(pe.SES() === sQ && (rs ? /이어서 · 10\/19 세트 카드 넘겨 보기 \d+\/10/.test(rs.textContent) : own && /이어서 · \d+번째 용어부터/.test(own.textContent)), 'Q: 오늘에 "이어서 · 10/19 세트 카드 넘겨 보기 n/10"');
+    click(rs ? '.resume' : '.prow.now .btn'); await sleep(60);
+    ok(w.location.hash === '#sess' && pe.SES() === sQ && sQ.from === 'today' && sQ.i === 1, 'Q: 이어서를 누르면 같은 세션 그 카드부터, 연 곳은 오늘');
+    click('.topbar [data-act="back"]'); await sleep(60);
+    ok(w.location.hash === '#today' && pe.SES() === sQ, 'Q: 닫기 → 오늘(세션 그대로)');
+    const K = JSON.parse(keep); ['tk', 'daily', 'mockp', 'today'].forEach(k => { S()[k] = K[k]; }); S().settings.budget = K.budget; pe.render(); await go('#today');
   }
 
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));

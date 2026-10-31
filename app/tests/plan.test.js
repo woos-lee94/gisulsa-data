@@ -460,8 +460,9 @@ function runWeek(W, sets, st) {
     await go('#today');
     // 복원은 S.today를 비운다
     scene('2026-10-29T07:40:00', ST); pe.planToday(THU); const bk = JSON.stringify({ state: pe.S(), sets: pe.SETS() });
-    await go('#backup'); d.querySelector('#restoreText').value = bk; click('[data-act="restore"]'); await sleep(60);
-    ok(pe.S().today === null && pe.S().wk && pe.S().tk, '20. 복원하면 S.today = null(다른 날·기기의 고정 목록을 쓰지 않음)'); }
+    await go('#backup'); d.querySelector('#restoreText').value = bk; click('[data-act="restore"]'); const rT = pe.S().today; await sleep(60);
+    ok(rT === null && pe.S().wk && pe.S().tk, '20. 복원하면 S.today = null(다른 날·기기의 고정 목록을 쓰지 않음)');
+    ok(pe.S().today && pe.S().today.d === THU && pe.S().today.at === '07:40' && w.location.hash === '#today', '20. 복원 뒤 오늘 화면이 오늘 몫을 새로 짬'); }
 
   // 21. 시험 일정을 바꿔 할 일 목록에서 사라진 줄(시험 전 3일의 "카드 30장 돌리기"): 안 한 것은 빼고(오늘 한 분 그대로), 바꾸기 전에 끝낸 것만 그 자리에
   { const X = clone(FIX), T0 = '2027-01-27'; X.sets[T0] = cloneSet(T0, 14, refsFor(2));
@@ -522,6 +523,76 @@ function runWeek(W, sets, st) {
       at(t + 'T' + hh + ':00:00'); const I = pe.taskList(t).map(x => x.id), P = ids(pe.dayPlan(t)); n++;
       if (new Set(I).size !== I.length || new Set(P).size !== P.length) bad.push(t + ' ' + hh + '시'); }
     ok(!bad.length && n > 600, `26. ${n}번(날 × 시각) 모두 id 겹침 없음 ${bad.slice(0, 3).join(' | ')}`); }
+
+  // 화면(시계 고정): 오늘·이번 주를 다시 그린다(같은 주소면 hashchange가 없으므로 render)
+  const show = async h => { await go(h); pe.render(); await sleep(10); }, V$ = () => d.querySelector('#view'), prim = () => [...V$().querySelectorAll('.btn:not(.sec):not(.ghost)')];
+  const ROLL = /일요일까지|오늘만|다시 나와요|다음 모의 전까지|오늘 밤까지|D-\d|오늘까지/;
+  // 27. 목 07:40 오늘 화면: 블록마다 번호 줄 9개, 파란 버튼은 펼친 첫 줄(용어 10개 읽기) 하나, 필수 줄마다 "못 하면", 체크리스트 없음, 이번 주 띠·남은 필수
+  scene('2026-10-29T07:40:00', ST);
+  { await show('#today'); const rows = [...V$().querySelectorAll('.blk + .plan > .prow, .blk + .plan .pmore > .prow')], nums = rows.map(r => (r.querySelector('.pn') || {}).textContent).join(',');
+    ok(rows.length === 9 && nums === '1,2,3,4,5,6,7,8,9' && /오늘 몫 9개 · 약 1시간 48분/.test(V$().querySelector('.daysum').textContent), `27. 목 07:40: 오늘 몫 9줄(번호 ${nums}), "오늘 몫 9개 · 약 1시간 48분"`);
+    const p = prim(); ok(p.length === 1 && p[0].closest('.prow.now') && p[0].closest('.prow.now').dataset.task === 'set.read:2026-10-29' && p[0].textContent === '시작', '27. 파란 버튼은 하나: 펼친 첫 줄 "용어 10개 읽기"의 시작');
+    const req = rows.filter(r => !r.querySelector('.tag')), miss = req.filter(r => !ROLL.test((r.querySelector('.pm') || {}).textContent || ''));
+    ok(req.length === 9 && !miss.length, `27. 필수 줄마다 못 하면(일요일까지·오늘만·다시 나와요 …) ${miss.map(r => r.dataset.task).join(' ')}`);
+    ok(/세트 복습 2개/.test(rows[1].textContent) && /10\/27·10\/28 1일 차 · 16분 · 다시 나와요/.test(rows[1].textContent) && /0\/2/.test(rows[1].querySelector('.pv').textContent), '27. 세트 복습 2개는 한 줄(날짜·단계, 16분, 0/2)');
+    const ddSub = pe.taskList(THU).find(x => x.id === 'hw.dd:2026-10-29').sub;
+    ok(/말하기 4번/.test(rows[3].textContent) && /필수 2번 · 8분 · 오늘만/.test(rows[3].textContent) && /0\/16/.test(rows[3].textContent) && ddSub && rows[6].textContent.indexOf(ddSub) > 0 && /15분/.test(rows[6].querySelector('.pv').textContent), '27. 숙제 줄은 학원 횟수 그대로(말하기 4번 0/16, 필수 2번), 단답은 그 카드 이름 · 15분');
+    ok(!V$().querySelector('[data-act="chk"]') && !V$().querySelector('.check') && V$().querySelector('.blk.cur') && /아침·출근길/.test(V$().querySelector('.blk.cur').textContent) && /지금/.test(V$().querySelector('.blk.cur').textContent), '27. 체크리스트 없음, 지금 블록은 아침·출근길');
+    const wk = V$().querySelector('.wksec');
+    ok(wk && wk.querySelectorAll('.wkd').length === 7 && /남은 필수 약 7시간 48분 \/ 남은 시간 15시간/.test(wk.textContent) && /다 하면 97% · 지금 17%/.test(wk.textContent) && wk.querySelectorAll('.qline').length <= 5 && /세트 핵심 2\/5 · 다음 하나: 10\/28\(수\) 퀴즈/.test(wk.textContent), '27. 이번 주: 띠 7칸, 남은 필수 약 7시간 48분 / 남은 시간 15시간, 다 하면 97% · 지금 17%, 줄 5개 이하');
+    ok([...wk.querySelectorAll('.wkd .wg')].map(g => g.classList.contains('today') ? 'T' : g.classList[1]).join() === 'done,done,half,T,fut,fut,fut', '27. 띠: 월·화 끝, 수 반쯤, 목 오늘, 금~일 앞날(지난날도 빨강 없음)');
+    const fold = [...V$().querySelectorAll('details.pf')].find(x => /시간이 되면/.test(x.textContent));
+    ok(fold && !fold.open && /시간이 되면 · \d+개/.test(fold.querySelector('summary').textContent) && fold.querySelector('[data-task^="cards:"]'), '27. 시간이 되면은 접혀 있고 카드 복습은 거기(세트 복습 나머지 뒤)');
+    click('[data-act="later"]'); await sleep(10);
+    ok(prim().length === 1 && prim()[0].closest('.prow.now').dataset.task === 'rev:2026-10-27:1' && /시작 · 10\/27 세트부터/.test(prim()[0].textContent), '27. 나중에 → 다음 줄(세트 복습 2개, "시작 · 10/27 세트부터")이 펼쳐짐');
+    pe.UI().later = {}; await show('#today');
+    const nt = V$().querySelector('.notice [data-act="wk-dismiss"]');
+    ok(nt && nt.dataset.k === 'phase:1' && /1단계 시작/.test(V$().querySelector('.notice').textContent), '27. 단계 첫 주: 한 줄 안내(1단계 시작, × 로 닫음)');
+    click('.notice [data-act="wk-dismiss"]'); await sleep(10);
+    ok(!V$().querySelector('.notice') && pe.S().tk['phase:1'] === THU, '27. ×를 누르면 안내가 사라지고 S.tk에 남음');
+    // 이어서: 오늘 세트를 카드 넘겨 보기로 보다 닫으면, 펼친 줄(용어 10개 읽기)의 버튼이 "이어서 · n번째 용어부터"로 그 세션을 잇는다(위의 이어서 줄은 숨김)
+    await show('#set/2026-10-29'); click('[data-act="set-tab"][data-t="cards"]'); await sleep(10); click('[data-act="set-flash"]'); await sleep(40);
+    const sF = pe.SES(); click('[data-act="sess-flip"]'); await sleep(5); click('[data-act="sess-skip"]'); await sleep(5); click('[data-act="sess-flip"]'); await sleep(5);
+    click('.topbar [data-act="back"]'); await sleep(60); await show('#today');
+    ok(!V$().querySelector('.resume') && prim().length === 1 && prim()[0].dataset.act === 'resume' && /이어서 · 2번째 용어부터/.test(prim()[0].textContent), '27. 하다 만 넘겨 보기가 펼친 줄의 일이면 그 줄의 버튼이 "이어서 · 2번째 용어부터"(이어서 줄은 숨김)');
+    click('.prow.now .btn'); await sleep(60);
+    ok(w.location.hash === '#sess' && pe.SES() === sF && sF.i === 1 && sF.from === 'today', '27. 누르면 같은 세션 그 카드부터(연 곳은 오늘)');
+    pe.goTab('today'); await sleep(40); }
+  // 28. 토 08:00 오늘 화면: 1~3줄 모의고사(1교시 시작이 파란 버튼), 쉬는 시간 줄, 따라잡기 4줄, 다른 날로 옮긴 것 4개, 시간이 되면 1개
+  scene('2026-10-31T08:00:00', ST);
+  { await show('#today'); const t = V$().textContent, p = prim();
+    ok(/오늘 몫 7개 · 약 4시간 57분/.test(V$().querySelector('.daysum').textContent) && p.length === 1 && p[0].textContent === '1교시 시작' && p[0].closest('.prow.now').dataset.task === 'mock:2026-10-31:p1', '28. 토 08:00: 오늘 몫 7개 · 약 4시간 57분, 파란 버튼은 "1교시 시작" 하나');
+    ok(/쉬는 시간 · 답안 사진 찍기/.test(t) && /2교시논술50분/.test(t.replace(/\s+/g, '')) && /쏘일네일링 · 심층혼합처리공법\(DCM\)/.test(t) && /밀린 세트 3개/.test(t) && /10\/26·10\/27·10\/28 3일 차 · 10\/30 1일 차/.test(t), '28. 쉬는 시간 줄, 2교시 논술 50분(문제 이름), 밀린 세트 3개, 세트 복습 4개(단계마다 묶음)');
+    ok(/다른 날로 옮긴 것 · 4개 · 약 2시간 12분/.test(t) && /내일\(일\) 손글씨 몫 3개 · 내일 다시 나와요 1개/.test(t) && /시간이 되면 · 1개/.test(t), '28. 다른 날로 옮긴 것 4개(갈 곳별 수), 시간이 되면 1개');
+    ok(/빠듯해요 · 권장은 접어 두었어요/.test(V$().querySelector('.wksec').textContent) && /주간 리포트\(일\) 0\/1/.test(V$().querySelector('.wksec').textContent), '28. 이번 주: 단계 1 문장, 토·일요일엔 주간 리포트 줄');
+    await show('#week'); const sc = V$().querySelector('.score');
+    ok(sc && /다 하면 94%/.test(sc.textContent) && /지금 18%/.test(sc.textContent) && /세트 핵심 14\/25 · 모의고사 0\/25 · 손글씨 4\/30 · 복습 1\/15 · 마감 0\/5/.test(sc.textContent) && prim().length === 1 && /^다음: 주간 모의고사 1교시 · 100분$/.test(prim()[0].textContent), '28. 이번 주 화면: 다 하면 94% · 지금 18%, 부분 점수, 파란 버튼 "다음: 주간 모의고사 1교시 · 100분"');
+    const L = [...V$().querySelectorAll('.qline')].map(q => q.id);
+    ok(L.join() === 'ql-mock,ql-core,ql-dd,ql-eo,ql-w,ql-rev,ql-close' && V$().querySelectorAll('.drow').length === 7, '28. 일요일까지 끝낼 것 7줄(모의·핵심·단답·목차·쓰기·세트 복습·리포트), 날마다 7줄'); }
+  // 29. 주간 리포트는 그 리포트가 다루는 주로 친다: 일요일 오늘 줄 → report:W, 수요일 통계 → 치지 않고 알림, 월요일 "지난주 리포트" → 지난주 머리·report:LW, 토요일 통계 → report:W
+  { let copied = ''; const cp0 = w.PE_IO.copy; w.PE_IO.copy = x => { copied = x; return Promise.resolve(); }; const toastT = () => d.querySelector('#toast').textContent;
+    scene('2026-11-01T09:00:00', ST); await show('#today'); click('#view [data-task="report:2026-10-26"]'); await sleep(20);
+    ok(pe.S().tk['report:2026-10-26'] === SUN && /\] 2026-10-26 ~ 2026-11-01/.test(copied) && /이번 주 필수 \d+%/.test(copied), '29. 일요일 오늘의 주간 리포트 줄 → 복사하고 이번 주(report:10/26)로 침');
+    scene('2026-10-28T12:00:00', ST); await show('#stats'); copied = ''; click('[data-act="report"]'); await sleep(20);
+    ok(!pe.S().tk['report:2026-10-26'] && /\] 2026-10-26 ~ 2026-10-28/.test(copied) && /토·일요일에 복사하면 이번 주 리포트로 쳐요/.test(toastT()), '29. 수요일 통계에서 복사하면 치지 않고 "토·일요일에 복사하면 이번 주 리포트로 쳐요"');
+    scene('2026-11-02T07:00:00', ST); await show('#today'); copied = ''; click('#view [data-task="report:2026-10-26"]'); await sleep(20);
+    ok(pe.S().tk['report:2026-10-26'] === MON && !pe.S().tk['report:2026-11-02'] && /\] 2026-10-26 ~ 2026-11-01/.test(copied) && /지난주 필수 19%/.test(copied), '29. 월요일 "지난주 리포트 아직" → 지난주(10/26~11/1, 고정한 19%) 복사, report:10/26');
+    scene('2026-10-31T08:00:00', ST); await show('#stats'); copied = ''; click('[data-act="report"]'); await sleep(20);
+    ok(pe.S().tk['report:2026-10-26'] === SAT && /\] 2026-10-26 ~ 2026-10-31/.test(copied), '29. 토요일 통계에서 복사 → 이번 주(report:10/26)로 침');
+    w.PE_IO.copy = cp0; await go('#today'); }
+  // 30. 모의고사가 오지 않은 토요일(예약 작업 실패): 지난주 모의고사는 권장 접힌 줄, 펼칠 줄이 아니고, 화면의 파란 버튼은 하나(오늘 몫을 다 한 뒤에도)
+  { const st = clone(ST); delete st.mockp['2026-10-24']; const X = clone(FIX); delete X.mocks['2026-10-31'];
+    scene('2026-10-31T10:00:00', st, X); const V = pe.planToday(SAT), cm = V.fold.find(x => x.k === 'carry.mock');
+    ok(cm && cm.need === '권장' && cm.never && V.active && V.active.id !== cm.id && !V.rows.some(r => /^carry\.mock/.test(r.id)) && V.info.some(x => x.id === 'wait.mock'), '30. 모의가 안 온 토요일: 지난주 모의고사는 권장 접힌 줄(펼칠 줄 아님), "주간 모의고사를 기다리는 중"');
+    await show('#today'); const cmRow = V$().querySelector('[data-task="carry.mock:2026-10-24"]');
+    ok(prim().length === 1 && cmRow && cmRow.closest('details') && !cmRow.classList.contains('now') && /주간 모의고사를 기다리는 중/.test(V$().textContent), '30. 화면: 파란 버튼 하나, 지난주 모의고사 줄은 시간이 되면 안');
+    applyRows(pe.S().today.rows, SAT); const V2 = pe.planToday(SAT); await show('#today');
+    ok(V2.rows.every(r => r.done) && (!V2.active || V2.active.id !== cm.id) && prim().length === 1 && /오늘 몫 끝/.test(V$().textContent), '30. 오늘 몫을 다 해도 지난주 모의고사는 펼치지 않음, "오늘 몫 끝", 파란 버튼 하나'); }
+  // 31. 할 몫이 없는 날(받은 세트 없음): 카드 하나에 파란 버튼 하나("지금 받아 오기"). 9시 전 세트를 기다리는 평일은 그 안내가 카드 제목
+  { scene('2026-11-03T10:00:00', BLANK, { sets: {}, mocks: {} }); await show('#today');
+    ok(V$().querySelector('.norows') && /아직 받은 세트가 없어요/.test(V$().querySelector('.norows').textContent) && prim().length === 1 && prim()[0].dataset.act === 'sync' && !V$().querySelectorAll('.blk').length, '31. 받은 세트가 없으면 할 몫 없음 카드("아직 받은 세트가 없어요" + 지금 받아 오기) 하나');
+    const X = { sets: {}, mocks: {} }; X.sets['2026-10-19'] = clone(FIX.sets['2026-10-19']); scene('2026-11-03T07:00:00', BLANK, X); await show('#today');
+    ok(V$().querySelector('.norows') && /오늘 세트를 기다리는 중/.test(V$().querySelector('.norows').textContent) && prim().length === 1 && prim()[0].dataset.act === 'sync', '31. 평일 07:00 세트 전·할 일 없음: "오늘 세트를 기다리는 중" 카드에 지금 받아 오기'); await go('#today'); }
 
   // 시작(taskGo)·다음 줄(nextAfter): 줄마다 한 번에 그 자리로
   scene('2026-10-29T07:40:00', ST);
