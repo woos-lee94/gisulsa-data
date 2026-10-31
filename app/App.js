@@ -246,7 +246,7 @@ export default function App() {
           setSupportMultipleWindows={false}
           contentInsetAdjustmentBehavior="never"
           automaticallyAdjustContentInsets={false}
-          allowsBackForwardNavigationGestures
+          allowsBackForwardNavigationGestures={false}
           allowsLinkPreview={false}
           dataDetectorTypes="none"
           keyboardDisplayRequiresUserAction={false}
