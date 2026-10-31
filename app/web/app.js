@@ -393,7 +393,7 @@ function vToday(){const t=todayStr(),w=weekIndex(),wk=weekObj(w),ph=phaseObj(w),
     setBox=`<div class="sheet"><p class="sheet-k">오늘의 세트</p><h3>${wk2?'오늘 세트를 기다리는 중':'주말에는 세트가 없어요'}</h3>
     <p class="ds" style="margin:8px 0 12px">${wk2?'평일 06:21에 만들기 시작해 보통 30분 안에 도착해요. 앱을 열 때마다 자동으로 확인합니다.':(dtp==='sat'?'토요일엔 주간 모의고사가 테스트 탭으로 들어와요.':'일요일은 복습 탭에서 다시 볼 세트와 오답 노트를 비우는 날이에요.')}</p>
     <div class="btns">${wk2?`<button class="btn" data-act="sync">지금 받아 오기</button>`:''}${last?`<button class="btn sec" data-act="go" data-h="set/${last}">${last===addDays(t,-1)?'어제':korDate(last)} 세트</button>`:''}</div></div>`;}
-  const due=dueCards(null).length,rv=dueSetReviews(),wr=Object.keys(S.wrong).length,lm=latestMockDate();
+  const due=dueNow().length,rv=dueSetReviews(),wr=Object.keys(S.wrong).length,lm=latestMockDate();
   const thisMock=lm&&weekIndex(lm)===w?lm:null;
   const items=routineFor(t),chk=S.checks[t]||{},done=items.filter((_,i)=>chk[i]).length;
   const ms=milestones().filter(m=>m.d>=t).slice(0,2);
@@ -558,7 +558,9 @@ function startGq(d,mode){const L=gqList(d);if(!L||!L.items.length)return toast('
   else if(mode==='rand'||mode==='all'){ns=shuffle(L.items.map((_,n)=>n));if(mode==='rand')ns=ns.slice(0,GQ_ROUND);title=mode==='rand'?`무작위 ${ns.length}문`:`${ns.length}문 섞어서`;}
   else{let k=Number(mode);if(mode==='next'||isNaN(k)){k=0;for(let j=0;j<nR;j++)if(r.slice(j*GQ_ROUND,(j+1)*GQ_ROUND).includes('-')){k=j;break;}}
     for(let n=k*GQ_ROUND;n<Math.min(L.items.length,(k+1)*GQ_ROUND);n++)ns.push(n);title=(k+1)+'회';const f=ns.findIndex(n=>r[n]==='-');at=f>0?f:0;}
-  startSession({kind:'gq',title:`${korDate(d)} 용어 퀴즈${title.startsWith(':')?'':' '}${title}`,items:ns.map(n=>({type:'gq',d,n})),revD:d,i:at});}
+  /* 안 푼 문제부터 이어 풀면 그 앞의 이미 푼 문제는 끝낸 것으로 센다(세트 복습 80%, "이어서"에 다시 나오지 않음) */
+  const done={};for(let j=0;j<at;j++)if(r[ns[j]]!=='-')done[j]=1;
+  startSession({kind:'gq',title:`${korDate(d)} 용어 퀴즈${title.startsWith(':')?'':' '}${title}`,items:ns.map(n=>({type:'gq',d,n})),revD:d,i:at,done});}
 /* 푸는 방식: 회차별(15문씩, 쉬운 것부터), 용어별(그 용어 문제만, 쉬운 것부터), 무작위(15문 또는 전체를 풀 때마다 새로 섞기). 기록은 문제마다 하나라 어느 방식으로 풀어도 같이 남는다 */
 const GQ_MODES=[['round','회차별'],['term','용어별'],['rand','무작위']];
 function gqSection(d){const L=gqList(d);if(!L||!L.items.length)return'';const r=gqRec(d),st=gqStat(d),nR=st.rounds,qid=uniq(L.items.map(q=>q.id)),ids=setIds(d).filter(id=>qid.includes(id)).concat(qid.filter(id=>!setIds(d).includes(id))),mode=SV['gqm:'+d]||'round';
@@ -675,7 +677,8 @@ function vStudy(){const rg=S.range||'week',f=rangeFilter(rg);const pool=deck().f
 /* ════════ 15. 세션(카드·퀴즈·빈칸·목차 공통) ════════ */
 /* SES.kind: 세션을 연 곳(rev 세트 복습, flash 세트 카드 넘겨 보기, gq 용어 퀴즈, wrong 오답, cards 카드 복습, study·free·stars·mcq·recall·cloze·fill·outline).
    SES.done: 끝낸 항목 번호(답 고름·매김·채점·빈칸 채점, 넘겨 보기는 뒷면 본 카드). SES.acc: "이어서"로 이어 붙인 세션이 앞 세션에서 한 수 {d,step,a,n} */
-function startSession(o){SES=Object.assign({i:0,back:false,answered:null,stats:{ok:0,mid:0,no:0},done:{},kind:null,from:R.page?('#'+R.page+(R.a?'/'+R.a:'')):'#'+R.tab},o);if(!SES.items.length){toast('이 범위에 문제가 없어요');SES=null;return;}nav('sess');}
+/* 항목이 없으면 알리기만 하고 하던 세션(멈춰 둔 넘겨 보기 등)은 그대로 둔다 */
+function startSession(o){const s=Object.assign({i:0,back:false,answered:null,stats:{ok:0,mid:0,no:0},done:{},kind:null,from:R.page?('#'+R.page+(R.a?'/'+R.a:'')):'#'+R.tab},o);if(!s.items.length)return toast('이 범위에 문제가 없어요');SES=s;nav('sess');}
 function vSess(){if(!SES)return topbar('학습')+`<div class="empty" style="margin-top:20px"><b>진행 중인 학습이 없어요</b><div class="btns"><button class="btn" data-act="go" data-h="study">암기 탭으로</button></div></div>`;
   const it=SES.items[SES.i];if(!it)return sessDone();const n=SES.items.length;
   const head=`${topbar(SES.title||'학습')}<div class="prog"><div class="bar"><i style="width:${Math.round((SES.i+1)/n*100)}%"></i></div><span>${SES.i+1} / ${n}</span></div>`;
@@ -766,8 +769,10 @@ function startStudy(range,o){o=o||{};const f=rangeFilter(range||S.range);const p
   const due=o.newOnly?[]:pool.filter(c=>{const p=S.cards[c.id];return p&&p.seen>0&&p.due&&p.due<=t;}).sort((a,b)=>S.cards[a.id].due<S.cards[b.id].due?-1:1);
   const fresh=pool.filter(c=>!S.cards[c.id]||S.cards[c.id].seen===0).sort((a,b)=>(b.f||2)-(a.f||2)||((b.x||[]).length-(a.x||[]).length)).slice(0,newRoom());
   startSession({kind:'study',title:'오늘 학습',items:cardItems(due.concat(fresh).map(c=>c.id)),requeue:true});}
-/* 카드 복습: 오늘 이미 매긴 카드(같은 날 두 번 올리지 않음)와 o.skip(오늘 세트 복습에 들어 있는 카드)은 빼고, o.k장까지 */
-function startDueAll(o){o=o||{};const t=todayStr(),sk=new Set(o.skip||[]);let ids=dueCards(null).map(c=>c.id).filter(id=>!sk.has(id)&&pget(id).last!==t);if(o.k)ids=ids.slice(0,o.k);
+/* 카드 복습에 나올 카드: 간격이 돌아온 카드 가운데 오늘 이미 매긴 것은 뺀다(같은 날 두 번 올리지 않음). 오늘 화면의 "카드 복습" 수도 이것으로 센다 */
+function dueNow(){const t=todayStr();return dueCards(null).filter(c=>pget(c.id).last!==t);}
+/* 카드 복습: dueNow에서 o.skip(오늘 세트 복습에 들어 있는 카드)은 빼고, o.k장까지 */
+function startDueAll(o){o=o||{};const sk=new Set(o.skip||[]);let ids=dueNow().map(c=>c.id).filter(id=>!sk.has(id));if(o.k)ids=ids.slice(0,o.k);
   startSession({kind:'cards',title:'카드 복습',items:cardItems(ids),requeue:true,k:o.k||null});}
 function startFree(){startSession({kind:'free',title:'자유 복습',items:cardItems(shuffle(deck().filter(rangeFilter(S.range))).slice(0,30).map(c=>c.id))});}
 /* 세트 복습 항목: 세트 카드(오늘 이미 매긴 카드는 빼서 같은 날 두 번 올리지 않음)와 세트 퀴즈 */
@@ -1300,10 +1305,11 @@ function vAdmin(){const me=PE_IO.member();if(!me||!me.admin)return topbar('승�
 const TM={preset:'essay',total:6000,parts:4,endAt:0,remain:6000,running:false,iv:null,lastPart:-1,custom:100};
 const PRESETS={p1:{n:'1교시 단답',total:100,parts:10},essay:{n:'논술 교시',total:100,parts:4},one1:{n:'단답 1문',total:10,parts:1},one2:{n:'논술 1문',total:25,parts:1},custom:{n:'직접',total:0,parts:1}};
 function setPreset(k){TM.preset=k;const p=PRESETS[k];TM.total=(k==='custom'?TM.custom:p.total)*60;TM.parts=p.parts;TM.remain=TM.total;TM.running=false;TM.lastPart=-1;clearInterval(TM.iv);PE_IO.keepAwake(false);}
-/* 다른 타이머로 바꾸기: 돌고 있거나 멈춰 둔 타이머가 있으면 먼저 묻는다(취소하면 o.no). 같은 타이머면 그대로 두고 then만 */
+/* 다른 타이머로 바꾸기: 돌고 있거나 멈춰 둔 타이머가 있으면 먼저 묻는다(취소하면 o.no).
+   같은 타이머: 타이머 화면에서 고른 칸을 다시 누르면(o.keep) 그대로, 다른 화면의 타이머 버튼은 새로 맞추되 돌고 있을 때만 묻는다 */
 function setPresetAsk(k,then,o){o=o||{};const busy=TM.running||(TM.remain>0&&TM.remain<TM.total),same=TM.preset===k&&(k!=='custom'||TM.custom===o.mins);
   const go=()=>{if(k==='custom'&&o.mins)TM.custom=o.mins;setPreset(k);if(o.ctx)TM.ctx=o.ctx;then&&then();};
-  if(busy&&same){if(o.ctx)TM.ctx=o.ctx;return then&&then();}if(!busy)return go();
+  if(busy&&same&&o.keep){if(o.ctx)TM.ctx=o.ctx;return then&&then();}if(!busy||(same&&!TM.running))return go();
   PE_IO.ask('돌고 있는 '+PRESETS[TM.preset].n+' 타이머(남은 '+mmss(TM.remain)+')를 멈추고 '+(o.name||PRESETS[k].n)+' '+(o.n||(k==='custom'?o.mins:PRESETS[k].total))+'분으로 바꿀까요?',go,o.no);}
 function beep(long){try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;TM.ac=TM.ac||new A();if(TM.ac.state!=='running'&&TM.ac.resume)TM.ac.resume().catch(()=>{});const o=TM.ac.createOscillator(),g=TM.ac.createGain();o.connect(g);g.connect(TM.ac.destination);o.frequency.value=long?660:880;g.gain.value=.15;o.start();o.stop(TM.ac.currentTime+(long?.9:.25));}catch(e){}}
 function partIdx(){const per=TM.total/TM.parts;return Math.min(TM.parts,Math.floor((TM.total-TM.remain)/per)+1);}
@@ -1385,7 +1391,9 @@ document.addEventListener('click',e=>{
   case'set-open':{const i=Number(D.i);const key=D.d+':o';SV[key]=SV[key]===i?null:i;if(SV[key]===i){const p=sp(D.d);p.read[i]=1;introduce(setCardId(D.d,i));touchDay();calSetRead(D.d);save();}return render();}
   case'set-flash':{const rk='flash:'+D.d;if(SES&&SES.rkey===rk&&SES.i<SES.items.length)return nav('sess');
     const s=SETS.sets[D.d];const items=(s.cards||[]).map((_,i)=>({type:'card',id:setCardId(D.d,i),si:i})).filter(x=>x.id);const r=resumeGet(rk),i0=r&&r.i<items.length?r.i:0;
-    if(i0)toast(`${i0+1}번째 카드부터 이어서 해요`);return startSession({kind:'flash',title:korDate(D.d)+' 세트 카드',items,setD:D.d,rkey:rk,i:i0});}
+    /* 이어서 할 때 그 앞 카드 가운데 이미 본 것(세트의 읽음: 뒷면을 봤거나 펼쳐 읽음)은 끝낸 것으로 센다. 넘기기만 한 카드는 "이어서"로 남는다 */
+    const rs=spGet(D.d).read||{},done={};items.slice(0,i0).forEach((x,j)=>{if(rs[x.si])done[j]=1;});
+    if(i0)toast(`${i0+1}번째 카드부터 이어서 해요`);return startSession({kind:'flash',title:korDate(D.d)+' 세트 카드',items,setD:D.d,rkey:rk,i:i0,done});}
   case'cal-mon':return calShift(Number(D.v),true);
   case'cal-day':{SV.calD=D.d;render();return openModal(`<p class="sheet-k">${D.d===todayStr()?'오늘':'그날'} 끝낸 공부</p><h2 class="cmh">${esc(korDate(D.d,true))}</h2>${calDayBody(D.d)}<div class="btns"><button class="btn sec" data-act="cal-close">닫기</button></div>`);}
   case'cal-today':SV.calM=null;SV.calD=null;return render();
@@ -1495,8 +1503,8 @@ document.addEventListener('click',e=>{
   case'report':return copy(weeklyReport(),'주간 리포트를 복사했어요');
   /* 타이머 */
   case'timer-go':return setPresetAsk(D.p,()=>nav('timer'),{no:()=>nav('timer')});
-  case'timer-preset':return setPresetAsk(D.p,render,{no:render,mins:D.p==='custom'?TM.custom:undefined});
-  case'timer-custom':return setPresetAsk('custom',render,{no:render,mins:Math.max(1,Number(($('#tmCustom')||{}).value)||100)});
+  case'timer-preset':return setPresetAsk(D.p,render,{no:render,keep:1,mins:D.p==='custom'?TM.custom:undefined});
+  case'timer-custom':return setPresetAsk('custom',render,{no:render,keep:1,mins:Math.max(1,Number(($('#tmCustom')||{}).value)||100)});
   case'timer-toggle':return TM.running?tPause():tStart();
   case'timer-reset':return tReset();
   /* 도구 */
