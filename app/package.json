@@ -7,7 +7,7 @@
     "start": "node scripts/build-web.js && expo start",
     "build:web": "node scripts/build-web.js",
     "postinstall": "node scripts/build-web.js",
-    "test": "node tests/app.test.js && node tests/native.test.js && node tests/gloss.test.js",
+    "test": "node tests/app.test.js && node tests/plan.test.js && node tests/native.test.js && node tests/gloss.test.js",
     "test:firebase": "cd firebase && npx -y firebase-tools@15 emulators:exec --only auth,firestore --project demo-gisulsa \"node ../tests/member.test.js\""
   },
   "dependencies": {

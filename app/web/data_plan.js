@@ -48,6 +48,22 @@ window.PE_HW = {
   4:{w:1,s:2,rv:1,eo:2,ew:0,fg:1,dd:2, why:'파이널은 새로 쌓기보다 회전이에요. 짧게 여러 번 꺼내 보는 숙제만 남겨요.'},
   5:{w:0,s:2,rv:1,eo:1,ew:0,fg:0,dd:1, why:'시험 주는 머릿속에 있는 것을 꺼내 보기만 해요.'}
 };
+// 숙제 중 "필수"로 셀 앞쪽 동그라미 수(단계별, PE_HW 횟수보다 크면 PE_HW에 맞춤). 나머지 동그라미는 "더 하기"
+window.PE_HW_MIN = {0:{w:1,s:2,eo:2,dd:1,ew:0},1:{w:1,s:2,eo:2,dd:1,ew:0},2:{w:1,s:2,eo:1,dd:1,ew:1},
+  3:{w:1,s:1,eo:1,dd:2,ew:0,fg:1},4:{w:1,s:1,eo:1,dd:1,ew:0},5:{w:0,s:1,eo:1,dd:0,ew:0}};
+// 주간 성적표 배점(합 100). hw는 손글씨(hand) 안의 배분, rot는 4단계 카드 회전. 0단계는 1단계 표, 5단계와 시험이 든 주는 점수 대신 체크
+window.PE_SCORE = {1:{core:25,mock:25,hand:30,hw:{dd:12,eo:9,w:9},rev:15,close:5},
+  2:{core:20,mock:20,hand:40,hw:{essay:20,dd:10,w:5,eo:5},rev:15,close:5},
+  3:{core:10,mock:35,hand:35,hw:{redo:20,dd:10,fg:5},rev:15,close:5},
+  4:{core:10,mock:20,hand:25,hw:{redo:15,dd:10},rot:30,rev:10,close:5}};
+// 아직 오지 않은 것의 어림(분): 평일 세트 핵심(읽기 10 + 퀴즈 5; 시험 전 3일은 10). 이번 주 모의의 어림은 app.js의 estMock(w)
+window.PE_EST = {core:15,coreExam:10};
+// 단계 첫 주(월요일부터)에 한 줄
+window.PE_PHASE_NOTE = {1:'1단계 시작: 세트 숙제(쓰기·말하기·목차)와 단답 1문이 매일 필수예요. 논술은 토요일 모의 2문으로 채워요.',
+  2:'2단계 시작: 평일 논술 실전 25분이 필수가 돼요(주 5편). 목차 옮겨 적기는 3번으로 줄어요.',
+  3:'3단계 시작: 토 1·2교시, 일 3·4교시 모의와 평일 모의 오답 다시 쓰기 25분이 필수예요.',
+  4:'4단계 시작: 카드 50장 돌리기와 기출 목차 외우기 5문이 매일 필수예요. 새 용어는 하루 1개로 줄어요.',
+  5:'시험 주: 새로 배우지 않아요. 카드·목차 돌리기와 준비물 점검만 해요.'};
 
 // 주차별 계획 — u: 단원 번호(세트·암기 범위에 쓰임)
 window.PE_WEEKS = [
@@ -118,6 +134,42 @@ window.PE_ROUTINES = {
   },
   exam: { wd:['새로 배우지 않기 — 카드·목차 회전만','수면 7시간','준비물 점검(볼펜, 자, 시계, 신분증, 수험표, 간식)','시험일: 문제 선택 3분 → 시간 엄수 → 공란 금지'], sat:['시험 당일 — 교시마다 시간표대로'], sun:['복기 기록, 면접 준비 계획'] }
 };
+
+// PE_ROUTINES 줄을 오늘 몫의 할 일로 바꾼 표(단계·요일별). k는 고정 id 머리(날짜나 주를 붙인다, 배열 순서와 무관), need 필수·권장,
+// blk 오늘 몫 블록, to 시작 동작, auto 이미 있는 기록으로 끝을 앎, after 앞선 일 다음 날, dow 그 요일만(5 금요일). 단계 줄과 할 일의 대응은 아래와 같다
+//   준비 주 평일: 세트 용어 읽기 · 이번 주 목표(권장) · 카드 복습 · 단답 1문 / 토: 진단 모의 · 채점 / 일: 세트 복습·오답 · 다음 주 기출 훑기 · 하루 공부 시간 정하기
+//   1단계 평일: 용어 읽기 · 세트 복습 2개 + 카드 복습 · 세트 퀴즈 + 오답(금 필수) · 목차 떠올리기 3문 · 교재 60분 · 단답 1문 + 1문 더
+//   2단계 평일: 목차 떠올리기 5문(필수) · 세트 논술 25분(필수) · 고쳐 쓰기 30분 / 일: 지난주 모의 틀린 1문제 다시 쓰기 · 기출 목차 10개
+//   3단계 평일: 약점 단원 카드 · 수치 빈칸 10문 · 목차 5문 · 모의 오답 다시 쓰기 25분 · 그림·표 1번(숙제) / 토·일: 1·2교시, 3·4교시 모의 · 일: 점수 적기
+//   4단계 평일: 카드 50장 · 기출 목차 5문 · 다시 쓰기 25분 · 압축 요약 2장 / 일: 반나절 휴식 · 압축 요약 16장 · 준비물·일정
+//   시험 전 3일: 읽기·퀴즈만 · 카드 30장 · 목차 5문 · 금요일 준비물 점검 / 시험 날: 체크리스트 / 다음 날: 48시간 복기
+// auto: outline3/5 = 오늘 떠올린 논술 목차 3/5문(S.essayStat[id].last), cloze10 = 오늘 수치 빈칸 10문(S.log), graded50/30 = 오늘 매긴 카드 50/30장(S.daily),
+//       kichul = S.tk['kichul:'+주], budget = S.tk.budget, score = 이번 주 모의 점수(S.mockp[날짜].sc). auto가 없으면 "다 했어요"로 S.tk[id]
+window.PE_EXTRA = {
+  prep:{wd:[{k:'goal',t:'이번 주 목표 하나 처리',min:20,need:'권장',to:'week'}],
+        sun:[{k:'kichul',t:'다음 주 단원 기출 훑기',min:20,need:'권장',blk:'close',auto:'kichul'},
+             {k:'budget',t:'하루 공부 시간 정하기',min:5,need:'필수',blk:'close',to:'settings',auto:'budget'}]},
+  1:{wd:[{k:'x.outline',t:'논술 목차 떠올리기 3문',min:10,need:'권장',auto:'outline3',to:'start-outline'},
+         {k:'x.book',t:'교재 단원 읽기·서브노트 60분',min:60,need:'권장'},
+         {k:'x.dd2',t:'단답 1문제 더',min:15,need:'권장',to:'dd-rand'}],
+     sun:[{k:'kichul',t:'다음 주 단원 기출 훑기',min:20,need:'권장',blk:'close',auto:'kichul'}]},
+  2:{wd:[{k:'x.outline',t:'논술 목차 떠올리기 5문',min:15,need:'필수',blk:'noon',auto:'outline5',to:'start-outline'},
+         {k:'x.fix',t:'첨삭 받은 논술 고쳐 쓰기 30분',min:30,need:'권장',after:'essay'}],
+     sun:[{k:'redo',t:'지난주 모의 틀린 1문제 다시 쓰기 25분',min:25,need:'필수',blk:'hand'},
+          {k:'kichul',t:'다음 주 단원 기출 목차 10개 외우기',min:20,need:'권장',blk:'close',auto:'kichul'}]},
+  3:{wd:[{k:'x.outline',t:'논술 목차 떠올리기 5문',min:15,need:'필수',blk:'noon',auto:'outline5',to:'start-outline'},
+         {k:'x.cloze',t:'수치 빈칸 10문',min:5,need:'권장',auto:'cloze10',to:'start-cloze'},
+         {k:'x.redo',t:'지난 모의 틀린 1문제 다시 쓰기 25분',min:25,need:'필수',blk:'eve'}],
+     sun:[{k:'x.trend',t:'모의 점수 적기',min:2,need:'권장',blk:'close',auto:'score'}]},
+  4:{wd:[{k:'x.rot',t:'카드 50장 돌리기',min:25,need:'필수',blk:'am',auto:'graded50',to:'start-rot'},
+         {k:'x.outline',t:'기출 목차 외우기 5문',min:15,need:'필수',blk:'noon',auto:'outline5',to:'start-outline'},
+         {k:'x.redo',t:'틀린 1문제 다시 쓰기 25분',min:25,need:'필수',blk:'eve'},
+         {k:'x.sum2',t:'압축 요약 2장 읽기',min:20,need:'권장'}],
+     sun:[{k:'sum16',t:'압축 요약 16장 통독',min:90,need:'권장',blk:'close'},
+          {k:'prep',t:'다음 주 준비물·일정 점검',min:10,need:'권장',blk:'close'}]},
+  pre3:{wd:[{k:'x.rot',t:'카드 30장 돌리기',min:15,need:'필수',blk:'am',auto:'graded30',to:'start-rot'},
+            {k:'x.outline',t:'논술 목차 떠올리기 5문',min:15,need:'필수',blk:'noon',auto:'outline5',to:'start-outline'},
+            {k:'kit',t:'준비물 점검: 검은 볼펜·자·시계·신분증·수험표·간식',min:10,need:'필수',blk:'eve',dow:5}]}};
 
 // 마일스톤(원서접수·시험·발표)은 앱이 준비 시작일과 목표 회차로 계산한다(app.js milestones)
 window.PE_MILESTONES = [];
