@@ -587,6 +587,8 @@ button.qline:active{background:var(--rule2)}
 .qbar i{display:block;height:100%;border-radius:3px;background:var(--blue)}
 .qbar.ok i{background:var(--ok)}
 .qx{font-size:.84rem;color:var(--ink2);line-height:1.4}
+.qline.tkl .tkc{margin-top:0}   /* 날짜 일 핀 줄(원서접수·48시간 복기): 줄 전체가 동그라미 */
+.qline.tkl.done .qm{color:var(--ok);font-weight:700}
 .score{margin-top:14px;padding:16px;border-radius:var(--r-lg);background:var(--sheet)}
 .sc1{margin:0;font-size:1.06rem;font-weight:700;line-height:1.4}
 .sc2{margin:2px 0 0;font-size:.88rem;color:var(--ink2)}
