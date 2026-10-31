@@ -791,6 +791,93 @@ function runWeek(W, sets, st) {
     click(`[data-act="hw"][data-k="fg"][data-v="${fgN}"]`); await sleep(10);
     ok(tOn && pe.S().sp[THU].tasks[ti] === false && pe.setStatus(THU).nt === pe.hwItems(THU).length, '그림·표 마지막 동그라미 → 그 과제도 다 함(sp.tasks), 하나 빼면 되돌림(숙제 수는 그대로)');
     pe.goTab('today'); await sleep(40);
+
+    // 하는 곳이 없는 다음 줄(3단계 토요일 "모의 오답 다시 쓰기" 몫): 끝 화면·세트 막대의 "다음"은 오늘에서 그 줄을 펼칠 뿐, 다시 쓰기를 한 것으로 치지 않는다(S.tk 그대로)
+    { const W3 = '2027-02-22', X3 = { sets: {}, mocks: {} }; for (let i = 0; i < 5; i++) X3.sets[add(W3, i)] = cloneSet(add(W3, i), 18, refsFor(3));
+      X3.mocks['2027-02-27'] = cloneMock('2027-02-27', { p1: clone(MOCK0.p1), p2: P6(2), p3: P6(3), p4: P6(4) });
+      const st3 = ddOpen => { const st = clone(BLANK); for (let i = 0; i < 5; i++) { const dd = add(W3, i), s = X3.sets[dd], p = { read: {}, quiz: {}, tasks: {}, essay: {}, rev: {}, first: dd, hw: { fg: 3 } };
+          if (!(ddOpen && i === 0)) for (let j = 0; j < 10; j++) p.hw['dd' + j] = 1;
+          s.cards.forEach((_, j) => p.read[j] = 1); s.quiz.forEach((q, j) => p.quiz[j] = { pick: q.a, ok: true }); if (ddOpen || i !== 2) p.rev = { 1: add(dd, 1), 3: add(dd, 3) }; st.sp[dd] = p; }
+        st.mockp['2027-02-27'] = { p1: true, p2: true }; return st; };
+      const redo = () => Object.keys(pe.S().tk).filter(k => /redo/.test(k)), act = () => (V$().querySelector('.prow.now') || {}).dataset;
+      scene('2027-02-27T08:00:00', st3(false), X3); pe.goTab('today'); await sleep(40);
+      const V3 = pe.planToday('2027-02-27'), rv = V3.rows.find(r => /^rev:/.test(r.id) && !r.done), qr = V3.rows.find(r => /^q\.redo:/.test(r.id)), h3 = L();
+      pe.taskGo(rv.id); await sleep(60); await doAll(true); const tk1 = JSON.stringify(pe.S().tk);
+      ok(qr && /^다음: 모의 오답 다시 쓰기 \d편 · /.test(T_(endP())), `3단계 토요일 세트 복습(${rv && rv.id}) 끝: 다음 오늘 줄은 "모의 오답 다시 쓰기"`);
+      click('[data-act="end-go"][data-w="p"]'); await sleep(60);
+      ok(H() === '#today' && L() === h3 && !redo().length && JSON.stringify(pe.S().tk) === tk1 && act() && act().task === qr.id && !pe.weekBoard('2027-02-27').lines.find(l => l.k === 'redo').a,
+        '끝 화면 "다음: 모의 오답 다시 쓰기" → 오늘에서 그 줄을 펼침(다시 쓰기로 치지 않음: S.tk·주간 다시 쓰기 0/5 그대로, 방문 기록 그대로)');
+      scene('2027-02-27T08:00:00', st3(true), X3); pe.goTab('today'); await sleep(40);
+      const V4 = pe.planToday('2027-02-27'), qd = V4.rows.find(r => /^q\.dd:/.test(r.id)), qr4 = V4.rows.find(r => /^q\.redo:/.test(r.id)); pe.taskGo(qd.id); await sleep(60);
+      for (let k = 0; k < 5 && /^다 썼어요/.test(T_(bar())); k++) await tap('.nextbar .btn');
+      const tk2 = JSON.stringify(pe.S().tk);
+      ok(H() === '#set/2027-02-22' && /^✓ 끝 · 아까 넘긴 것: 모의 오답 다시 쓰기 \d편 · /.test(T_(bar())), '단답 손글씨 몫을 다 쓰면 세트 막대 "✓ 끝 · 아까 넘긴 것: 모의 오답 다시 쓰기"');
+      await tap('.nextbar .btn');
+      ok(H() === '#today' && !redo().length && JSON.stringify(pe.S().tk) === tk2 && act() && act().task === qr4.id, '세트 막대 "✓ 끝 · 아까 넘긴 것: 모의 오답 다시 쓰기" → 오늘에서 그 줄을 펼침(치지 않음)');
+      ok(T_(V$().querySelector('.prow.now .pgo .btn')) === '다 썼어요', '펼친 줄의 파란 "다 썼어요"를 눌러야 다시 쓰기 1편으로 친다');
+      pe.taskGo(qr4.id, { replace: true }); await sleep(30); ok(!redo().length && H() === '#today', '"다음"으로 부른 하는 곳 없는 줄(taskGo replace)은 손으로 치지 않음');
+      click('#view .prow.now .pgo .btn'); await sleep(30); ok(redo().length === 1, '파란 "다 썼어요" → 다시 쓰기 1편(S.tk x.redo)'); }
+
+    // 단답 답안지: 세트 ①·카드 창에서 연 그 세트 숙제 단답 카드는 #dandap/카드/날짜("다 썼어요(숙제에 표시)" → 숙제 동그라미). 숙제가 아닌 카드는 칠 것이 없어 타이머가 파란 버튼
+    scene('2026-10-29T07:40:00', ST); pe.goTab('today'); await sleep(40);
+    { const ddId = pe.hwParts(THU).dd.ids[0], ddk = pe.hwParts(THU).dd.ks[0], ix = pe.setIds(THU).indexOf(ddId), dds = pe.hwItems(THU).find(x => x.key === 'dd').rows.map(r => r.go);
+      await show('#set/' + THU); click('[data-act="set-tab"][data-t="cards"]'); await sleep(10); click(`[data-act="set-open"][data-i="${ix}"]`); await sleep(20);
+      ok(V$().querySelector('.acc.open [data-h^="dandap/"]').dataset.h === 'dandap/' + encodeURIComponent(ddId) + '/' + THU, '① 숙제 단답 카드의 "단답 답안지" → #dandap/카드/날짜');
+      await tap('.acc.open [data-h^="dandap/"]');
+      ok(prim().length === 1 && T_(prim()[0]) === '다 썼어요(숙제에 표시)' && !V$().querySelector('[data-act="dd-tick"]'), '①에서 연 숙제 카드 답안지: 파란 "다 썼어요(숙제에 표시)" 하나("단답 1문제 더" 없음)');
+      await tap('[data-act="dd-done"]');
+      ok(pe.S().sp[THU].hw[ddk] === 1 && !pe.S().tk['x.dd2:' + THU] && pe.planToday(THU).rows.find(r => r.id === 'hw.dd:' + THU).done, '→ 그 세트 숙제 단답 동그라미, 오늘 "단답 1문제" 줄도 끝("단답 1문제 더"는 치지 않음)');
+      const b = d.createElement('button'); b.dataset.act = 'card-modal'; b.dataset.id = ddId; V$().appendChild(b); b.dispatchEvent(new w.MouseEvent('click', { bubbles: true })); await sleep(10);
+      const mh = d.querySelector('#modal-wrap [data-h^="dandap/"]'); ok(mh && mh.dataset.h === 'dandap/' + encodeURIComponent(ddId) + '/' + THU, '카드 창의 "단답 답안지로 보기"도 숙제 단답 카드면 #dandap/카드/날짜'); d.querySelector('#modal-wrap').innerHTML = '';
+      const nx = pe.setIds(THU).findIndex(id => !dds.includes(id)); await show('#set/' + THU); click('[data-act="set-tab"][data-t="cards"]'); await sleep(10); click(`[data-act="set-open"][data-i="${nx}"]`); await sleep(20);
+      const nhs = V$().querySelector('.acc.open [data-h^="dandap/"]').dataset.h; await tap('.acc.open [data-h^="dandap/"]');
+      ok(nhs.split('/').length === 2 && prim().length === 1 && prim()[0].dataset.act === 'timer-go' && !V$().querySelector('[data-act="dd-tick"], [data-act="dd-done"]'), '① 숙제 아닌 카드의 답안지(#dandap/카드): 칠 것이 없어 "다 썼어요" 없음, 파란 버튼은 타이머 10분'); }
+    // 끝 화면에서 "다음"으로 연 "단답 1문제 더"(답안지)도 뒤로는 연 곳(오늘)으로(끝난 세션 화면으로 돌아가지 않음)
+    scene('2026-10-29T07:40:00', ST); pe.goTab('today'); await sleep(40); pe.taskGo('rev:2026-10-27:1'); await sleep(60); await doAll(true); const hd = L();
+    pe.taskGo('x.dd2:' + THU, { replace: true }); await sleep(60); const ddOk = /^#dandap\/[^/]+$/.test(H()) && prim().length === 1 && prim()[0].dataset.act === 'dd-tick';
+    await tap('.topbar [data-act="back"]');
+    ok(ddOk && H() === '#today' && L() === hd, '끝 화면 "다음"으로 연 "단답 1문제 더" 답안지: 파란 "다 썼어요", 뒤로 → 오늘(방문 기록 그대로)');
+    // 연습(테스트 탭) "단답 답안지 1문"의 "다 썼어요": "단답 1문제 더" 줄이 없는 날(토요일)도 달력 할 일 글은 "단답 1문제 더"(id 그대로가 아님)
+    scene('2026-10-31T08:00:00', ST); pe.goTab('today'); await sleep(40); await show('#test'); await tap('[data-act="dd-rand"]');
+    ok(/^#dandap\/[^/]+$/.test(H()) && prim().length === 1 && prim()[0].dataset.act === 'dd-tick', '연습에서 연 답안지: 파란 "다 썼어요" 하나(오늘 "단답 1문제 더")');
+    await tap('[data-act="dd-tick"]');
+    ok(pe.S().tk['x.dd2:' + SAT] === SAT && JSON.stringify(((pe.S().cal[SAT] || {}).x || {})['tk:x.dd2:' + SAT]) === '["todo","단답 1문제 더"]', '토요일에 친 "다 썼어요": 달력 할 일 "단답 1문제 더"');
+
+    // 끝 화면 "또는:"은 다른 곳으로 가는 것만: 오늘 줄(용어 읽기)에서 연 가리며 외우기 끝 → 다음 줄이 그 세트 퀴즈면 "또는: 세트 퀴즈 5문"을 다시 쓰지 않음
+    scene('2026-10-29T07:40:00', EMPTY); pe.goTab('today'); await sleep(40); pe.taskGo('set.read:' + THU); await sleep(60);
+    click('[data-act="memo-set"]'); await sleep(60); while (pe.MEMO().i + 1 < pe.MEMO().items.length) { click('[data-act="memo-next"]'); await sleep(2); }
+    click('[data-act="memo-finish"]'); await sleep(20);
+    ok(T_(endP()) === '다음: 세트 퀴즈 5문 · 5분' && !link() && prim().length === 1, '용어를 다 본 가리며 외우기 끝: "다음: 세트 퀴즈 5문 · 5분" 하나(같은 곳인 "또는: 세트 퀴즈 5문" 없음)');
+    pe.goTab('today'); await sleep(40);
+
+    // 지난 세트 막대: 넘어가는 칸(쓰기·단답·목차)만 끝났으면 "넘어가는 필수 끝"("③ 숙제 3/5"와 어긋나지 않게), 필수를 모두 하면 "이 세트 필수 끝"
+    scene('2026-10-31T08:00:00', ST); pe.goTab('today'); await sleep(40);
+    { const D = '2026-10-27', P = pe.hwParts(D), h = pe.S().sp[D].hw, seg3 = () => T_(V$().querySelector('[data-act="set-tab"][data-t="tasks"]'));
+      P.write.ks.forEach(k => h[k] = P.write.f); P.dd.ks.forEach(k => h[k] = 1); h.eo = P.eo.f; pe.invalidate(); await show('#set/' + D); click('[data-act="set-tab"][data-t="tasks"]'); await sleep(10);
+      ok(/③ 숙제 3\/5/.test(seg3()) && T_(bar()) === '넘어가는 필수 끝 · 돌아가기', '지난 세트: 쓰기·단답·목차만 했으면 막대 "넘어가는 필수 끝 · 돌아가기"(③ 숙제 3/5)');
+      P.say.ks.forEach(k => h[k] = P.say.f); h.sl = 1; pe.invalidate(); pe.render(); await sleep(10);
+      ok(/③ 숙제 ✓/.test(seg3()) && T_(bar()) === '이 세트 필수 끝 · 돌아가기', '필수를 모두 하면 "이 세트 필수 끝 · 돌아가기"'); }
+
+    // 접는 칸: 세트 퀴즈를 다 푼 뒤 열리는 용어 퀴즈·숙제 더 하기는 닫으면 다시 그려도 닫힌 채. 오늘 "숙제 나머지" 줄로 오면 더 하기를 다시 펼친다
+    await show('#set/2026-10-26'); click('[data-act="set-tab"][data-t="quiz"]'); await sleep(10);
+    { const gf = () => V$().querySelector('details.gqf'), o0 = gf().open; click('details.gqf > summary'); gf().open = false;
+      click('[data-act="set-tab"][data-t="cards"]'); await sleep(10); click('[data-act="set-tab"][data-t="quiz"]'); await sleep(10);
+      ok(o0 && !gf().open, '용어 퀴즈 접는 칸: 세트 퀴즈를 다 풀면 열려 있고, 닫으면 다시 그려도 닫힌 채'); }
+    scene('2026-10-29T07:40:00', ST); pe.goTab('today'); await sleep(40);
+    { const hx = () => V$().querySelector('details.hwext'), rest = pe.taskList(THU).find(x => x.id === 'hw.rest:' + THU);
+      pe.taskGo(rest.id); await sleep(60); const o1 = !!hx() && hx().open; click('details.hwext > summary'); hx().open = false; pe.render(); await sleep(10); const o2 = hx().open;
+      pe.goTab('today'); await sleep(40); pe.taskGo(rest.id); await sleep(60);
+      ok(rest && o1 && !o2 && hx().open, '숙제 더 하기: "숙제 나머지" 줄로 오면 펼쳐 있고, 닫으면 다시 그려도 닫힌 채, 그 줄로 다시 오면 다시 펼침'); }
+    pe.goTab('today'); await sleep(40);
+
+    // 스크롤: "다음: 용어 읽기"로 펼친 용어는 머리가 위쪽 막대 바로 아래(가운데 맞추기는 긴 설명에서 제목이 화면 위로 나감), 세트 퀴즈 카드는 가운데로
+    { const calls = [], si0 = w.HTMLElement.prototype.scrollIntoView, st0 = w.scrollTo;
+      w.HTMLElement.prototype.scrollIntoView = function (o) { calls.push(['into', this.className, o && o.block]); }; w.scrollTo = (x, y) => { calls.push(['to', y]); };
+      scene('2026-10-29T07:40:00', EMPTY); pe.goTab('today'); await sleep(40); await show('#set/' + THU); click('[data-act="set-tab"][data-t="cards"]'); await sleep(10); calls.length = 0; await tap('.nextbar .btn');
+      ok(V$().querySelector('.acc.open') && calls.some(c => c[0] === 'to') && !calls.some(c => c[0] === 'into'), '"다음: 용어 읽기" → 펼친 용어를 위쪽 막대 아래로(가운데로 맞추지 않음)');
+      for (let i = 0; i < 10; i++) pe.S().sp[THU].read[i] = 1; pe.render(); calls.length = 0; await tap('.nextbar .btn');
+      ok(calls.some(c => c[0] === 'into' && /qcard/.test(c[1]) && c[2] === 'center'), '"다음: 세트 퀴즈" → 퀴즈 카드는 가운데로');
+      w.HTMLElement.prototype.scrollIntoView = si0; w.scrollTo = st0; pe.goTab('today'); await sleep(40); }
   }
 
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
