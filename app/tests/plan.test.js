@@ -659,7 +659,34 @@ function runWeek(W, sets, st) {
     ok(a1 && !nb(), '38. 접수 마지막 날(1/1)까지 1, 다음 날은 없음');
     at('2027-01-31T09:00:00'); pe.render(); const r1 = !!nb() && nb().textContent === '1'; at('2027-02-02T09:00:00'); pe.render();
     ok(r1 && !nb() && pe.navBadgeN('2027-02-01') === 1, '38. 시험(1/30) 다음 날부터 48시간 복기 1(1/31·2/1), 2/2는 없음');
+    // 배지가 세는 일은 이번 주 탭에도: "일요일까지 끝낼 것" 맨 위 동그라미 줄(누르면 접수했어요·다 했어요 → 배지 없음, ✓로 아래, 다시 누르면 되돌림).
+    // 오늘은 맨 위 핀만(아래 이번 주 칸에 다시 넣지 않음). 화면의 파란 버튼은 그 줄이 아님
+    for (const [t, id, re] of [['2026-12-30', 'apply:141', /^큐넷 원서접수 · 제141회15분12\/29\(화\)~1\/1\(금\) 예상 · 첫날 오전 10시 · 접수 기간$/], ['2027-02-01', 'recap:141', /^제141회 복기2시간 30분문제 모두 적기 → 4문제 다시 써서 채점\(48시간 안\) · 오늘까지$/]]) {
+      scene(t + 'T09:00:00', BLANK, HOL); await show('#week');
+      const ql = () => [...V$().querySelectorAll('.qline')], q = () => V$().querySelector(`.qline.tkl[data-act="tk"][data-id="${id}"]`), p = prim();
+      ok(nb() && nb().textContent === '1' && q() && ql()[0] === q() && re.test(q().textContent) && !q().querySelector('.tkc.on') && p.length === 1 && p[0].dataset.id !== id, `38. ${t}: 배지 1 → 이번 주 탭 맨 위에 ${id} 줄(동그라미), 파란 버튼은 ${p[0] && p[0].textContent}`);
+      await show('#today');
+      ok(V$().querySelector(`.pin [data-act="tk"][data-id="${id}"]`) && V$().querySelector('.wksec') && !V$().querySelector(`.wksec [data-id="${id}"]`), `38. ${t}: 오늘은 맨 위 핀만(이번 주 칸에는 없음)`);
+      await show('#week'); const hl = w.history.length; click(`.qline.tkl[data-id="${id}"]`); await sleep(10);
+      const L1 = ql(), i1 = L1.indexOf(q());
+      ok(pe.S().tk[id] === t && !nb() && pe.navBadgeN(t) === 0 && w.location.hash === '#week' && w.history.length === hl && q().querySelector('.tkc.on') && /접수했어요|다 했어요/.test(q().textContent) && i1 > 0 && L1.every((x, i) => (i < i1) !== x.classList.contains('done')), `38. ${t}: 이번 주 탭에서 누르면 S.tk → 배지 없음, 줄은 ✓로 아래(주소·방문 기록 그대로)`);
+      click(`.qline.tkl[data-id="${id}"]`); await sleep(10);
+      ok(!pe.S().tk[id] && nb() && nb().textContent === '1' && ql()[0] === q(), `38. ${t}: 다시 누르면 되돌림(배지 1, 줄은 맨 위)`); }
     await go('#today'); }
+
+  // 39. 준비 시작 전·시험 뒤(이번 주 탭은 할 몫 카드 하나): 아래 기록(학습 달력 · 세트 보관함 · 통계·주간 리포트 · 로드맵)으로 통계에 간다(통계는 이번 주 탭에서만).
+  //     통계는 이번 주 점수 없이("—", "시험 주" 줄 없음), 주간 리포트는 "시험 뒤라·준비 시작 전이라 필수 점수가 없어요"
+  for (const [t, st, re] of [['2027-05-18', null, /이번 주는 시험 뒤라 필수 점수가 없어요/], ['2026-11-02', '2026-11-30', /이번 주는 준비 시작 전이라 필수 점수가 없어요/]]) {
+    scene(t + 'T09:00:00', BLANK); if (st) { pe.S().settings.start = st; pe.recalcPlan(); } await show('#week');
+    const hl = w.history.length;
+    ok(V$().querySelector('.norows') && ['cal', 'archive', 'stats', 'plan'].every(h => V$().querySelector(`.sec [data-act="go"][data-h="${h}"]`)) && prim().length === 1, `39. ${t}: 이번 주 탭은 카드 하나(파란 버튼 하나)와 기록 4줄`);
+    click('[data-act="go"][data-h="stats"]'); await sleep(60);
+    const tx = V$().textContent;
+    ok(w.location.hash === '#stats' && w.history.length === hl && (d.querySelector('.topbar .back') || {}).textContent === '이번 주' && /—이번 주 필수/.test(tx) && !/시험 주 · 점수 대신 체크/.test(tx) && !/ · 이번 주/.test(tx), `39. ${t}: → 통계(위쪽 "이번 주"), 이번 주 필수 "—", 이번 주 줄 없음`);
+    let copied = ''; const cp0 = w.PE_IO.copy; w.PE_IO.copy = x => { copied = x; return Promise.resolve(); }; click('[data-act="report"]'); await sleep(20); w.PE_IO.copy = cp0;
+    ok(re.test(copied) && !/시험이 든 주/.test(copied) && /^\[기술사 6개월 주간 리포트\] \S+ ~ \S+ \((시험 후|시작 전)\)\n/.test(copied), `39. ${t}: 주간 리포트 "${copied.split('\n').slice(0, 2).join(' / ')}"`);
+    click('.topbar [data-act="back"]'); await sleep(60); ok(w.location.hash === '#week' && w.history.length === hl, `39. ${t}: 뒤로 → 이번 주`); }
+  await go('#today');
 
   // 시작(taskGo)·다음 줄(nextAfter): 줄마다 한 번에 그 자리로
   scene('2026-10-29T07:40:00', ST);
