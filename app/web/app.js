@@ -15,6 +15,8 @@ const REVIEW_STEPS=[1,3,7,14,30];
 const KEY='pe_state_v1', SKEY='pe_sets_v1';
 const DATA_DEFAULT='https://raw.githubusercontent.com/woos-lee94/gisulsa-data/main/data/';
 const APP_VER='2.3.2';
+const MOCK_GRADE_SINCE='YYYY-MM-DD';            /* v3.0.0을 내는 날(마지막 단계에서 채움). 이 날짜 전 모의고사는 "채점 받았어요"를 묻지 않는다 */
+const BUDGET_DEF={wd:180,sat:300,sun:240};       /* 하루 공부 시간(분) 기본값: 평일·토요일·일요일과 공휴일(S.settings.budget, budgetOf) */
 const PLAN_START=(window.PE_EXAM&&PE_EXAM.defaults.start)||'2026-10-19';
 
 const IC={
@@ -46,9 +48,10 @@ const IC={
 const icon=(n)=>`<svg viewBox="0 0 24 24" aria-hidden="true">${IC[n]||''}</svg>`;
 
 /* ════════ 1. 상태 ════════ */
-function fresh(){return{v:2,settings:{start:PLAN_START,target:'auto',roundDates:{},exam:'',mock:'',newPerDay:10,theme:'auto',fs:'m',dataUrl:''},
+function fresh(){return{v:2,settings:{start:PLAN_START,target:'auto',roundDates:{},exam:'',mock:'',newPerDay:10,theme:'auto',fs:'m',dataUrl:'',budget:Object.assign({},BUDGET_DEF)},
   cards:{},userCards:[],userEssays:[],essayStat:{},checks:{},log:[],hidden:{},daily:{},lastMock:null,created:todayStr(),
-  sp:{},qp:{},wrong:{},sync:{},mockp:{},cal:{},resume:{}};}
+  sp:{},qp:{},wrong:{},sync:{},mockp:{},cal:{},resume:{},
+  tk:{},today:null,wk:{}};}   /* tk 할 일 id → 한 날, today 그날 고정한 오늘 몫, wk 주마다 기록(줄인 목표·지난주 점수) */
 function load(){try{const r=PE_IO.get(KEY);if(r){const s=JSON.parse(r);const f=fresh();for(const k in f){if(s[k]===undefined||s[k]===null&&k!=='lastMock')s[k]=f[k];}s.settings=Object.assign({},f.settings,s.settings||{});if(!s.settings.roundDates||typeof s.settings.roundDates!=='object')s.settings.roundDates={};if(!s.settings.target)s.settings.target='auto';s.v=2;return s;}}catch(e){}return fresh();}
 function loadSets(){try{const r=PE_IO.get(SKEY);if(r){const o=JSON.parse(r);return Object.assign({sets:{},mocks:{},kichul:null,index:null,plan:null},o);}}catch(e){}return{sets:{},mocks:{},kichul:null,index:null,plan:null};}
 let S=load(); let SETS=loadSets();
@@ -234,7 +237,7 @@ function fillCheck(giveup){const it=SES&&SES.items[SES.i];if(!it||it.type!=='fil
   const ins=document.querySelectorAll('.fill-in');const vals=it.b.map((_,k)=>giveup?'':((ins[k]&&ins[k].value)||'').trim());
   const res=it.b.map((bk,k)=>fillJudge(vals[k],c.d.substr(bk.i,bk.len)));const all=res.every(r=>r.ok);const key='F:'+c.id;const prev=S.wrong[key]?Object.assign({},S.wrong[key]):null;const p=prog(c.id);
   if(all){SES.stats.ok++;p.ok++;rightOnWrong(key);}else{SES.stats.no++;p.ng++;markWrong(key,'fill');sessMiss(c.id);}
-  SES.answered={vals,res,all,prev};touchDay();save();render();}
+  SES.answered={vals,res,all,prev};sessDid();render();}
 
 /* ════════ 7-3. 어려운 낱말 형광펜(설명 속 다른 카드 용어, 꾹 누르면 그 카드) ════════ */
 /* 용어 이름: 괄호를 뺀 본 이름, ·/, 로 나뉜 한 낱말(3자 이상), 괄호 속 영문. 흔한 말(FILL_STOP·GL_STOP)과 너무 짧거나 긴 이름은 뺀다 */
@@ -293,7 +296,8 @@ function glossSheet(w,d){const q=encodeURIComponent(w);
 function glOpen(raw){const r=glLookup(raw);if(!r)return false;if(r.t==='card'){const c=card(r.id);if(!c)return false;openModal(cardModal(c));return true;}openModal(glossSheet(r.w,r.t==='gloss'?r.d:''));return true;}
 
 /* ════════ 8. 세트 진행·다시 보기 ════════ */
-function sp(d){return S.sp[d]||(S.sp[d]={read:{},quiz:{},tasks:{},essay:{},rev:{}});}
+/* 세트 진행에 처음 쓰는 순간(세트 열기·넘겨 보기·가리며 외우기·용어 퀴즈·숙제 어느 것이든) 1·3·7·14·30일 세트 복습 시계가 돈다. 화면 그리기는 spGet만 쓴다 */
+function sp(d){const p=S.sp[d]||(S.sp[d]={read:{},quiz:{},tasks:{},essay:{},rev:{}});if(!p.first){p.first=todayStr();save();}return p;}
 function spGet(d){return S.sp[d]||{read:{},quiz:{},tasks:{},essay:{},rev:{}};}
 /* nt·td: 세트 숙제(hwItems) 수와 다 한 수 */
 function setStatus(d){const s=SETS.sets[d];if(!s)return null;const p=spGet(d);const nc=(s.cards||[]).length,nq=(s.quiz||[]).length,hs=hwSum(d),nt=hs.n,td=hs.done;
@@ -342,7 +346,7 @@ function parseHash(){const h=decodeURIComponent((location.hash||'').replace(/^#\
   if(TABS.includes(p[0]))r.tab=p[0];else if(p[0]&&TAB_OF[p[0]]!==undefined){r.page=p[0];r.tab=TAB_OF[p[0]]||(SES&&SES.from)||'today';}return r;}
 function nav(h){closeModal();if(('#'+h)===location.hash)render();else location.hash=h;}
 function back(){if(history.length>1&&document.referrer!==undefined&&R.page){history.back();}else nav(R.tab||'today');}
-window.addEventListener('hashchange',()=>{R=parseHash();if(R.page!=='sess')SES_SAVE();if(R.page!=='memo')memoStop();render();window.scrollTo(0,0);});
+window.addEventListener('hashchange',()=>{closeModal();R=parseHash();if(R.page!=='sess')SES_SAVE();if(R.page!=='memo')memoStop();render();window.scrollTo(0,0);});
 let SES=null;function SES_SAVE(){/* 세션은 메모리에만 */}
 function render(){R=parseHash();document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===R.tab));
   const v=$('#view');let html='';
@@ -358,6 +362,16 @@ const topbar=(title)=>`<div class="topbar"><button class="back" data-act="back">
 const sec=(title,meta,body)=>`<section class="sec"><div class="sec-h"><h2>${esc(title)}</h2>${meta?`<span class="meta">${meta}</span>`:''}</div>${body}</section>`;
 function row(o){const tag=o.act?'button':'div';const attrs=o.act?` data-act="${o.act}"${o.data?Object.keys(o.data).map(k=>` data-${k}="${esc(o.data[k])}"`).join(''):''}`:'';
   return`<${tag} class="row${o.ic?'':' noic'}"${attrs}>${o.ic?`<span class="ic ${o.tone||''}">${icon(o.ic)}</span>`:''}<span class="tx"><span class="tt">${o.t}</span>${o.d?`<span class="ds">${o.d}</span>`:''}</span>${o.v!=null?`<span class="val${o.zero?' zero':''}">${o.v}</span>`:''}${o.badge?o.badge:''}${o.act?'<span class="chev"></span>':''}</${tag}>`;}
+
+/* ════════ 11-0. 오늘 몫·이번 주 ════════ */
+/* 날의 종류: exam 시험 날(본시험·실전 모의), pre3 시험 날 전 평일 3일, holi 평일 공휴일, 그 밖은 wd·sat·sun */
+function dayKind(t){const ex=[PLAN.target&&PLAN.target.d,PLAN.mock&&PLAN.mock.d].filter(Boolean);if(ex.includes(t))return'exam';const k=dayType(t);
+  if(k==='wd'&&ex.some(e=>{let d=e;for(let n=0;n<3;){d=addDays(d,-1);if(dayType(d)!=='wd')continue;if(d===t)return true;n++;}return false;}))return'pre3';
+  return k==='wd'&&KR_HOLI[t]?'holi':k;}
+/* 그날 공부 시간(분). 일요일·공휴일은 sun, 시험 전 3일은 평일, 시험 날 0, 전교시 리허설 토요일은 430분 이상. 저장값이 숫자가 아니면 기본값 */
+function budgetOf(t,kind){kind=kind||dayKind(t);if(kind==='exam')return 0;
+  const B=Object.assign({},BUDGET_DEF,S.settings.budget||{}),k={wd:'wd',pre3:'wd',holi:'sun',sat:'sat',sun:'sun'}[kind]||'wd';
+  let v=Number(B[k])||BUDGET_DEF[k];if(kind==='sat'&&weekObj(weekIndex(t)).pre)v=Math.max(v,430);return v;}
 
 /* ════════ 11. 화면: 오늘 ════════ */
 function routineFor(ds){const w=weekIndex(ds),k=phaseKey(w),r=PE_ROUTINES[k]||PE_ROUTINES[1];return r[dayType(ds)]||r.wd;}
@@ -544,7 +558,7 @@ function startGq(d,mode){const L=gqList(d);if(!L||!L.items.length)return toast('
   else if(mode==='rand'||mode==='all'){ns=shuffle(L.items.map((_,n)=>n));if(mode==='rand')ns=ns.slice(0,GQ_ROUND);title=mode==='rand'?`무작위 ${ns.length}문`:`${ns.length}문 섞어서`;}
   else{let k=Number(mode);if(mode==='next'||isNaN(k)){k=0;for(let j=0;j<nR;j++)if(r.slice(j*GQ_ROUND,(j+1)*GQ_ROUND).includes('-')){k=j;break;}}
     for(let n=k*GQ_ROUND;n<Math.min(L.items.length,(k+1)*GQ_ROUND);n++)ns.push(n);title=(k+1)+'회';const f=ns.findIndex(n=>r[n]==='-');at=f>0?f:0;}
-  startSession({title:`${korDate(d)} 용어 퀴즈${title.startsWith(':')?'':' '}${title}`,items:ns.map(n=>({type:'gq',d,n})),revD:d,i:at});}
+  startSession({kind:'gq',title:`${korDate(d)} 용어 퀴즈${title.startsWith(':')?'':' '}${title}`,items:ns.map(n=>({type:'gq',d,n})),revD:d,i:at});}
 /* 푸는 방식: 회차별(15문씩, 쉬운 것부터), 용어별(그 용어 문제만, 쉬운 것부터), 무작위(15문 또는 전체를 풀 때마다 새로 섞기). 기록은 문제마다 하나라 어느 방식으로 풀어도 같이 남는다 */
 const GQ_MODES=[['round','회차별'],['term','용어별'],['rand','무작위']];
 function gqSection(d){const L=gqList(d);if(!L||!L.items.length)return'';const r=gqRec(d),st=gqStat(d),nR=st.rounds,qid=uniq(L.items.map(q=>q.id)),ids=setIds(d).filter(id=>qid.includes(id)).concat(qid.filter(id=>!setIds(d).includes(id))),mode=SV['gqm:'+d]||'round';
@@ -568,7 +582,7 @@ function gqRoundStat(r,k){const s=r.slice(k*GQ_ROUND,(k+1)*GQ_ROUND);return{n:s.
 const SV={};
 function vSet(){const d=R.a;const s=SETS.sets[d];
   if(!s)return topbar('세트')+`<div class="empty" style="margin-top:20px"><b>${esc(d||'')} 세트가 아직 없어요</b>앱이 저장소에서 받아 오지 못했어요.<div class="btns"><button class="btn" data-act="sync">지금 받아 오기</button></div></div>`;
-  const p=sp(d);if(!p.first){p.first=todayStr();save();}
+  const p=sp(d);
   const tab=SV[d]||'cards';const st=setStatus(d);const w=s.week!=null?s.week:weekIndex(d);
   let body='';
   if(tab==='cards'){body=(s.cards||[]).map((sc,i)=>{const id=setCardId(d,i);const c=id?card(id):null;const t=c?c.t:sc.t;const open=SV[d+':o']===i;const read=!!p.read[i];
@@ -636,7 +650,7 @@ function vWrong(){const wl=wrongList();const nm={card:'카드',quiz:'퀴즈',clo
 function vArchive(){const sd=Object.keys(SETS.sets).sort().reverse(),mdts=Object.keys(SETS.mocks).sort().reverse();
   return topbar('세트 보관함')+`<h1 class="ptitle">세트 보관함</h1><div data-syncline>${syncLine()}</div><div class="btns"><button class="btn sec" data-act="sync">지금 받아 오기</button></div>
   ${sec('매일 세트',sd.length+'개',sd.length?`<div class="group">${sd.map(d=>{const s=SETS.sets[d],st=setStatus(d);return row({ic:st.done?'check':'paper',tone:st.done?'ok':'',t:esc(korDate(d,true)),d:esc(s.title||''),v:st.done?'완료':`${st.read}/${st.nc}`,act:'go',data:{h:'set/'+d}});}).join('')}</div>`:`<div class="empty"><b>아직 받은 세트가 없어요</b>평일 06:21 예약 작업이 만든 세트가 여기 쌓여요.</div>`)}
-  ${sec('주간 모의고사',mdts.length+'개',mdts.length?`<div class="group">${mdts.map(d=>row({ic:'paper',tone:'amber',t:esc(korDate(d,true)),d:esc(SETS.mocks[d].title||''),act:'go',data:{h:'mock/'+d}})).join('')}</div>`:`<div class="empty"><b>아직 없어요</b>토요일 06:50에 만들어져요.</div>`)}`;}
+  ${sec('주간 모의고사',mdts.length+'개',mdts.length?`<div class="group">${mdts.map(d=>row({ic:'paper',tone:'amber',t:esc(korDate(d,true)),d:esc(SETS.mocks[d].title||''),act:'go',data:{h:'mock/'+d}})).join('')}</div>`:`<div class="empty"><b>아직 없어요</b>토요일 06:21쯤 만들어져요.</div>`)}`;}
 
 /* ════════ 14. 화면: 암기 ════════ */
 const RANGES=[['week','이번 주 단원'],['all','전체'],['kichul','기출에 나온 카드'],['set','세트로 받은 카드'],['stars','별표 카드']];
@@ -659,7 +673,9 @@ function vStudy(){const rg=S.range||'week',f=rangeFilter(rg);const pool=deck().f
   ${sec('단원별 진도','학습 / 정답률',`<div class="group">${units.map(x=>`<button class="unitbar" data-act="study-unit" data-u="${x.u.id}" style="width:100%"><span class="nm">${esc(x.u.n)}</span><span class="bar"><i style="width:${x.n?Math.round(x.l/x.n*100):0}%"></i></span><span class="c">${x.l}/${x.n}</span><span class="c" style="color:${x.acc==null?'var(--ink3)':x.acc>=80?'var(--ok)':x.acc>=60?'var(--amber)':'var(--red)'}">${x.acc==null?'—':x.acc+'%'}</span></button>`).join('')}</div>`)}`;}
 
 /* ════════ 15. 세션(카드·퀴즈·빈칸·목차 공통) ════════ */
-function startSession(o){SES=Object.assign({i:0,back:false,answered:null,stats:{ok:0,mid:0,no:0},from:R.page?('#'+R.page+(R.a?'/'+R.a:'')):'#'+R.tab},o);if(!SES.items.length){toast('이 범위에 문제가 없어요');SES=null;return;}nav('sess');}
+/* SES.kind: 세션을 연 곳(rev 세트 복습, flash 세트 카드 넘겨 보기, gq 용어 퀴즈, wrong 오답, cards 카드 복습, study·free·stars·mcq·recall·cloze·fill·outline).
+   SES.done: 끝낸 항목 번호(답 고름·매김·채점·빈칸 채점, 넘겨 보기는 뒷면 본 카드). SES.acc: "이어서"로 이어 붙인 세션이 앞 세션에서 한 수 {d,step,a,n} */
+function startSession(o){SES=Object.assign({i:0,back:false,answered:null,stats:{ok:0,mid:0,no:0},done:{},kind:null,from:R.page?('#'+R.page+(R.a?'/'+R.a:'')):'#'+R.tab},o);if(!SES.items.length){toast('이 범위에 문제가 없어요');SES=null;return;}nav('sess');}
 function vSess(){if(!SES)return topbar('학습')+`<div class="empty" style="margin-top:20px"><b>진행 중인 학습이 없어요</b><div class="btns"><button class="btn" data-act="go" data-h="study">암기 탭으로</button></div></div>`;
   const it=SES.items[SES.i];if(!it)return sessDone();const n=SES.items.length;
   const head=`${topbar(SES.title||'학습')}<div class="prog"><div class="bar"><i style="width:${Math.round((SES.i+1)/n*100)}%"></i></div><span>${SES.i+1} / ${n}</span></div>`;
@@ -706,18 +722,31 @@ function sessItemCard(it){if(!it)return null;if(it.type==='gq'){const L=gqList(i
 function sessCardIds(){return SES?uniq(SES.items.map(sessItemCard).filter(Boolean)):[];}
 function sessMiss(id){if(SES&&id)(SES.miss||(SES.miss=[])).includes(id)||SES.miss.push(id);}
 function skipBtn(){return`<div class="empty"><b>이 항목을 찾을 수 없어요</b><div class="btns"><button class="btn" data-act="sess-skip">건너뛰기</button></div></div>`;}
-function sessDone(){const s=SES.stats,n=s.ok+s.mid+s.no;
+/* 끝까지 했는지: 앞 세션(acc)과 합쳐 처음 항목 수의 80% 이상을 끝냈으면. 세트 복습·오답 기록은 이것으로만 친다 */
+function enough(s){return((s.acc?s.acc.a:0)+Object.keys(s.done||{}).length)>=Math.ceil(0.8*(s.acc?s.acc.n:s.items.length));}
+function sessDid(){if(!SES)return;(SES.done||(SES.done={}))[SES.i]=1;touchDay();save();}
+/* 끝 화면을 처음 그릴 때 한 번: 세트 복습(80% 이상일 때만, D3), 테스트 기록(S.log), 오답·카드 복습 할 일 표시(S.tk) */
+function sessDone(){const s=SES.stats,n=s.ok+s.mid+s.no,t=todayStr(),rd=SES.revD||SES.setD;
+  if(SES.rvDue==null)SES.rvDue=SES.kind==='rev'?(SES.rv||[]).some(x=>reviewDue(x.d)):!!(rd&&reviewDue(rd));
+  const en=enough(SES),dn=Object.keys(SES.done).length;
   if(SES.onDone&&!SES.doneRan){SES.doneRan=true;try{SES.onDone(SES);}catch(e){}}
   if(SES.rkey&&!SES.calDone){SES.calDone=1;resumeSet(SES.rkey,0,0);if(SES.setD)calMark('flash:'+SES.setD,'term',`${korDate(SES.setD)} 세트 카드 넘겨 보기 끝(${SES.items.length}장)`);}
-  const rd=SES.revD||SES.setD;if(rd&&!SES.revRan){SES.revRan=1;const st=reviewDue(rd);if(st)markReviewed(rd,st);}
+  if(rd&&!SES.revRan){SES.revRan=1;const st=reviewDue(rd);if(st&&en)markReviewed(rd,st);}
+  if(!SES.logged){SES.logged=1;if(SES.log&&n)logTest(SES.log,n,s.ok);const tk=S.tk||(S.tk={});
+    if(SES.kind==='wrong'&&en)tk['wrong:'+t]=t;if(SES.kind==='cards'&&SES.k&&dn>=Math.min(20,SES.k))tk['cards:'+t]=t;save();}
+  const skip=SES.rvDue&&!en,a=(SES.acc?SES.acc.a:0)+dn,N=SES.acc?SES.acc.n:SES.items.length;
   const ids=sessCardIds(),miss=(SES.miss||[]).filter(id=>card(id));
   return topbar(SES.title||'학습')+`<div class="sheet" style="margin-top:18px"><p class="sheet-k">끝</p><h3>${esc(SES.title||'학습')} 완료</h3>
   <ul class="steps"><li><span class="dot on"></span><span class="k">맞힘·앎</span><span class="v">${s.ok}</span></li>${s.mid?`<li><span class="dot half"></span><span class="k">애매</span><span class="v">${s.mid}</span></li>`:''}<li><span class="dot"></span><span class="k">틀림·모름</span><span class="v">${s.no}</span></li></ul>
-  <p class="ds" style="margin:6px 0 12px">${n&&s.no?'틀린 것은 오답 노트에 모였어요. 두 번 연속 맞히면 빠집니다.':'좋아요. 간격이 벌어진 만큼 다음 복습 날짜가 뒤로 갔어요.'}</p>
-  <button class="btn" data-act="sess-close">돌아가기</button>
+  <p class="ds" style="margin:6px 0 12px">${skip?`건너뛴 문제가 많아 오늘 세트 복습으로 치지 않았어요 (${a}/${N})`:n&&s.no?'틀린 것은 오답 노트에 모였어요. 두 번 연속 맞히면 빠집니다.':'좋아요. 간격이 벌어진 만큼 다음 복습 날짜가 뒤로 갔어요.'}</p>
+  ${skip?`<button class="btn" data-act="sess-rest">이어서 · 남은 ${SES.items.length-dn}문제</button><div class="btns"><button class="btn sec" data-act="sess-close">돌아가기</button></div>`:'<button class="btn" data-act="sess-close">돌아가기</button>'}
   ${miss.length?`<div class="btns"><button class="btn sec" data-act="memo-sess" data-only="miss">틀리거나 애매한 카드 가리며 외우기 (${miss.length}장)</button></div>`:''}
   ${ids.length?`<div class="btns"><button class="btn sec" data-act="memo-sess">방금 본 카드 가리며 외우기 (${ids.length}장)</button></div>`:''}</div>`;}
 function sessAdvance(){SES.i++;SES.back=false;SES.answered=null;if(SES.rkey)resumeSet(SES.rkey,SES.i,SES.items.length);render();window.scrollTo(0,0);}
+/* 끝 화면 "이어서 · 남은 n문제": 안 한 항목만 새 세션으로. 한 수(acc)는 앞 세션에 더해 세고, 끝나면 같은 세트 복습으로 친다 */
+function sessRest(){const s=SES;if(!s)return;const dn=Object.keys(s.done).length,rd=s.revD||s.setD,r0=(s.rv||[])[0]||{};
+  startSession({kind:s.kind,title:s.title,items:s.items.filter((_,i)=>!s.done[i]),onDone:s.onDone,rv:s.rv,revD:s.revD,setD:s.setD,log:s.log,requeue:s.requeue,chain:s.chain,from:s.from,
+    acc:s.acc?Object.assign({},s.acc,{a:s.acc.a+dn}):{d:rd||r0.d||null,step:rd?reviewDue(rd):r0.step||null,a:dn,n:s.items.length}});window.scrollTo(0,0);}
 /* 카드 넘겨 보기: 이전 카드로(이미 매긴 카드는 뒷면부터), 세트 카드는 뒷면을 본 것만 읽음 */
 function sessPrev(){if(!SES||SES.i<=0)return;SES.i--;SES.back=!!(SES.graded&&SES.graded[SES.i]!=null);SES.answered=null;if(SES.rkey)resumeSet(SES.rkey,SES.i,SES.items.length);render();window.scrollTo(0,0);}
 function sessMarkRead(it){if(!SES||!SES.setD||!it||it.si==null)return;const p=sp(SES.setD);if(!p.read[it.si]){p.read[it.si]=1;introduce(it.id);touchDay();calSetRead(SES.setD);save();}}
@@ -732,27 +761,36 @@ function logTest(type,n,ok){S.log.push({d:todayStr(),type,total:n,ok});if(S.log.
 
 /* 세션 만들기 */
 function cardItems(ids){return ids.map(id=>({type:'card',id}));}
-function startStudy(){const f=rangeFilter(S.range);const pool=deck().filter(f);const t=todayStr();
-  const due=pool.filter(c=>{const p=S.cards[c.id];return p&&p.seen>0&&p.due&&p.due<=t;}).sort((a,b)=>S.cards[a.id].due<S.cards[b.id].due?-1:1);
+/* range: 단원 하나(단원 진도의 "이 단원 카드 외우기")처럼 S.range를 바꾸지 않고 고를 범위. o.newOnly: 새 카드만 */
+function startStudy(range,o){o=o||{};const f=rangeFilter(range||S.range);const pool=deck().filter(f);const t=todayStr();
+  const due=o.newOnly?[]:pool.filter(c=>{const p=S.cards[c.id];return p&&p.seen>0&&p.due&&p.due<=t;}).sort((a,b)=>S.cards[a.id].due<S.cards[b.id].due?-1:1);
   const fresh=pool.filter(c=>!S.cards[c.id]||S.cards[c.id].seen===0).sort((a,b)=>(b.f||2)-(a.f||2)||((b.x||[]).length-(a.x||[]).length)).slice(0,newRoom());
-  startSession({title:'오늘 학습',items:cardItems(due.concat(fresh).map(c=>c.id)),requeue:true});}
-function startDueAll(){startSession({title:'카드 복습',items:cardItems(dueCards(null).map(c=>c.id)),requeue:true});}
-function startFree(){startSession({title:'자유 복습',items:cardItems(shuffle(deck().filter(rangeFilter(S.range))).slice(0,30).map(c=>c.id))});}
-function setReviewItems(d){const s=SETS.sets[d];const items=[];(s.cards||[]).forEach((_,i)=>{const id=setCardId(d,i);if(id)items.push({type:'card',id});});(s.quiz||[]).forEach((_,i)=>items.push({type:'quiz',d,i}));return items;}
-function startSetReview(d){const step=reviewDue(d)||1;startSession({title:korDate(d)+' 세트 다시 보기',items:setReviewItems(d),onDone:()=>{markReviewed(d,step);}});}
-function startSetReviewAll(){const rv=dueSetReviews();let items=[];rv.forEach(x=>{items=items.concat(setReviewItems(x.d));});startSession({title:'세트 다시 보기',items,onDone:()=>rv.forEach(x=>markReviewed(x.d,x.step))});}
-function startWrong(){const wl=wrongList();startSession({title:'오답 다시 풀기',items:shuffle(wl.map(w=>w.type==='card'?{type:'card',id:w.id,wrongKey:w.key}:w.type==='quiz'?{type:'quiz',d:w.d,i:w.i,wrongKey:w.key}:w.type==='fill'?Object.assign(fillItem(card(w.id),S.fillLv||'중')||{type:'card',id:w.id},{wrongKey:w.key}):w.type==='gq'?{type:'gq',d:w.d,n:w.n,wrongKey:w.key}:{type:'cloze',id:w.id,k:w.k,wrongKey:w.key}))});}
+  startSession({kind:'study',title:'오늘 학습',items:cardItems(due.concat(fresh).map(c=>c.id)),requeue:true});}
+/* 카드 복습: 오늘 이미 매긴 카드(같은 날 두 번 올리지 않음)와 o.skip(오늘 세트 복습에 들어 있는 카드)은 빼고, o.k장까지 */
+function startDueAll(o){o=o||{};const t=todayStr(),sk=new Set(o.skip||[]);let ids=dueCards(null).map(c=>c.id).filter(id=>!sk.has(id)&&pget(id).last!==t);if(o.k)ids=ids.slice(0,o.k);
+  startSession({kind:'cards',title:'카드 복습',items:cardItems(ids),requeue:true,k:o.k||null});}
+function startFree(){startSession({kind:'free',title:'자유 복습',items:cardItems(shuffle(deck().filter(rangeFilter(S.range))).slice(0,30).map(c=>c.id))});}
+/* 세트 복습 항목: 세트 카드(오늘 이미 매긴 카드는 빼서 같은 날 두 번 올리지 않음)와 세트 퀴즈 */
+function setReviewItems(d){const s=SETS.sets[d],t=todayStr(),items=[];(s.cards||[]).forEach((_,i)=>{const id=setCardId(d,i);if(id&&pget(id).last!==t)items.push({type:'card',id});});(s.quiz||[]).forEach((_,i)=>items.push({type:'quiz',d,i}));return items;}
+/* 복습 날이 아니면(step 없음) 세트 복습 기록을 남기지 않는다(D4). 80% 이상 끝냈을 때만 친다(D3). 카드를 모두 오늘 매겨 항목이 없으면 바로 친다 */
+function revNow(rv){rv.forEach(x=>markReviewed(x.d,x.step));touchDay();closeModal();toast('오늘 이미 본 카드라 세트 복습으로 쳤어요');render();}
+function startSetReview(d,o){o=o||{};const step=reviewDue(d),items=setReviewItems(d);if(!items.length&&step&&setIds(d).length)return revNow([{d,step}]);
+  startSession({kind:'rev',title:korDate(d)+' 세트 다시 보기',items,rv:step?[{d,step}]:[],chain:o.chain,acc:o.acc,onDone:s=>{if(step&&enough(s))markReviewed(d,step);}});}
+function startSetReviewAll(){const rv=dueSetReviews();let items=[];rv.forEach(x=>{items=items.concat(setReviewItems(x.d));});if(!items.length&&rv.length&&rv.every(x=>setIds(x.d).length))return revNow(rv);
+  startSession({kind:'rev',title:'세트 다시 보기',items,rv,onDone:s=>{if(enough(s))rv.forEach(x=>markReviewed(x.d,x.step));}});}
+/* o.skipQ: 그 날짜 세트의 퀴즈 오답은 빼기(그날 숙제 "틀린 이유 한 줄"로 다룬다) */
+function startWrong(o){o=o||{};const wl=wrongList().filter(w=>!(o.skipQ&&w.type==='quiz'&&w.d===o.skipQ));startSession({kind:'wrong',title:'오답 다시 풀기',items:shuffle(wl.map(w=>w.type==='card'?{type:'card',id:w.id,wrongKey:w.key}:w.type==='quiz'?{type:'quiz',d:w.d,i:w.i,wrongKey:w.key}:w.type==='fill'?Object.assign(fillItem(card(w.id),S.fillLv||'중')||{type:'card',id:w.id},{wrongKey:w.key}):w.type==='gq'?{type:'gq',d:w.d,n:w.n,wrongKey:w.key}:{type:'cloze',id:w.id,k:w.k,wrongKey:w.key}))});}
 function startFill(lv,d){let pool;if(d){const s=SETS.sets[d];pool=((s&&s.cards)||[]).map((_,i)=>card(setCardId(d,i))).filter(Boolean);}else{pool=deck().filter(rangeFilter(S.range));const seen=pool.filter(c=>pget(c.id).seen>0);if(seen.length>=10)pool=seen;}
-  const items=shuffle(pool).slice(0,10).map(c=>fillItem(c,lv)).filter(Boolean);startSession({title:'용어 빈칸 쓰기'+(d?', '+korDate(d)+' 세트':''),items,log:'fill',revD:d||null});}
+  const items=shuffle(pool).slice(0,10).map(c=>fillItem(c,lv)).filter(Boolean);startSession({kind:'fill',title:'용어 빈칸 쓰기'+(d?', '+korDate(d)+' 세트':''),items,log:'fill',revD:d||null});}
 function startCloze(){const f=rangeFilter(S.range);let pool=deck().filter(f).filter(c=>clozeTokens(c.d).length);const seen=pool.filter(c=>pget(c.id).seen>0);if(seen.length>=10)pool=seen;
-  const items=shuffle(pool).slice(0,10).map(c=>{const toks=clozeTokens(c.d);return{type:'cloze',id:c.id,k:Math.floor(Math.random()*toks.length)};});startSession({title:'기준 수치 빈칸',items,log:'cloze'});}
-function startStars(){startSession({title:'별표 카드',items:cardItems(shuffle(deck().filter(c=>pget(c.id).star)).map(c=>c.id))});}
+  const items=shuffle(pool).slice(0,10).map(c=>{const toks=clozeTokens(c.d);return{type:'cloze',id:c.id,k:Math.floor(Math.random()*toks.length)};});startSession({kind:'cloze',title:'기준 수치 빈칸',items,log:'cloze'});}
+function startStars(){startSession({kind:'stars',title:'별표 카드',items:cardItems(shuffle(deck().filter(c=>pget(c.id).star)).map(c=>c.id))});}
 function startMCQ(){const f=rangeFilter(S.range);let pool=deck().filter(f);const l=pool.filter(c=>pget(c.id).seen>0);if(l.length>=8)pool=l;if(pool.length<4){toast('카드가 4장 이상 있어야 해요');return;}
   const items=shuffle(pool).slice(0,10).map(c=>{const same=deck().filter(x=>x.u===c.u&&x.id!==c.id);let d=shuffle(same).slice(0,3);if(d.length<3)d=d.concat(shuffle(deck().filter(x=>x.id!==c.id&&!d.includes(x))).slice(0,3-d.length));return{type:'mcq',id:c.id,opts:shuffle([c.id].concat(d.map(x=>x.id)))};});
-  startSession({title:'4지선다',items,log:'mcq'});}
+  startSession({kind:'mcq',title:'4지선다',items,log:'mcq'});}
 function startRecall(){const f=rangeFilter(S.range);let pool=deck().filter(f);const l=pool.filter(c=>pget(c.id).seen>0);if(l.length>=8)pool=l;
-  const stars=pool.filter(c=>pget(c.id).star);const pick=shuffle(stars).slice(0,3).concat(shuffle(pool.filter(c=>!pget(c.id).star))).slice(0,10);startSession({title:'용어 회상',items:cardItems(pick.map(c=>c.id)),log:'recall'});}
-function startOutline(){const u=rangeUnits(S.range);const pool=essays().filter(e=>!u||u.includes(Number(e.u)));startSession({title:'논술 목차',items:shuffle(pool).slice(0,5).map(e=>({type:'outline',id:e.id})),log:'outline'});}
+  const stars=pool.filter(c=>pget(c.id).star);const pick=shuffle(stars).slice(0,3).concat(shuffle(pool.filter(c=>!pget(c.id).star))).slice(0,10);startSession({kind:'recall',title:'용어 회상',items:cardItems(pick.map(c=>c.id)),log:'recall'});}
+function startOutline(){const u=rangeUnits(S.range);const pool=essays().filter(e=>!u||u.includes(Number(e.u)));startSession({kind:'outline',title:'논술 목차',items:shuffle(pool).slice(0,5).map(e=>({type:'outline',id:e.id})),log:'outline'});}
 
 /* ════════ 15-2. 가리며 외우기(정한 시간마다 보이기·가리기를 반복하는 단기 암기) ════════ */
 let MEMO=null,memoIv=null;
@@ -937,7 +975,7 @@ function vTest(){const rg=S.range||'week';const lm=latestMockDate();const rounds
     ${row({ic:'paper',t:'단답 답안지 1문 (10분)',d:'기출 카드를 1교시 답안지 모양으로 보고 직접 쓰기',act:'dd-rand'})}
   </div>`)}
   ${sec('실전','',`<div class="group">
-    ${lm?row({ic:'paper',tone:'amber',t:'이번 주 모의고사',d:esc((SETS.mocks[lm].title||'')+', '+korDate(lm)),act:'go',data:{h:'mock/'+lm}}):row({ic:'paper',tone:'gray',t:'주간 모의고사',d:'토요일 06:50에 만들어져 여기 들어와요'})}
+    ${lm?row({ic:'paper',tone:'amber',t:'이번 주 모의고사',d:esc((SETS.mocks[lm].title||'')+', '+korDate(lm)),act:'go',data:{h:'mock/'+lm}}):row({ic:'paper',tone:'gray',t:'주간 모의고사',d:'토요일 06:21쯤 만들어져 여기 들어와요'})}
     ${row({ic:'layers',t:'기출 회차 그대로 풀기',d:`제${rounds.length?rounds[rounds.length-1].r:''}~${rounds.length?rounds[0].r:''}회 ${rounds.length}회분, 실제 시험지 순서`,act:'go',data:{h:'kichul'}})}
     ${row({ic:'chart',t:'기출 단원별 보기',d:'단원마다 어떤 문제가 몇 번 나왔는지',act:'go',data:{h:'kichul/u'}})}
     ${row({ic:'wand',t:'앱이 모의고사 만들기',d:'기출·약점 가중으로 1~4교시 세트',act:'gen-mock'})}
@@ -992,7 +1030,7 @@ function pickByUnit(items,n,wf){const byU={};items.forEach(it=>{(byU[it.u]=byU[i
   while(out.length<n&&g++<600){if(!us.length)us=shuffle(Object.keys(byU).filter(u=>byU[u].length));if(!us.length)break;const u=us.shift();const arr=byU[u];if(!arr||!arr.length)continue;const w=arr.map(wf);const tot=w.reduce((a,b)=>a+b,0);let r=Math.random()*tot,k=0;for(;k<arr.length;k++){r-=w[k];if(r<=0)break;}k=Math.min(k,arr.length-1);out.push(arr[k]);arr.splice(k,1);}return out;}
 function genMock(){const wC=c=>(c.f||2)+(c.x&&c.x.length?2:0)+(pget(c.id).star?2:0)+(pget(c.id).ng>pget(c.id).ok?1:0);const wE=e=>(e.f||2)+(e.x&&e.x.length?2:0)+((S.essayStat[e.id]||{}).weak>0?1:0);
   const m={date:todayStr(),kind:'all',p1:pickByUnit(deck(),13,wC).map(c=>c.t)};let rem=essays().slice();['p2','p3','p4'].forEach(pk=>{const sel=pickByUnit(rem,6,wE);m[pk]=sel.map(e=>e.t);const ids=new Set(sel.map(e=>e.id));rem=rem.filter(e=>!ids.has(e.id));});
-  S.lastMock=m;touchDay();save();nav('mock/app');toast('모의고사 세트를 만들었어요');}
+  S.lastMock=m;delete S.mockp.app;touchDay();save();nav('mock/app');toast('모의고사 세트를 만들었어요');}   /* 새로 만든 앱 모의고사는 "다 썼어요"를 비우고 시작 */
 function mockText(m){const lab={p1:'1교시 단답형(13문 중 10문 선택, 각 10점, 100분)',p2:'2교시 논술형(6문 중 4문, 각 25점, 100분)',p3:'3교시 논술형(6문 중 4문, 각 25점, 100분)',p4:'4교시 논술형(6문 중 4문, 각 25점, 100분)'};
   let s=`[토목시공기술사 모의고사${m.title?' — '+m.title:''}]\n`;['p1','p2','p3','p4'].forEach(k=>{if(m[k]&&m[k].length){s+=`\n■ ${lab[k]}\n`;m[k].forEach((q,i)=>{const t=typeof q==='string'?q:q.t;s+=`${i+1}. ${k==='p1'&&!/시오\.?$/.test(t)?t+'에 대하여 설명하시오.':t}\n`;});}});return s;}
 function roundText(r){const lab={1:'1교시 단답형(13문 중 10문, 각 10점)',2:'2교시 논술형(6문 중 4문, 각 25점)',3:'3교시 논술형(6문 중 4문, 각 25점)',4:'4교시 논술형(6문 중 4문, 각 25점)'};
@@ -1262,6 +1300,11 @@ function vAdmin(){const me=PE_IO.member();if(!me||!me.admin)return topbar('승�
 const TM={preset:'essay',total:6000,parts:4,endAt:0,remain:6000,running:false,iv:null,lastPart:-1,custom:100};
 const PRESETS={p1:{n:'1교시 단답',total:100,parts:10},essay:{n:'논술 교시',total:100,parts:4},one1:{n:'단답 1문',total:10,parts:1},one2:{n:'논술 1문',total:25,parts:1},custom:{n:'직접',total:0,parts:1}};
 function setPreset(k){TM.preset=k;const p=PRESETS[k];TM.total=(k==='custom'?TM.custom:p.total)*60;TM.parts=p.parts;TM.remain=TM.total;TM.running=false;TM.lastPart=-1;clearInterval(TM.iv);PE_IO.keepAwake(false);}
+/* 다른 타이머로 바꾸기: 돌고 있거나 멈춰 둔 타이머가 있으면 먼저 묻는다(취소하면 o.no). 같은 타이머면 그대로 두고 then만 */
+function setPresetAsk(k,then,o){o=o||{};const busy=TM.running||(TM.remain>0&&TM.remain<TM.total),same=TM.preset===k&&(k!=='custom'||TM.custom===o.mins);
+  const go=()=>{if(k==='custom'&&o.mins)TM.custom=o.mins;setPreset(k);if(o.ctx)TM.ctx=o.ctx;then&&then();};
+  if(busy&&same){if(o.ctx)TM.ctx=o.ctx;return then&&then();}if(!busy)return go();
+  PE_IO.ask('돌고 있는 '+PRESETS[TM.preset].n+' 타이머(남은 '+mmss(TM.remain)+')를 멈추고 '+(o.name||PRESETS[k].n)+' '+(o.n||(k==='custom'?o.mins:PRESETS[k].total))+'분으로 바꿀까요?',go,o.no);}
 function beep(long){try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;TM.ac=TM.ac||new A();if(TM.ac.state!=='running'&&TM.ac.resume)TM.ac.resume().catch(()=>{});const o=TM.ac.createOscillator(),g=TM.ac.createGain();o.connect(g);g.connect(TM.ac.destination);o.frequency.value=long?660:880;g.gain.value=.15;o.start();o.stop(TM.ac.currentTime+(long?.9:.25));}catch(e){}}
 function partIdx(){const per=TM.total/TM.parts;return Math.min(TM.parts,Math.floor((TM.total-TM.remain)/per)+1);}
 function tStart(){if(TM.running)return;if(TM.remain<=0)TM.remain=TM.total;TM.endAt=Date.now()+TM.remain*1000;TM.running=true;beep(false);
@@ -1342,7 +1385,7 @@ document.addEventListener('click',e=>{
   case'set-open':{const i=Number(D.i);const key=D.d+':o';SV[key]=SV[key]===i?null:i;if(SV[key]===i){const p=sp(D.d);p.read[i]=1;introduce(setCardId(D.d,i));touchDay();calSetRead(D.d);save();}return render();}
   case'set-flash':{const rk='flash:'+D.d;if(SES&&SES.rkey===rk&&SES.i<SES.items.length)return nav('sess');
     const s=SETS.sets[D.d];const items=(s.cards||[]).map((_,i)=>({type:'card',id:setCardId(D.d,i),si:i})).filter(x=>x.id);const r=resumeGet(rk),i0=r&&r.i<items.length?r.i:0;
-    if(i0)toast(`${i0+1}번째 카드부터 이어서 해요`);return startSession({title:korDate(D.d)+' 세트 카드',items,setD:D.d,rkey:rk,i:i0});}
+    if(i0)toast(`${i0+1}번째 카드부터 이어서 해요`);return startSession({kind:'flash',title:korDate(D.d)+' 세트 카드',items,setD:D.d,rkey:rk,i:i0});}
   case'cal-mon':return calShift(Number(D.v),true);
   case'cal-day':{SV.calD=D.d;render();return openModal(`<p class="sheet-k">${D.d===todayStr()?'오늘':'그날'} 끝낸 공부</p><h2 class="cmh">${esc(korDate(D.d,true))}</h2>${calDayBody(D.d)}<div class="btns"><button class="btn sec" data-act="cal-close">닫기</button></div>`);}
   case'cal-today':SV.calM=null;SV.calD=null;return render();
@@ -1360,7 +1403,8 @@ document.addEventListener('click',e=>{
   case'hw-ew':{const p=sp(D.d);p.essay=p.essay||{};p.essay.done=!p.essay.done;touchDay();const e=SETS.sets[D.d].essay;if(p.essay.done)calMark('essay:'+D.d,'essay',`${korDate(D.d)} 세트 논술 손글씨: ${e&&e.t?e.t:''}`);else calUnmark('essay:'+D.d);hwCal(D.d);save();return render();}
   case'hw-mn':{const p=sp(D.d);p.hw=p.hw||{};const v=String(($('#hwMn')||{}).value||'').trim().slice(0,80);if(v)p.hw.mn=v;else delete p.hw.mn;touchDay();hwCal(D.d);save();toast(v?'적어 두었어요':'지웠어요');return render();}
   case'copy-essay':{const e=SETS.sets[D.d].essay;return copy(promptWith('p1','(여기에 문제를 그대로 적는다)',e.t),'첨삭 요청을 복사했어요. 사진과 함께 Claude 프로젝트에 붙여 넣으세요');}
-  case'star':{const p=prog(D.id);p.star=!p.star;save();if($('#modal-wrap').innerHTML){const c=card(D.id);if(c)openModal(cardModal(c));}return R.page==='sess'?render():render();}
+  /* 창 안의 별표는 그 버튼만 바꾼다(기출 문항처럼 카드 여러 장이 든 창을 한 장짜리로 바꾸지 않게) */
+  case'star':{const p=prog(D.id);p.star=!p.star;save();if(b.closest('#modal-wrap'))b.textContent=p.star?'★ 별표 해제':'☆ 별표';return render();}
   case'introduce':{introduce(D.id);toast('내일 카드 복습에 나와요');closeModal();return render();}
   case'hide-card':return PE_IO.ask('이 카드를 숨길까요? 가져오기 화면에서 되돌릴 수 있어요.',()=>{S.hidden[D.id]=true;save();invalidate();closeModal();render();});
   /* 세션 */
@@ -1393,7 +1437,7 @@ document.addEventListener('click',e=>{
   case'memo-pick':{const it=memoItem();if(!it||memoCfg().mode==='tape')return;const m=S.memoPick||(S.memoPick={});const li=D.li;
     if(memoCfg().mode!=='pick'){S.settings.memo=Object.assign(memoCfg(),{mode:'pick'});m[it.id]=[li];save();toast('고른 줄만 가리기로 바꿨어요');return render();}
     const a=new Set(m[it.id]||[]);a.has(li)?a.delete(li):a.add(li);if(a.size)m[it.id]=[...a];else delete m[it.id];save();return render();}
-  case'study-unit':S.range=String(D.u);save();return startStudy();
+  case'study-unit':return startStudy(String(D.u));
   case'start-setrev':return startSetReview(D.d);
   case'start-setrev-all':return startSetReviewAll();
   case'start-wrong':return startWrong();
@@ -1416,10 +1460,11 @@ document.addEventListener('click',e=>{
   case'start-mcq':return startMCQ();
   case'start-recall':return startRecall();
   case'start-outline':return startOutline();
-  case'sess-flip':{if(e.target.closest('[data-act="star"]'))return;SES.back=!SES.back;if(SES.back)sessMarkRead(SES.items[SES.i]);return render();}
+  case'sess-flip':{if(e.target.closest('[data-act="star"]'))return;SES.back=!SES.back;if(SES.back){sessMarkRead(SES.items[SES.i]);if(SES.kind==='flash')sessDid();}return render();}
+  /* 앎: grade()가 카드 오답(C:)을 이미 한 번 셌으니 다른 열쇠(빈칸 F: 등)일 때만 더 센다(D1) */
   case'sess-grade':{const it=SES.items[SES.i];const g=Number(D.g);const gd=SES.graded||(SES.graded={}),sn=SES.snap||(SES.snap={});const prev=gd[SES.i];
     if(prev!=null){if(prev===g)return sessAdvance();sessUngrade(it,sn[SES.i],prev);}else sn[SES.i]=sessSnap(it);
-    grade(it.id,g);if(it.wrongKey&&g===2)rightOnWrong(it.wrongKey);SES.stats[gradeKey(g)]++;gd[SES.i]=g;sessMarkRead(it);if(g<2)sessMiss(it.id);
+    grade(it.id,g);if(it.wrongKey&&g===2&&it.wrongKey!=='C:'+it.id)rightOnWrong(it.wrongKey);SES.stats[gradeKey(g)]++;gd[SES.i]=g;SES.done[SES.i]=1;sessMarkRead(it);if(g<2)sessMiss(it.id);
     if(g===0&&SES.requeue&&prev!==0)SES.items.push({type:'card',id:it.id});return sessAdvance();}
   case'sess-prev':return sessPrev();
   case'sess-pick':{if(SES.answered!=null)return;const it=SES.items[SES.i],k=Number(D.k);SES.answered=k;
@@ -1427,14 +1472,16 @@ document.addEventListener('click',e=>{
     else if(it.type==='gq'){const L=gqList(it.d),q=L&&L.items[it.n];if(!q)return render();const ok=k===q.a,key='G:'+it.d+':'+it.n+':'+L.sig,p=prog(q.id);gqSet(it.d,it.n,ok);
       if(ok){p.ok++;SES.stats.ok++;rightOnWrong(key);}else{p.ng++;SES.stats.no++;markWrong(key,'gq');sessMiss(q.id);}const st=gqStat(it.d);calMark('gq:'+it.d,'quiz',`${korDate(it.d)} 용어 퀴즈 ${st.a}/${st.n}문 풂(정답 ${st.ok})`);touchDay();save();}
     else if(it.type==='quiz'){const q=SETS.sets[it.d].quiz[it.i];const ok=k===q.a;const key='Q:'+it.d+':'+it.i;const qp=S.qp[key]||(S.qp[key]={ok:0,ng:0});qp.last=todayStr();if(ok){qp.ok++;SES.stats.ok++;rightOnWrong(key);}else{qp.ng++;SES.stats.no++;markWrong(key,'quiz');}save();}
-    return render();}
+    sessDid();return render();}
   case'sess-next':return sessAdvance();
   case'sess-self':{const it=SES.items[SES.i];const g=Number(D.g);
     if(it.type==='cloze'){const key='Z:'+it.id+':'+it.k;if(g===2){SES.stats.ok++;rightOnWrong(key);}else{SES.stats.no++;markWrong(key,'cloze');sessMiss(it.id);}}
     if(it.type==='outline'){const st=S.essayStat[it.id]||(S.essayStat[it.id]={good:0,weak:0});if(g===2){st.good++;SES.stats.ok++;}else{st.weak++;SES.stats.no++;}st.last=todayStr();save();}
-    return sessAdvance();}
+    sessDid();return sessAdvance();}
   case'sess-skip':return sessAdvance();
-  case'sess-close':{const s=SES;if(s&&s.log)logTest(s.log,s.stats.ok+s.stats.mid+s.stats.no,s.stats.ok);const from=s&&s.from;SES=null;return nav(from?from.replace(/^#/,''):'today');}
+  case'sess-rest':return sessRest();
+  /* 테스트 기록은 끝 화면에서 이미 남겼다(sessDone). 여기서는 돌아가기만 */
+  case'sess-close':{const from=SES&&SES.from;SES=null;return nav(from?from.replace(/^#/,''):'today');}
   case'wrong-del':delete S.wrong[D.k];save();return render();
   /* 테스트·모의 */
   case'gen-mock':return genMock();
@@ -1447,9 +1494,9 @@ document.addEventListener('click',e=>{
   case'copy-outline-req':{const q=kq()[D.id];return copy(`토목시공기술사 제${q.r}회 ${q.p}교시 ${q.n}번 "${q.t}"의 모범 답안 목차를 만들어라. 소제목 5~7개(각 소제목 아래 핵심 키워드 3개), 넣을 그림·표 1개, 현장 적용 사례 소제목 1개, 결론의 최신 경향 1줄. 마지막에 아래 JSON 한 줄도 출력: [{"t":"문제","o":["1. 개요","..."],"p":"포인트·그림","u":${q.u},"f":3}]`,'목차 요청을 복사했어요');}
   case'report':return copy(weeklyReport(),'주간 리포트를 복사했어요');
   /* 타이머 */
-  case'timer-go':setPreset(D.p);return nav('timer');
-  case'timer-preset':setPreset(D.p);return render();
-  case'timer-custom':TM.custom=Math.max(1,Number(($('#tmCustom')||{}).value)||100);setPreset('custom');return render();
+  case'timer-go':return setPresetAsk(D.p,()=>nav('timer'),{no:()=>nav('timer')});
+  case'timer-preset':return setPresetAsk(D.p,render,{no:render,mins:D.p==='custom'?TM.custom:undefined});
+  case'timer-custom':return setPresetAsk('custom',render,{no:render,mins:Math.max(1,Number(($('#tmCustom')||{}).value)||100)});
   case'timer-toggle':return TM.running?tPause():tStart();
   case'timer-reset':return tReset();
   /* 도구 */
@@ -1471,7 +1518,7 @@ document.addEventListener('click',e=>{
   case'backup-copy':return copy(JSON.stringify({state:S,sets:SETS}),'백업을 복사했어요. 메모 앱에 붙여 두세요');
   case'backup-dl':{PE_IO.saveFile('gisulsa-backup-'+todayStr()+'.json',JSON.stringify({state:S,sets:SETS})).catch(()=>toast('파일로 저장하지 못했어요'));return;}
   case'restore':{let j,st;try{j=JSON.parse($('#restoreText').value);st=j.state||j;if(!st.settings||!st.cards)throw 0;}catch(err){return toast('백업 형식이 아니에요');}
-    return PE_IO.ask('지금 기록을 덮어씁니다. 계속할까요?',()=>{try{S=Object.assign(fresh(),st);S.settings=Object.assign(fresh().settings,st.settings||{});if(!S.settings.roundDates)S.settings.roundDates={};S.v=2;if(j.sets)SETS=Object.assign({sets:{},mocks:{},kichul:null,index:null,plan:null},j.sets);recalcPlan();flush();invalidate();applyLook();toast('복원했어요');nav('today');}catch(err){toast('백업 형식이 아니에요');}});}
+    return PE_IO.ask('지금 기록을 덮어씁니다. 계속할까요?',()=>{try{S=Object.assign(fresh(),st);S.settings=Object.assign(fresh().settings,st.settings||{});if(!S.settings.roundDates)S.settings.roundDates={};S.v=2;S.today=null;if(j.sets)SETS=Object.assign({sets:{},mocks:{},kichul:null,index:null,plan:null},j.sets);recalcPlan();flush();invalidate();applyLook();toast('복원했어요');nav('today');}catch(err){toast('백업 형식이 아니에요');}});}
   case'reset':return PE_IO.ask('모든 학습 기록과 내 카드를 지웁니다. 초기화할까요?',()=>PE_IO.ask('마지막 확인: 백업을 복사해 두었나요?',()=>{S=fresh();SETS={sets:{},mocks:{},kichul:null,index:null,plan:null};recalcPlan();flush();invalidate();applyLook();nav('today');toast('초기화했어요');sync(true);}));
   }
 });
@@ -1490,5 +1537,6 @@ window.addEventListener('online',()=>sync(true));
 PE_IO.init({toast});recalcPlan();applyLook();setPreset('essay');R=parseHash();
 if(!location.hash)history.replaceState(null,'','#today');
 calOpen();render();sync(true);
-window.__pe={S:()=>S,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession};
+window.__pe={S:()=>S,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession,
+  enough,setReviewItems,startDueAll,startWrong,budgetOf,dayKind,TM:()=>TM};
 })();

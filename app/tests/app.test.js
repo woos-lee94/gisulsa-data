@@ -834,6 +834,170 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     p0.remove(); b0.remove(); delete d.caretRangeFromPoint;
   }
 
+  // 기록 고침: 세트 복습은 80% 이상 끝냈을 때만(이어서는 남은 것만), 복습 날이 아니면 기록 없음, 오답 1번 앎, 같은 날 두 번 올리지 않기,
+  // 테스트 기록 한 번, 주소가 바뀌면 창 닫기, 타이머 바꿀 때 묻기, 별표·앱 모의·단원 외우기, 새 기록 열쇠와 백업
+  {
+    const D0 = '2026-10-19', ymdOf = x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
+    const T0 = ymdOf(new w.Date()), ago = n => { const x = new w.Date(); x.setDate(x.getDate() - n); return ymdOf(x); };
+    const keep = JSON.stringify({ cards: S().cards, wrong: S().wrong, sp: S().sp, log: S().log, tk: S().tk, resume: S().resume, mockp: S().mockp, lastMock: S().lastMock, qp: S().qp, essayStat: S().essayStat });
+    const mw = () => d.querySelector('#modal-wrap'), toastTxt = () => d.querySelector('#toast').textContent;
+    const freshDay = () => Object.values(S().cards).forEach(p => { if (p.last === T0) p.last = ago(30); });   // 오늘 매긴 카드가 없는 날처럼
+    const due = first => { S().sp[D0] = { read: {}, quiz: {}, tasks: {}, essay: {}, rev: {}, first }; freshDay(); };
+    const revKeys = () => Object.keys((S().sp[D0] || {}).rev || {}).join();
+    const sheet = async (dd, act) => { await go('#review'); click(`[data-act="rev-open"][data-d="${dd}"]`); await sleep(10); click(`[data-act="${act}"]`, mw()); await sleep(20); return pe.SES(); };
+    const doItem = g => { const it = pe.SES().items[pe.SES().i]; if (it.type === 'card') { click('[data-act="sess-flip"]'); click(`[data-act="sess-grade"][data-g="${g}"]`); } else { click('[data-act="sess-pick"][data-k="0"]'); click('[data-act="sess-next"]'); } };
+    const skipCard = () => click('[data-act="sess-skip"]');
+    const primaries = () => view().querySelectorAll('.btn:not(.sec):not(.ghost)').length;
+
+    // 하루 공부 시간과 날의 종류(새 기록 S.settings.budget)
+    const P = pe.PLAN(), bg0 = S().settings.budget;
+    ok(pe.dayKind(P.mock.d) === 'exam' && pe.dayKind(P.target.d) === 'exam' && pe.dayKind('2027-01-27') === 'pre3' && pe.dayKind('2027-01-29') === 'pre3' && pe.dayKind('2027-01-26') === 'wd' && pe.dayKind('2026-12-25') === 'holi' && pe.dayKind('2026-10-31') === 'sat' && pe.dayKind('2026-11-01') === 'sun', '날의 종류: 시험 날·시험 전 평일 3일·평일 공휴일·토·일');
+    ok(JSON.stringify(bg0) === '{"wd":180,"sat":300,"sun":240}' && pe.budgetOf('2026-11-02') === 180 && pe.budgetOf('2026-10-31') === 300 && pe.budgetOf('2026-11-01') === 240 && pe.budgetOf('2026-12-25') === 240 && pe.budgetOf('2027-01-27') === 180 && pe.budgetOf(P.mock.d) === 0 && pe.budgetOf('2027-01-23') === 430, '하루 공부 시간: 평일 180·토 300·일과 공휴일 240·시험 전 3일 평일·시험 날 0·리허설 토요일 430');
+    S().settings.budget = { wd: 150 }; const b1 = [pe.budgetOf('2026-11-02'), pe.budgetOf('2026-10-31'), pe.budgetOf('2026-11-01')].join();
+    S().settings.budget = { wd: 'x' }; const b2 = pe.budgetOf('2026-11-02'); S().settings.budget = bg0;
+    ok(b1 === '150,300,240' && b2 === 180, '하루 공부 시간: 고친 칸만 바뀌고 숫자가 아니면 기본값');
+
+    // D2: 연 적 없는 세트도 처음 쓰는 순간 세트 복습 시계가 돈다(화면을 그리기만 해서는 안 생김)
+    await go('#more'); delete S().sp[D0]; S().resume = {};   // 세트 화면을 여는 것은 그대로 시계를 돌리므로(T13) 다른 화면에서
+    const rc0 = d.createElement('button'); rc0.dataset.act = 'resume-clear'; rc0.dataset.k = `memo:set:${D0} flash:${D0}`; view().appendChild(rc0); click('[data-act="resume-clear"]'); await sleep(10);
+    await go('#today'); await go('#review');
+    ok(!S().sp[D0] && view().querySelector(`[data-act="rev-open"][data-d="${D0}"]`), 'D2: 오늘·복습 화면을 그려도 세트 진행 기록이 생기지 않음');
+    click(`[data-act="rev-open"][data-d="${D0}"]`); await sleep(10); click('[data-act="memo-set"]', mw()); await sleep(20);
+    ok(pe.MEMO() && pe.MEMO().setD === D0 && S().sp[D0] && S().sp[D0].first === T0, 'D2: 열지 않은 세트를 가리며 외우기로 보면 그날부터 세트 복습 시계(first)');
+
+    // D3: 복습 날 세트 복습은 항목의 80% 이상을 끝냈을 때만 친다
+    due(ago(3)); let ses = await sheet(D0, 'start-setrev');
+    ok(ses && ses.kind === 'rev' && ses.items.length === 15 && ses.items.filter(it => it.type === 'card').length === 10 && ses.rv.length === 1 && ses.rv[0].step === 3, 'D3: 3일 차 세트 복습 15항목(카드 10, 퀴즈 5)');
+    for (let k = 0; k < 15 && pe.SES().items[pe.SES().i]; k++) { if (pe.SES().items[pe.SES().i].type === 'card') skipCard(); else doItem(0); }
+    ok(/건너뛴 문제가 많아 오늘 세트 복습으로 치지 않았어요 \(5\/15\)/.test(txt()) && revKeys() === '', 'D3: 카드를 넘기기만 하고 끝내면 세트 복습으로 치지 않음(5/15)');
+    ok(primaries() === 1 && view().querySelector('.btn:not(.sec)[data-act="sess-rest"]') && /이어서 · 남은 10문제/.test(txt()) && view().querySelector('.btn.sec[data-act="sess-close"]'), 'D3: 끝 화면의 파란 버튼 하나 "이어서 · 남은 10문제", 돌아가기는 회색');
+    const s1 = pe.SES(), hl = w.history.length; click('[data-act="sess-rest"]'); await sleep(20); ses = pe.SES();
+    ok(ses !== s1 && ses.kind === 'rev' && ses.items.length === 10 && ses.items.every((it, i) => it === s1.items[i]) && ses.i === 0 && w.location.hash === '#sess' && w.history.length === hl, 'D3: 이어서 = 안 한 10항목만(같은 화면, 방문 기록 그대로)');
+    ok(ses.acc && ses.acc.a === 5 && ses.acc.n === 15 && ses.acc.d === D0 && ses.acc.step === 3 && ses.from === s1.from, 'D3: 이어서는 앞에서 한 5/15를 이어 셈(SES.acc), 돌아갈 곳도 그대로');
+    for (let k = 0; k < 10; k++) { if (k < 3) doItem(2); else skipCard(); }
+    ok(/\(8\/15\)/.test(txt()) && /이어서 · 남은 7문제/.test(txt()) && revKeys() === '', 'D3: 이어서 한 것까지 8/15면 아직 치지 않음');
+    click('[data-act="sess-rest"]'); await sleep(20); ses = pe.SES();
+    ok(ses.items.length === 7 && ses.acc.a === 8 && ses.acc.n === 15, 'D3: 다시 이어서도 남은 7항목, 8/15부터');
+    for (let k = 0; k < 7; k++) { if (k < 4) doItem(1); else skipCard(); }
+    ok(revKeys() === '1,3' && !/건너뛴 문제가 많아/.test(txt()) && primaries() === 1 && view().querySelector('.btn:not(.sec)[data-act="sess-close"]'), 'D3: 앞 세션과 합쳐 12/15를 채우면 그날 세트 복습(1·3일 차)');
+    due(ago(3)); await sheet(D0, 'start-setrev');
+    for (let k = 0; k < 15 && pe.SES().items[pe.SES().i]; k++) { if (pe.SES().items[pe.SES().i].type === 'card' && k >= 7) skipCard(); else doItem(2); }
+    ok(revKeys() === '1,3' && !/건너뛴/.test(txt()), 'D3: 15항목 중 12개(카드 7, 퀴즈 5)를 하면 바로 세트 복습으로 침');
+    // 카드 넘겨 보기는 뒷면을 본 카드를 끝낸 것으로 센다
+    due(ago(3)); ses = await sheet(D0, 'set-flash');
+    ok(ses && ses.kind === 'flash' && ses.setD === D0 && ses.items.length === 10, '넘겨 보기 세션(flash)');
+    for (let k = 0; k < 10; k++) skipCard();
+    ok(revKeys() === '' && /건너뛴 문제가 많아 오늘 세트 복습으로 치지 않았어요 \(0\/10\)/.test(txt()), 'D3: 넘겨 보기를 넘기기만 하면 세트 복습이 아님');
+    ses = await sheet(D0, 'set-flash');
+    for (let k = 0; k < 10; k++) { click('[data-act="sess-flip"]'); skipCard(); }
+    ok(revKeys() === '1,3' && ses.kind === 'flash' && Object.keys(ses.done).length === 10 && ses.stats.ok + ses.stats.mid + ses.stats.no === 0, 'D3: 매기지 않아도 10장 뒷면을 다 보면 세트 복습');
+    // D4: 복습 날이 아닌 세트는 끝까지 해도 세트 복습 기록을 남기지 않는다(다음 복습 날을 먹지 않음)
+    due(T0); ses = await sheet(D0, 'start-setrev');
+    ok(ses && ses.kind === 'rev' && ses.rv.length === 0, 'D4: 복습 날이 아닌 세트 다시 보기');
+    for (let k = 0; k < 15 && pe.SES().items[pe.SES().i]; k++) doItem(2);
+    ok(revKeys() === '' && /완료/.test(txt()) && !/건너뛴/.test(txt()), 'D4: 끝까지 해도 세트 복습 기록은 그대로');
+    // 카드를 모두 오늘 매겨 항목이 없는(퀴즈 없는) 세트의 복습은 바로 친다
+    const DC = '2026-10-20'; pe.SETS().sets[DC] = Object.assign({}, pe.SETS().sets[D0], { date: DC, quiz: [] }); S().sp[DC] = { read: {}, quiz: {}, tasks: {}, essay: {}, rev: {}, first: ago(1) };
+    pe.setReviewItems(DC).forEach(it => { S().cards[it.id] = Object.assign({ box: 1, due: '2000-01-01', seen: 1, ok: 0, ng: 0, star: false }, S().cards[it.id] || {}, { last: T0 }); });
+    const sesC = pe.SES(); await go('#review'); click(`[data-act="rev-open"][data-d="${DC}"]`); await sleep(10); click('[data-act="start-setrev"]', mw()); await sleep(20);
+    ok(Object.keys(S().sp[DC].rev).join() === '1' && pe.SES() === sesC && !mw().innerHTML && /오늘 이미 본 카드라 세트 복습으로 쳤어요/.test(toastTxt()), '카드를 모두 오늘 매긴 퀴즈 없는 세트: 바로 세트 복습으로 침');
+    delete pe.SETS().sets[DC]; delete S().sp[DC];
+
+    // D1·E1: 오답 카드는 "앎" 한 번에 빠지지 않고(1번 맞힘), 오늘 매긴 카드는 그 세트 복습에 다시 나오지 않는다
+    due(ago(3)); const X = pe.setReviewItems(D0).find(it => it.type === 'card').id;
+    S().wrong = { ['C:' + X]: { type: 'card', since: ago(5), n: 1, last: ago(5), streak: 0 } };
+    await go('#review'); click('[data-act="start-wrong"]'); await sleep(20);
+    ok(pe.SES().kind === 'wrong' && pe.SES().items.length === 1 && pe.SES().items[0].id === X, '오답 다시 풀기(wrong)');
+    click('[data-act="sess-flip"]'); click('[data-act="sess-grade"][data-g="2"]'); await sleep(10);
+    ok(S().wrong['C:' + X] && S().wrong['C:' + X].streak === 1, 'D1: 오답 카드를 한 번 앎으로 고르면 오답 노트에 남음(1번 맞힘)');
+    ok(S().tk['wrong:' + T0] === T0, '오답을 끝까지 풀면 오늘 오답 할 일로 남음(S.tk)');
+    ok(!pe.setReviewItems(D0).some(it => it.id === X) && pe.setReviewItems(D0).filter(it => it.type === 'quiz').length === 5, 'E1: 오답에서 오늘 매긴 카드는 그 세트 복습에서 빠짐(퀴즈는 그대로)');
+    await go('#review'); click('[data-act="start-wrong"]'); await sleep(20); click('[data-act="sess-flip"]'); click('[data-act="sess-grade"][data-g="2"]'); await sleep(10);
+    ok(!S().wrong['C:' + X], 'D1: 다음에 또 앎이면(두 번 연속) 오답 노트에서 빠짐');
+    S().wrong = { ['Q:' + D0 + ':0']: { type: 'quiz', since: ago(5), n: 1, last: ago(5), streak: 0 }, ['C:' + X]: { type: 'card', since: ago(5), n: 1, last: ago(5), streak: 0 } };
+    pe.startWrong({ skipQ: D0 }); await sleep(20);
+    ok(pe.SES().items.length === 1 && pe.SES().items[0].type === 'card', '오답 다시 풀기 skipQ: 그날 세트의 퀴즈 오답은 뺌');
+    S().wrong = {};
+    // 카드 복습: 오늘 매긴 카드와 오늘 세트 복습 카드(skip)는 빼고 k장, 그만큼 매기면 오늘 카드 복습 할 일로 남음
+    const dk = pe.deck().filter(c => !(S().cards[c.id] && S().cards[c.id].seen)).slice(0, 4).map(c => c.id);
+    dk.forEach((id, j) => { S().cards[id] = { box: 1, due: '2000-01-0' + (j + 1), seen: 1, ok: 0, ng: 0, star: false, last: j ? '2000-01-01' : T0 }; });
+    pe.startDueAll({ k: 2, skip: [dk[1]] }); await sleep(20);
+    ok(pe.SES().kind === 'cards' && pe.SES().items.map(it => it.id).join() === dk[2] + ',' + dk[3], 'E1: 카드 복습은 오늘 매긴 카드와 skip 카드를 빼고 k장');
+    for (let k = 0; k < 2; k++) { click('[data-act="sess-flip"]'); click('[data-act="sess-grade"][data-g="2"]'); }
+    ok(S().tk['cards:' + T0] === T0, '카드 복습 k장을 다 매기면 오늘 카드 복습 할 일로 남음(S.tk)');
+
+    // T3: 테스트 기록은 끝 화면에서 한 번 남는다(돌아가기를 누르지 않고 뒤로 가도)
+    await go('#more'); await go('#test'); const nl = S().log.length;
+    click('[data-act="start-mcq"]'); await sleep(20);
+    click('[data-act="sess-pick"][data-k="0"]'); click('[data-act="sess-next"]'); click('[data-act="sess-pick"][data-k="1"]');
+    pe.SES().i = pe.SES().items.length; pe.render(); pe.render();
+    const lg = S().log[S().log.length - 1];
+    ok(S().log.length === nl + 1 && lg.type === 'mcq' && lg.total === 2 && lg.d === T0, 'T3: 끝 화면에서 테스트 기록 한 번(다시 그려도 한 번)');
+    w.history.back(); await sleep(60);
+    ok(w.location.hash !== '#sess' && S().log.length === nl + 1, 'T3: 끝 화면에서 뒤로 가도 기록은 하나');
+    await go('#sess'); click('[data-act="sess-close"]'); await sleep(30);
+    ok(S().log.length === nl + 1 && !pe.SES(), 'T3: 돌아가기를 눌러도 더 남기지 않음');
+
+    // T8: 주소가 바뀌면(뒤로·앞으로 가기 포함) 열린 창을 닫는다
+    await go('#review'); click(`[data-act="rev-open"][data-d="${D0}"]`); await sleep(10);
+    const hadM = !!mw().innerHTML; w.location.hash = '#more'; await sleep(30);
+    ok(hadM && !mw().innerHTML && w.location.hash === '#more', 'T8: 창이 열린 채 주소가 바뀌면 창이 닫힘');
+    await go('#review'); click(`[data-act="rev-open"][data-d="${D0}"]`); await sleep(10); w.history.back(); await sleep(60);
+    ok(!mw().innerHTML && w.location.hash === '#more', 'T8: 창이 열린 채 뒤로 가도 창이 닫힘');
+
+    // T9: 돌고 있는 타이머를 다른 것으로 바꿀 때는 먼저 묻고, 취소하면 그대로
+    {
+      let T = 2e12; const realNow = w.Date.now; w.Date.now = () => T; const asked = [], rc = w.confirm, TM = pe.TM();
+      const answer = yes => { w.confirm = m => { asked.push(m); return yes; }; };
+      await go('#timer'); click('[data-act="timer-reset"]'); click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10);
+      click('[data-act="timer-toggle"]'); await sleep(10); T += 60000; await sleep(300); const r0 = TM.remain;
+      ok(TM.running && TM.preset === 'essay' && r0 === 5940, 'T9: 논술 교시 타이머가 1분 돌아감');
+      answer(false); click('[data-act="timer-preset"][data-p="one1"]'); await sleep(10);
+      ok(asked.length === 1 && asked[0] === '돌고 있는 논술 교시 타이머(남은 99:00)를 멈추고 단답 1문 10분으로 바꿀까요?' && TM.preset === 'essay' && TM.remain === r0 && TM.running, 'T9: 다른 타이머를 고르면 묻고, 취소하면 그대로(timer-preset)');
+      click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10);
+      ok(asked.length === 1 && TM.running && TM.remain === r0, 'T9: 돌고 있는 그 타이머를 다시 누르면 묻지 않고 그대로');
+      await go('#kichul/r/140'); click('[data-act="timer-go"][data-p="p1"]'); await sleep(30);
+      ok(asked.length === 2 && /를 멈추고 1교시 단답 100분으로 바꿀까요\?$/.test(asked[1]) && w.location.hash === '#timer' && TM.preset === 'essay' && TM.remain === r0 && TM.running, 'T9: 다른 화면의 타이머 버튼도 묻고, 취소하면 돌던 타이머 화면으로(timer-go)');
+      answer(true); click('[data-act="timer-preset"][data-p="custom"]'); await sleep(10);
+      ok(asked.length === 3 && TM.preset === 'custom' && !TM.running && TM.remain === TM.custom * 60, 'T9: 확인하면 바꿈');
+      click('[data-act="timer-toggle"]'); await sleep(10); T += 30000; await sleep(300); const r1 = TM.remain, c1 = TM.custom;
+      answer(false); d.querySelector('#tmCustom').value = String(c1 + 7); click('[data-act="timer-custom"]'); await sleep(10);
+      ok(asked.length === 4 && new RegExp(`직접 ${c1 + 7}분으로 바꿀까요`).test(asked[3]) && TM.custom === c1 && TM.remain === r1 && TM.running, 'T9: 직접 분 맞추기도 묻고, 취소하면 그대로(timer-custom)');
+      click('[data-act="timer-reset"]'); w.confirm = rc; w.Date.now = realNow; click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10);
+      ok(TM.preset === 'essay' && !TM.running && asked.length === 4, 'T9: 멈춰 있는(처음 상태) 타이머는 묻지 않고 바꿈');
+    }
+
+    // E3: 기출 문항 창(카드가 든 창)에서 별표를 눌러도 그 창 그대로
+    await go('#kichul/r/140'); click('.paper-q[data-id="140-1-05"]'); await sleep(10);
+    const qn = mw().querySelector('.qnum').textContent, nst = mw().querySelectorAll('[data-act="star"]').length, sid = mw().querySelector('[data-act="star"]').dataset.id, st0 = !!(S().cards[sid] && S().cards[sid].star);
+    click('[data-act="star"]', mw()); await sleep(10);
+    ok(mw().querySelector('.qnum') && mw().querySelector('.qnum').textContent === qn && mw().querySelectorAll('[data-act="star"]').length === nst && !!S().cards[sid].star === !st0 && mw().querySelector('[data-act="star"]').textContent === (st0 ? '☆ 별표' : '★ 별표 해제'), 'E3: 기출 문항 창에서 별표를 눌러도 창은 그대로(버튼만 바뀜)');
+    click('[data-act="star"]', mw()); await sleep(10); click('#modal-wrap .modal'); await sleep(10);
+
+    // E2: 앱 모의고사를 새로 만들면 "다 썼어요"를 비우고 시작
+    S().mockp.app = { p1: true, p2: true }; await go('#test'); click('[data-act="gen-mock"]'); await sleep(30);
+    const mds = [...view().querySelectorAll('[data-act="mock-done"]')];
+    ok(w.location.hash === '#mock/app' && !S().mockp.app && mds.length >= 4 && mds.every(x => !x.checked), 'E2: 새 앱 모의고사는 다 썼어요가 비어 있음');
+
+    // E5: 단원 진도의 "이 단원 카드 외우기"는 범위(S.range)를 바꾸지 않는다
+    const rg0 = S().range, cu = pe.deck()[0], u0 = Number(cu.u);
+    S().cards[cu.id] = Object.assign({ box: 1, ok: 0, ng: 0, star: false }, S().cards[cu.id] || {}, { seen: 1, due: '2000-01-01', last: '2000-01-01' });
+    await go('#study'); click(`[data-act="study-unit"][data-u="${u0}"]`); await sleep(20);
+    ok(S().range === rg0 && pe.SES() && pe.SES().kind === 'study' && pe.SES().items.length > 0 && pe.SES().items.every(it => Number(pe.deck().find(c => c.id === it.id).u) === u0), 'E5: 이 단원 카드 외우기는 그 단원 카드로, 범위는 그대로');
+
+    // 새 기록(S.tk·S.today·S.wk·하루 공부 시간)은 백업에 그대로 들어가고, 예전 백업은 기본값으로 복원
+    S().tk['x.book:' + T0] = T0; S().today = { d: T0, at: '07:40', v: 1, lv: 0, cap: 180, user: null, sig: 'x', rows: [{ id: 'set.read:' + T0, m: 10, tgt: null, blk: 'am' }] };
+    S().wk = { [ago(0)]: { cut: false, cph: 1 } }; S().settings.budget = { wd: 150, sat: 300, sun: 240 };
+    const bk = JSON.parse(JSON.stringify({ state: S(), sets: pe.SETS() }));
+    ok(bk.state.tk['x.book:' + T0] === T0 && bk.state.today && bk.state.today.rows[0].m === 10 && bk.state.wk[ago(0)].cph === 1 && bk.state.settings.budget.wd === 150, '백업 JSON에 S.tk·S.today·S.wk·하루 공부 시간이 그대로');
+    await go('#backup'); d.querySelector('#restoreText').value = JSON.stringify(bk); click('[data-act="restore"]'); await sleep(40);
+    ok(S().tk['x.book:' + T0] === T0 && S().today === null && S().wk[ago(0)].cph === 1 && S().settings.budget.wd === 150, '복원: 할 일·주간 기록·공부 시간은 그대로, 오늘 몫은 새로 짬(S.today=null)');
+    const old = JSON.parse(JSON.stringify(bk)); delete old.state.tk; delete old.state.today; delete old.state.wk; delete old.state.settings.budget;
+    await go('#backup'); d.querySelector('#restoreText').value = JSON.stringify(old); click('[data-act="restore"]'); await sleep(40);
+    ok(JSON.stringify(S().tk) === '{}' && S().today === null && JSON.stringify(S().wk) === '{}' && JSON.stringify(S().settings.budget) === '{"wd":180,"sat":300,"sun":240}' && Object.keys(S().cards).length === Object.keys(bk.state.cards).length && JSON.stringify(S().sp) === JSON.stringify(bk.state.sp), '예전 백업(새 열쇠 없음)을 복원하면 tk·today·wk·공부 시간은 기본값, 나머지 기록은 그대로');
+    const K = JSON.parse(keep); Object.keys(K).forEach(k => { S()[k] = K[k]; }); pe.render(); await go('#today');
+  }
+
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);
