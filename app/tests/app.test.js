@@ -101,31 +101,36 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   // 숙제: 세트 내용과 학습 단계로 앱이 정한다(몇 번, 어떻게)
   const hws = () => [...view().querySelectorAll('.hw')], hwOf = k => view().querySelector(`.hw [data-k="${k}"]`) && view().querySelector(`.hw [data-k="${k}"]`).closest('.hw');
   const hp = () => (S().sp['2026-10-19'].hw || {});
-  ok(/확인이 필요한 부분/.test(txt()) && /오늘 숙제/.test(txt()) && /준비 주/.test(txt()) && /이렇게 외워요/.test(txt()), '숙제 탭: 단계 설명·원칙·확인 필요');
+  ok(/이 세트 숙제/.test(txt()) && /준비 주/.test(txt()) && /숙제 원칙 6가지/.test(txt()) && !/오늘 숙제/.test(txt()), '숙제 탭: 이 세트 숙제(단계 설명·숙제 원칙 6가지)');
+  click('[data-act="set-tab"][data-t="cards"]'); await sleep(10);
+  ok(/교재로 확인할 것 \d+/.test(txt()) && view().querySelector('details.schk') && /세트를 만들 때 확신하지 못한 내용이에요/.test(txt()), '① 용어: 접은 "교재로 확인할 것 n"(예전 숙제 탭의 확인이 필요한 부분)');
+  click('[data-act="set-tab"][data-t="tasks"]'); await sleep(10);
   ok(/새 용어 4개: 안 보고 쓰기 2번, 소리 내어 말하기 4번/.test(txt()) && view().querySelectorAll('.hw [data-k="w0"]').length === 2 && view().querySelectorAll('.hw [data-k="s0"]').length === 4, '새 용어: 낱말마다 쓰기 2·말하기 4 동그라미');
   ok(/복습 용어 6개: 제목만 보고 키워드 백지 복원/.test(txt()) && /논술 목차 옮겨 적기 4번/.test(txt()) && view().querySelectorAll('.hw [data-k="eo"]').length === 4 && /그림·표 그리기 3번/.test(txt()) && /논술 실전 쓰기 25분/.test(txt()), '복습 용어·논술 목차 4번·실전 쓰기·그림 3번');
   ok(/퀴즈를 다 풀면 틀린 문제가 여기/.test(txt()) && /앞글자로 외우기/.test(txt()) && /자기 전 5분/.test(txt()), '퀴즈 오답(다 풀기 전)·앞글자·자기 전 떠올리기');
   ok(!/새 용어 4개를 소리 내어 30초씩/.test(txt()) && hws().length === 9, '예약 작업의 공통 과제는 숙제가 대신함(세트만의 과제만 남김)');
   ok(view().querySelectorAll('.hw .how').length === hws().length && /빨간 펜/.test(hwOf('w0').querySelector('.how').textContent), '항목마다 요령');
-  const tabLabel = () => view().querySelector('[data-act="set-tab"][data-t="tasks"]').textContent;
-  ok(/숙제 0\/9/.test(tabLabel()), '탭에 숙제 수');
+  const tabLabel = () => view().querySelector('[data-act="set-tab"][data-t="tasks"]').textContent, allN = () => (view().querySelector('.hwcnt') || {}).textContent || '';
+  ok(/③ 숙제 0\/5/.test(tabLabel()) && /필수 0\/5/.test(allN()) && /전체 0\/9/.test(allN()), '탭: ③ 숙제 필수 0/5(퀴즈를 다 풀기 전에는 틀린 이유를 세지 않음), 머리에 전체 0/9');
+  ok(view().querySelector('[data-k="w0"][data-v="1"].req') && view().querySelector('[data-k="w0"][data-v="2"].ext') && view().querySelectorAll('.hw [data-k="s0"].req').length === 2 && view().querySelectorAll('.hw [data-k="s0"].ext').length === 2 && view().querySelector('.hw [data-k="eo"][data-v="2"].req') && view().querySelector('.hw [data-k="eo"][data-v="3"].ext') && view().querySelector('.ccsep'), '필수 동그라미(.req)·더 하기(.ext)·사이 줄(쓰기 1번·말하기 2번·목차 2번이 필수)');
+  ok(/필수: 쓰기 1번 · 말하기 2번 \(나머지는 시간이 되면\)/.test(hwOf('w0').textContent) && hwOf('r4') && hwOf('r4').closest('details.hwext') && !hwOf('w0').closest('details'), '새 용어 카드에 "필수:" 줄, 복습 용어는 접은 "더 하기" 안');
   click('[data-act="hw"][data-k="w0"][data-v="2"]'); await sleep(10);
   ok(hp().w0 === 2 && view().querySelectorAll('.hw [data-k="w0"].on').length === 2, '두 번째 동그라미를 누르면 2번 한 것으로');
   click('[data-act="hw"][data-k="w0"][data-v="2"]'); await sleep(10);
   ok(hp().w0 === 1, '같은 동그라미를 다시 누르면 하나 뺌');
   for (let i = 0; i < 4; i++) { click(`[data-act="hw"][data-k="w${i}"][data-v="2"]`); await sleep(5); click(`[data-act="hw"][data-k="s${i}"][data-v="4"]`); await sleep(5); }
-  ok(hwOf('w0').classList.contains('done') && /숙제 1\/9/.test(tabLabel()), '새 용어를 다 하면 그 숙제 끝');
+  ok(hwOf('w0').classList.contains('done') && /③ 숙제 2\/5/.test(tabLabel()) && /전체 1\/9/.test(allN()), '새 용어를 다 하면 그 숙제 끝(필수 2/5: 쓰기·말하기, 전체 1/9)');
   click('[data-act="hw"][data-k="eo"][data-v="4"]'); await sleep(10);
   click('[data-act="hw-ew"]'); await sleep(10);
-  ok(S().sp['2026-10-19'].essay.done && hwOf('eo').classList.contains('done') && /숙제 3\/9/.test(tabLabel()), '목차 4번, 실전 쓰기(논술 탭 손글씨와 같은 기록)');
+  ok(S().sp['2026-10-19'].essay.done && hwOf('eo').classList.contains('done') && /③ 숙제 3\/5/.test(tabLabel()) && /전체 3\/9/.test(allN()), '목차 4번(필수 3/5), 실전 쓰기(논술 탭 손글씨와 같은 기록, 전체 3/9)');
   view().querySelector('#hwMn').value = '침윤선 누수 파이핑 → 침누파'; click('[data-act="hw-mn"]'); await sleep(10);
-  ok(hp().mn === '침윤선 누수 파이핑 → 침누파' && view().querySelector('#hwMn').value === hp().mn && /숙제 4\/9/.test(tabLabel()), '앞글자 외우기를 적어 둠');
+  ok(hp().mn === '침윤선 누수 파이핑 → 침누파' && view().querySelector('#hwMn').value === hp().mn && /전체 4\/9/.test(allN()), '앞글자 외우기를 적어 둠');
   click('[data-act="hw-ew"]'); await sleep(10);
-  ok(!S().sp['2026-10-19'].essay.done && /숙제 3\/9/.test(tabLabel()), '실전 쓰기를 다시 누르면 취소');
+  ok(!S().sp['2026-10-19'].essay.done && /전체 3\/9/.test(allN()), '실전 쓰기를 다시 누르면 취소');
   click('[data-act="set-tab"][data-t="essay"]'); await sleep(20); click('[data-act="set-essay-done"]'); await sleep(20); click('[data-act="set-tab"][data-t="tasks"]'); await sleep(20);
-  ok(/숙제 4\/9/.test(tabLabel()), '논술 탭에서 손글씨 체크해도 숙제에 반영');
+  ok(/전체 4\/9/.test(allN()), '논술 탭에서 손글씨 체크해도 숙제에 반영');
   click('[data-act="hw-ew"]'); await sleep(10);
-  ok(!S().sp['2026-10-19'].essay.done && /숙제 3\/9/.test(tabLabel()), '(되돌림) 실전 쓰기 취소');
+  ok(!S().sp['2026-10-19'].essay.done && /전체 3\/9/.test(allN()), '(되돌림) 실전 쓰기 취소');
   // 단답 답안지: 카드를 1교시 답안지 모양으로(정의 → 주요 내용(키워드) → 그림 칸 → 결론 → 끝)
   const ddHw = view().querySelector('.hw [data-k^="dd"]') && view().querySelector('.hw [data-k^="dd"]').closest('.hw');
   ok(ddHw && /단답 1문제: 답안지에 10분 쓰기/.test(txt()) && ddHw.querySelector('[data-h^="dandap/"]') && ddHw.querySelector('[data-p="one1"]'), '숙제: 단답 1문제(답안지 버튼, 10분 타이머)');
@@ -133,7 +138,8 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   const dw = pe.ddWrap('가나다라 마바사아자 차카타파하 가나다라마바사아자차카타파하가나다', 10);
   ok(dw.length >= 4 && dw.join('').replace(/\s/g, '') === '가나다라마바사아자차카타파하가나다라마바사아자차카타파하가나다' && dw.every(l => l.length <= 10), '줄 나누기(긴 낱말은 끊고 글자는 그대로)');
   click('.hw [data-h^="dandap/"]'); await sleep(30);
-  const ddId = decodeURIComponent(w.location.hash.replace('#dandap/', '')), ddc = pe.deck().find(c => c.id === ddId);
+  const ddId = decodeURIComponent(w.location.hash.replace('#dandap/', '').split('/')[0]), ddc = pe.deck().find(c => c.id === ddId);
+  ok(w.location.hash.split('/')[2] === '2026-10-19' && view().querySelector('[data-act="dd-done"][data-d="2026-10-19"]') && /다 썼어요\(숙제에 표시\)/.test(txt()), '숙제에서 연 답안지(#dandap/카드/날짜): "다 썼어요(숙제에 표시)"');
   const rowsN = () => [...view().querySelectorAll('.asheet.dd .ar')].reduce((a, r) => a + (r.classList.contains('blk') ? 5 : (r.querySelector('.ac').textContent.trim() ? 1 : 0)), 0);
   ok(ddc && /^#dandap\//.test(w.location.hash) && view().querySelector('.asheet.dd'), '답안지 화면');
   const sheetTxt = view().querySelector('.asheet.dd').textContent;
@@ -152,6 +158,10 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   ok(view().querySelector('.acc.open [data-h^="dandap/"]'), '세트 용어에서 단답 답안지로');
   await go('#test'); click('[data-act="dd-rand"]'); await sleep(30);
   ok(/^#dandap\//.test(w.location.hash) && view().querySelector('.asheet.dd'), '테스트 탭: 단답 답안지 1문');
+  { const t0 = (x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'))(new w.Date()), kk = 'x.dd2:' + t0, had = S().tk[kk]; delete S().tk[kk]; pe.render();
+    ok(view().querySelectorAll('.btn:not(.sec):not(.ghost)').length === 1 && view().querySelector('.btn:not(.sec)[data-act="dd-tick"]') && view().querySelector('.btn.sec[data-p="one1"]'), '숙제 밖에서 연 답안지: 파란 "다 썼어요" 하나(타이머 10분은 보조)');
+    click('[data-act="dd-tick"]'); await sleep(10); const on = S().tk[kk] === t0; click('[data-act="dd-tick"]'); await sleep(10);
+    ok(on && !S().tk[kk], '"다 썼어요" → 오늘 "단답 1문제 더"(x.dd2)로 침, 다시 누르면 되돌림'); if (had) S().tk[kk] = had; }
   await go('#set/2026-10-19'); click('[data-act="set-tab"][data-t="tasks"]'); await sleep(20);
 
   // 카드로 넘겨 보기 세션
@@ -194,7 +204,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   const ses0 = pe.SES(); click('[data-act="set-flash"]'); await sleep(30);
   ok(w.location.hash === '#sess' && pe.SES() === ses0 && pe.SES().i === si, '넘겨 보기: 다시 누르면 보던 카드부터(매긴 기록도 그대로)');
   await go('#set/2026-10-19'); click('[data-act="resume-clear"]'); await sleep(20);
-  ok(!pe.SES() && !S().resume['flash:2026-10-19'] && /카드로 넘겨 보며 외우기/.test(txt()) && !view().querySelector('[data-act="resume-clear"]'), '처음부터: 이어 하기 지움');
+  ok(!pe.SES() && !S().resume['flash:2026-10-19'] && view().querySelector('[data-act="set-flash"]').textContent === '카드 넘겨 보기' && !view().querySelector('[data-act="resume-clear"]'), '처음부터: 이어 하기 지움("카드 넘겨 보기")');
   S().resume['flash:2026-10-19'] = { i: 2, n: nC, day: '2020-01-01' }; await go('#today'); await go('#set/2026-10-19');
   click('[data-act="set-flash"]'); await sleep(30);
   ok(pe.SES().i === 2 && /3번째 카드부터 이어서/.test(w.document.querySelector('#toast').textContent), '앱을 껐다 켜도(저장된 자리) 보던 카드부터');
@@ -214,7 +224,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
 
   // 용어 퀴즈: 세트 용어로 앱이 만든 문제(용어당 15문, 15문씩 회차, 쉬운 것부터)
   {
-    const D0 = '2026-10-19', L = pe.gqList(D0);
+    const D0 = '2026-10-19', L = pe.gqList(D0), GQ3 = ['round', 'term', 'rand'];
     ok(L && L.items.length >= 120 && L.items.length <= 150, `용어 퀴즈 ${L && L.items.length}문(용어 10개)`);
     ok(L.items.every(q => q.q && (q.o.length === 4 || q.o.length === 2) && new Set(q.o).size === q.o.length && q.a >= 0 && q.a < q.o.length), '보기 2·4개, 겹침 없음, 정답 자리 유효');
     ok(pe.gqBuild(D0).sig === L.sig && JSON.stringify(pe.gqBuild(D0).items) === JSON.stringify(L.items), '같은 세트는 늘 같은 문제·같은 보기 순서');
@@ -230,6 +240,8 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(pe.gqNumAlt('2023', () => 0.5).every(a => Math.abs(Number(a) - 2023) <= 3), '연도는 앞뒤 몇 해');
     await go('#set/' + D0); click('[data-act="set-tab"][data-t="quiz"]'); await sleep(20);
     ok(/용어 퀴즈/.test(txt()) && view().querySelectorAll('.gqc').length === Math.ceil(L.items.length / 15) && /세트 퀴즈/.test(txt()) && view().querySelectorAll('.qcard').length === 5, '퀴즈 탭: 용어 퀴즈 회차 칸과 세트 퀴즈');
+    { const sq = view().querySelector('section.sec'), gf = view().querySelector('details.gqf');
+      ok(sq && gf && /세트 퀴즈/.test(sq.textContent) && (sq.compareDocumentPosition(gf) & 4) && gf.contains(view().querySelector('.gqc')) && /더 연습: 용어 퀴즈/.test(gf.querySelector('summary').textContent) && !gf.querySelector('.btn:not(.sec):not(.ghost)') && GQ3.every(m => gf.querySelector(`[data-act="gq-mode"][data-m="${m}"]`)), '② 퀴즈: 세트 퀴즈 먼저, 용어 퀴즈(회차별·용어별·무작위)는 그 아래 접은 "더 연습" 안, 버튼은 보조'); }
     click('[data-act="gq-go"][data-r="next"]'); await sleep(40);
     ok(pe.SES() && pe.SES().items.length === 15 && pe.SES().items.every((it, i) => it.type === 'gq' && it.n === i), '1회: 1~15번 세션');
     const q0 = L.items[0], q1 = L.items[1];
@@ -283,6 +295,10 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     const read0 = JSON.stringify(S().sp[D0].read || {});
     await go('#review'); click('[data-act="rev-open"][data-d="' + D0 + '"]'); await sleep(20);
     ok(['start-setrev', 'memo-set', 'set-flash', 'start-fill', 'gq-go'].every(a => mw().querySelector(`[data-act="${a}"]`)) && /어느 방법이든 끝까지 하면 오늘 복습/.test(mw().textContent), '다시 볼 세트: 카드·퀴즈, 가리며 외우기, 넘겨 보기, 빈칸 쓰기, 용어 퀴즈');
+    ok(mw().querySelectorAll('.btn:not(.sec):not(.ghost)').length === 1 && mw().querySelector('.btn:not(.sec):not(.ghost)[data-act="start-setrev"]') && /^세트 복습 시작 · 카드 \d+/.test(mw().querySelector('[data-act="start-setrev"]').textContent) && ['memo-set', 'set-flash', 'start-fill', 'gq-go'].every(a => mw().querySelector(`details.rvm [data-act="${a}"]`)), '세트 창: 파란 버튼은 "세트 복습 시작" 하나, 다른 방법은 접은 "다른 방법으로" 안');
+    click('details.rvm [data-act="start-fill"]', mw()); await sleep(10);
+    ok(mw().querySelector('[data-act="rev-open"].rvback') && mw().querySelectorAll('[data-act="fill-lv"][data-rv="1"]').length === 4, '빈칸 쓰기 난이도 창 맨 위 "‹ 다른 방법"');
+    click('.rvback', mw()); await sleep(10); ok(mw().querySelector('[data-act="start-setrev"]'), '"‹ 다른 방법" → 세트 창으로');
     click('[data-act="memo-set"]', mw()); await sleep(30);
     ok(w.location.hash === '#memo' && !mw().innerHTML && pe.MEMO().setD === D0 && /가리며 외우기/.test(txt()), '창에서 가리며 외우기(창 닫힘)');
     while (pe.MEMO().i + 1 < pe.MEMO().items.length) { click('[data-act="memo-next"]'); await sleep(5); }
@@ -290,7 +306,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(Object.keys(S().sp[D0].rev || {}).length > 0, '가리며 외우기를 끝내도 그 날 복습으로 침');
     click('[data-act="memo-close"]'); await sleep(60);
     await go('#review');
-    ok(!/일 차/.test(txt()) && view().querySelector('[data-act="rev-open"][data-d="' + D0 + '"]') && /지난 세트 다시 외우기/.test(txt()), '복습을 마친 세트는 지난 세트에서 다시 열기');
+    ok(!/일 차/.test(txt()) && view().querySelector('[data-act="rev-open"][data-d="' + D0 + '"]') && /지난 세트/.test(txt()) && !/지난 세트 다시 외우기/.test(txt()), '복습을 마친 세트는 지난 세트에서 다시 열기');
     S().sp[D0].rev = {}; S().resume = {}; pe.render();
     // 세션 중·끝에 가리며 외우기
     await go('#study'); click('[data-act="start-free"]'); await sleep(40);
@@ -496,7 +512,8 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   ok(view().querySelectorAll('.check input').length === w.PE_GUIDE.check.length, '형식 점검표 ' + w.PE_GUIDE.check.length + '항목');
   await go('#prompts');
   ok(/\[답안 형식 점검표/.test(txt()) && /\[모범 답안 뼈대/.test(txt()) && !/\{답안형식\}/.test(txt()), '프롬프트에 형식 점검표가 채워짐');
-  await go('#test'); ok(view().querySelector('[data-h="guide"]'), '테스트 탭 → 답안 작성 요령');
+  await go('#test'); ok(!view().querySelector('[data-h="guide"]'), '테스트 탭에는 답안 작성 요령 줄이 없음(더보기·④ 논술·모의고사 화면에 있음)');
+  await go('#mock/2026-10-24'); ok(view().querySelector('[data-h="guide"]'), '모의고사 화면 → 답안 작성 요령');
   await go('#more'); ok(view().querySelector('[data-h="guide"]'), '더보기 → 답안 작성 요령');
 
   // 가리며 외우기: 보기 → 가림을 정한 시간마다 반복(시계는 검사에서 직접 돌린다)
@@ -676,7 +693,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(M().fin && /가리며 외우기 완료/.test(txt()) && /외운 카드/.test(txt()) && !S().resume['memo:set:2026-10-19'], '완료: 끝 화면, 이어 하기 자리 지움');
     ok(cx().some(v => v[0] === 'term' && /가리며 외우기 완료: 10월 19일 세트 10장/.test(v[1])) && !cx().some(v => /가리며 외우기: 10월 19일/.test(v[1])), '달력에 완료로 남음(진행 기록은 완료로 바뀜)');
     click('[data-act="memo-close"]'); await sleep(60);
-    ok(w.location.hash === '#set/2026-10-19' && !M() && /가리며 외우기\(보였다 가렸다 반복\)/.test(txt()), '돌아가기 → 세트 화면(이어 하기 없음)');
+    ok(w.location.hash === '#set/2026-10-19' && !M() && view().querySelector('[data-act="memo-set"]').textContent === '가리며 외우기', '돌아가기 → 세트 화면(이어 하기 없음: "가리며 외우기")');
     click('[data-act="memo-set"]'); await sleep(20);
     ok(M().i === 0 && !M().fin, '완료 뒤에는 처음부터');
     click('[data-act="memo-next"]'); await sleep(10);
@@ -887,7 +904,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     click('[data-act="sess-rest"]'); await sleep(20); ses = pe.SES();
     ok(ses.items.length === 7 && ses.acc.a === 8 && ses.acc.n === 15, 'D3: 다시 이어서도 남은 7항목, 8/15부터');
     for (let k = 0; k < 7; k++) { if (k < 4) doItem(1); else skipCard(); }
-    ok(revKeys() === '1,3' && !/건너뛴 문제가 많아/.test(txt()) && primaries() === 1 && view().querySelector('.btn:not(.sec)[data-act="sess-close"]'), 'D3: 앞 세션과 합쳐 12/15를 채우면 그날 세트 복습(1·3일 차)');
+    ok(revKeys() === '1,3' && !/건너뛴 문제가 많아/.test(txt()) && primaries() === 1 && view().querySelector('.btn:not(.sec)[data-act="end-go"]') && /오늘 순서로|오늘 몫 끝 · 오늘로|오늘로/.test(view().querySelector('.btn:not(.sec)[data-act="end-go"]').textContent) && view().querySelector('.btn.sec[data-act="sess-close"]') && /복습으로/.test(view().querySelector('.btn.sec[data-act="sess-close"]').textContent), 'D3: 앞 세션과 합쳐 12/15를 채우면 그날 세트 복습(1·3일 차), 끝 화면은 "오늘 순서로" 하나와 "복습으로"');
     due(ago(3)); await sheet(D0, 'start-setrev');
     for (let k = 0; k < 15 && pe.SES().items[pe.SES().i]; k++) { if (pe.SES().items[pe.SES().i].type === 'card' && k >= 7) skipCard(); else doItem(2); }
     ok(revKeys() === '1,3' && !/건너뛴/.test(txt()), 'D3: 15항목 중 12개(카드 7, 퀴즈 5)를 하면 바로 세트 복습으로 침');
