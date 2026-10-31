@@ -539,15 +539,29 @@ function gqStat(d){const r=gqRec(d);if(r==null)return null;const n=r.length,a=n-
 /* 회차 r(0부터) 또는 'next'(안 푼 문제가 있는 첫 회차, 다 풀었으면 1회), 'wrong'(틀린 문제만). 반쯤 푼 회차는 안 푼 문제부터 */
 function startGq(d,mode){const L=gqList(d);if(!L||!L.items.length)return toast('이 세트로는 용어 퀴즈를 만들 수 없어요');const r=gqRec(d),nR=Math.ceil(L.items.length/GQ_ROUND);let ns=[],title,at=0;
   if(mode==='wrong'){ns=[...r].map((x,i)=>x==='0'?i:-1).filter(i=>i>=0);title='틀린 문제';if(!ns.length)return toast('틀린 문제가 없어요');}
+  else if(/^t:/.test(mode||'')){const id=mode.slice(2),c=card(id);ns=L.items.map((q,n)=>q.id===id?n:-1).filter(n=>n>=0);if(!ns.length)return toast('이 용어로 만든 문제가 없어요');
+    title=': '+(c?gqMain(c):'용어');const f=ns.findIndex(n=>r[n]==='-');at=f>0?f:0;}
+  else if(mode==='rand'||mode==='all'){ns=shuffle(L.items.map((_,n)=>n));if(mode==='rand')ns=ns.slice(0,GQ_ROUND);title=mode==='rand'?`무작위 ${ns.length}문`:`${ns.length}문 섞어서`;}
   else{let k=Number(mode);if(mode==='next'||isNaN(k)){k=0;for(let j=0;j<nR;j++)if(r.slice(j*GQ_ROUND,(j+1)*GQ_ROUND).includes('-')){k=j;break;}}
     for(let n=k*GQ_ROUND;n<Math.min(L.items.length,(k+1)*GQ_ROUND);n++)ns.push(n);title=(k+1)+'회';const f=ns.findIndex(n=>r[n]==='-');at=f>0?f:0;}
-  startSession({title:`${korDate(d)} 용어 퀴즈 ${title}`,items:ns.map(n=>({type:'gq',d,n})),revD:d,i:at});}
-function gqSection(d){const L=gqList(d);if(!L||!L.items.length)return'';const r=gqRec(d),st=gqStat(d),nR=st.rounds,nc=uniq(L.items.map(q=>q.id)).length;
-  let next=-1;for(let j=0;j<nR;j++)if(r.slice(j*GQ_ROUND,(j+1)*GQ_ROUND).includes('-')){next=j;break;}
-  const chips=Array.from({length:nR},(_,k)=>{const x=gqRoundStat(r,k),cls=x.a===x.n?(x.ok>=Math.ceil(x.n*0.8)?'ok':'mid'):x.a?'part':'';
-    return`<button class="gqc ${cls}" data-act="gq-go" data-d="${d}" data-r="${k}"><b>${k+1}회</b><small>${x.a?`${x.ok}/${x.n}`:`${x.n}문`}</small></button>`;}).join('');
-  return sec('용어 퀴즈',`${st.a}/${st.n}문`,`<p class="note" style="margin-top:0">이 세트 용어 ${nc}개로 앱이 만든 문제 ${st.n}개예요. ${GQ_ROUND}문씩 ${nR}회, 뒤로 갈수록 어려워요(정의·키워드 보고 용어 → OX·빈칸 → 키워드 아닌 것). 틀린 문제는 오답 노트로 가요.</p>
-    <div class="gqg">${chips}</div><div class="btns"><button class="btn" data-act="gq-go" data-d="${d}" data-r="next">${next<0?'1회부터 다시 풀기':st.a?`이어 풀기: ${next+1}회`:'1회부터 풀기'}</button>${st.no?`<button class="btn sec" data-act="gq-go" data-d="${d}" data-r="wrong">틀린 문제만 (${st.no})</button>`:''}</div>`);}
+  startSession({title:`${korDate(d)} 용어 퀴즈${title.startsWith(':')?'':' '}${title}`,items:ns.map(n=>({type:'gq',d,n})),revD:d,i:at});}
+/* 푸는 방식: 회차별(15문씩, 쉬운 것부터), 용어별(그 용어 문제만, 쉬운 것부터), 무작위(15문 또는 전체를 풀 때마다 새로 섞기). 기록은 문제마다 하나라 어느 방식으로 풀어도 같이 남는다 */
+const GQ_MODES=[['round','회차별'],['term','용어별'],['rand','무작위']];
+function gqSection(d){const L=gqList(d);if(!L||!L.items.length)return'';const r=gqRec(d),st=gqStat(d),nR=st.rounds,qid=uniq(L.items.map(q=>q.id)),ids=setIds(d).filter(id=>qid.includes(id)).concat(qid.filter(id=>!setIds(d).includes(id))),mode=SV['gqm:'+d]||'round';
+  let body='';
+  if(mode==='term')body=`<div class="group">${ids.map(id=>{const c=card(id),ns=L.items.map((q,n)=>q.id===id?n:-1).filter(n=>n>=0),a=ns.filter(n=>r[n]!=='-').length,ok=ns.filter(n=>r[n]==='1').length;
+      return row({t:esc(c?gqMain(c):id),d:a?`${a}/${ns.length}문 풂, 정답 ${ok}`:`${ns.length}문`,v:a===ns.length?(ok===ns.length?'다 맞힘':`${ok}/${ns.length}`):'',act:'gq-go',data:{d,r:'t:'+id}});}).join('')}</div>
+    <p class="note">외울 용어 하나를 골라 그 용어 문제만 쉬운 것부터 풀어요.</p>`;
+  else if(mode==='rand')body=`<div class="btns"><button class="btn" data-act="gq-go" data-d="${d}" data-r="rand">무작위 ${Math.min(GQ_ROUND,st.n)}문 풀기</button><button class="btn sec" data-act="gq-go" data-d="${d}" data-r="all">${st.n}문 전부 섞기</button></div>
+    <p class="note">풀 때마다 용어와 문제 종류를 새로 섞어요.</p>`;
+  else{let next=-1;for(let j=0;j<nR;j++)if(r.slice(j*GQ_ROUND,(j+1)*GQ_ROUND).includes('-')){next=j;break;}
+    const chips=Array.from({length:nR},(_,k)=>{const x=gqRoundStat(r,k),cls=x.a===x.n?(x.ok>=Math.ceil(x.n*0.8)?'ok':'mid'):x.a?'part':'';
+      return`<button class="gqc ${cls}" data-act="gq-go" data-d="${d}" data-r="${k}"><b>${k+1}회</b><small>${x.a?`${x.ok}/${x.n}`:`${x.n}문`}</small></button>`;}).join('');
+    body=`<div class="gqg">${chips}</div><div class="btns"><button class="btn" data-act="gq-go" data-d="${d}" data-r="next">${next<0?'1회부터 다시 풀기':st.a?`이어 풀기: ${next+1}회`:'1회부터 풀기'}</button></div>
+    <p class="note">${GQ_ROUND}문씩 ${nR}회, 뒤로 갈수록 어려워요(정의·키워드 보고 용어 → OX·빈칸 → 키워드 아닌 것).</p>`;}
+  return sec('용어 퀴즈',`${st.a}/${st.n}문`,`<p class="note" style="margin-top:0">이 세트 용어 ${ids.length}개로 앱이 만든 문제 ${st.n}개예요. 어느 방식으로 풀어도 기록은 함께 남고, 틀린 문제는 오답 노트로 가요.</p>
+    <div class="seg" style="margin:10px 0 12px">${GQ_MODES.map(([k,l])=>`<button class="${mode===k?'on':''}" data-act="gq-mode" data-d="${d}" data-m="${k}">${l}</button>`).join('')}</div>${body}
+    ${st.no?`<div class="btns" style="margin-top:6px"><button class="btn sec" data-act="gq-go" data-d="${d}" data-r="wrong">틀린 문제만 (${st.no})</button></div>`:''}`);}
 function gqRoundStat(r,k){const s=r.slice(k*GQ_ROUND,(k+1)*GQ_ROUND);return{n:s.length,a:s.length-(s.match(/-/g)||[]).length,ok:(s.match(/1/g)||[]).length};}
 
 /* ════════ 12. 화면: 세트 ════════ */
@@ -1361,6 +1375,7 @@ document.addEventListener('click',e=>{
     return startMemo({key:'memo:sess',label:SES.title||'학습',title:(SES.title||'학습')+': 가리며 외우기',items:ids.map(id=>({id})),i:Math.max(0,ids.indexOf(cur))},true);}
   case'memo-one':{const c=card(D.id);if(!c)return;return startMemo({key:'memo:one',label:gqMain(c),title:gqMain(c)+': 가리며 외우기',items:[{id:c.id}]},true);}
   case'gq-go':return startGq(D.d,D.r);
+  case'gq-mode':SV['gqm:'+D.d]=D.m;return render();
   case'card-modal':{const c=card(D.id);if(c)openModal(cardModal(c));return;}
   case'rev-open':return openModal(revSheet(D.d));
   case'memo-study':return startMemo({key:'memo:study',label:'암기 탭',title:'가리며 외우기',items:memoStudyIds().map(id=>({id}))});
