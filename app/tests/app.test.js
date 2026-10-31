@@ -891,6 +891,24 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ses = await sheet(D0, 'set-flash');
     for (let k = 0; k < 10; k++) { click('[data-act="sess-flip"]'); skipCard(); }
     ok(revKeys() === '1,3' && ses.kind === 'flash' && Object.keys(ses.done).length === 10 && ses.stats.ok + ses.stats.mid + ses.stats.no === 0, 'D3: 매기지 않아도 10장 뒷면을 다 보면 세트 복습');
+    // 중간부터 이어서 한 세션: 앞에서 이미 한 것(용어 퀴즈 기록, 세트 읽음)은 끝낸 것으로 센다
+    due(ago(3)); const GL = pe.gqList(D0); S().sp[D0].gq = { s: GL.sig, r: GL.items.map((_, n) => n < 7 ? '1' : '-').join('') };
+    ses = await sheet(D0, 'gq-go');
+    ok(ses && ses.kind === 'gq' && ses.items.length === 15 && ses.i === 7 && Object.keys(ses.done).join() === '0,1,2,3,4,5,6', 'D3: 반쯤 푼 용어 퀴즈 회차를 이어 풀면 앞에서 푼 7문은 끝낸 것');
+    for (let k = 0; k < 8 && pe.SES().items[pe.SES().i]; k++) doItem(0);
+    ok(revKeys() === '1,3' && !/건너뛴/.test(txt()) && !view().querySelector('[data-act="sess-rest"]'), 'D3: 이어 푼 회차를 끝까지 풀면 세트 복습(앞의 7문 + 오늘 8문)');
+    due(ago(3)); [0, 1, 2, 3, 4].forEach(i => { S().sp[D0].read[i] = 1; }); S().resume = { ['flash:' + D0]: { i: 5, n: 10, day: T0 } };
+    ses = await sheet(D0, 'set-flash');
+    ok(ses && ses.kind === 'flash' && ses.i === 5 && Object.keys(ses.done).join() === '0,1,2,3,4', 'D3: 앱을 껐다 켜고 넘겨 보기를 6번째 카드부터 이어서 하면 앞의 본 카드 5장은 끝낸 것');
+    for (let k = 0; k < 5; k++) doItem(2);
+    ok(revKeys() === '1,3' && !/건너뛴/.test(txt()), 'D3: 이어서 넘겨 보기를 끝까지 하면 세트 복습');
+    due(ago(3)); S().resume = { ['flash:' + D0]: { i: 5, n: 10, day: T0 } };
+    ses = await sheet(D0, 'set-flash'); for (let k = 0; k < 5; k++) doItem(2);
+    ok(ses.i === 10 && revKeys() === '' && /건너뛴 문제가 많아 오늘 세트 복습으로 치지 않았어요 \(5\/10\)/.test(txt()) && /이어서 · 남은 5문제/.test(txt()), 'D3: 앞 5장을 보지 않고 넘기기만 했으면(읽음 없음) 이어서 끝까지 해도 아직 아님(5/10)');
+    click('[data-act="sess-rest"]'); await sleep(20);
+    ok(pe.SES().items.map(it => it.si).join() === '0,1,2,3,4', 'D3: 이어서 = 넘기기만 한 앞 5장');
+    for (let k = 0; k < 5; k++) { click('[data-act="sess-flip"]'); skipCard(); }
+    ok(revKeys() === '1,3', 'D3: 그 5장 뒷면까지 보면 세트 복습');
     // D4: 복습 날이 아닌 세트는 끝까지 해도 세트 복습 기록을 남기지 않는다(다음 복습 날을 먹지 않음)
     due(T0); ses = await sheet(D0, 'start-setrev');
     ok(ses && ses.kind === 'rev' && ses.rv.length === 0, 'D4: 복습 날이 아닌 세트 다시 보기');
@@ -925,6 +943,17 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(pe.SES().kind === 'cards' && pe.SES().items.map(it => it.id).join() === dk[2] + ',' + dk[3], 'E1: 카드 복습은 오늘 매긴 카드와 skip 카드를 빼고 k장');
     for (let k = 0; k < 2; k++) { click('[data-act="sess-flip"]'); click('[data-act="sess-grade"][data-g="2"]'); }
     ok(S().tk['cards:' + T0] === T0, '카드 복습 k장을 다 매기면 오늘 카드 복습 할 일로 남음(S.tk)');
+    // 오늘 화면 "카드 복습" 수는 카드 복습 세션과 같은 목록(오늘 매긴 카드는 뺌). 빈 세션을 눌러도 하던 세션은 그대로
+    const dueRow = () => { const r = [...view().querySelectorAll('[data-act="start-due"]')].find(x => /카드 복습/.test(x.textContent)); const v = r && r.querySelector('.val'); return v ? Number(v.textContent) : NaN; };
+    Object.values(S().cards).forEach(p => { p.due = '2099-01-01'; }); const dz = pe.deck().slice(0, 3).map(c => c.id);
+    dz.forEach(id => { S().cards[id] = { box: 2, due: '2000-01-01', seen: 2, ok: 1, ng: 0, star: false, last: '2000-01-01' }; });
+    await go('#today'); const dn0 = dueRow(); click('[data-act="start-due"]'); await sleep(20);
+    ok(dn0 === 3 && pe.SES().kind === 'cards' && pe.SES().items.length === 3, '오늘 카드 복습 3 = 카드 복습 세션 3장');
+    for (let k = 0; k < 3; k++) { click('[data-act="sess-flip"]'); click('[data-act="sess-grade"][data-g="0"]'); }
+    const live = pe.SES(); await go('#today');
+    ok(dueRow() === 0 && /오늘 복습할 카드를 다 했어요/.test(txt()), 'E1: 오늘 모름으로 매긴 카드는 오늘 화면 카드 복습 수에서도 빠짐');
+    click('[data-act="start-due"]'); await sleep(20);
+    ok(pe.SES() === live && live.i === 3 && w.location.hash === '#today' && /이 범위에 문제가 없어요/.test(toastTxt()), '카드 복습할 카드가 없을 때 눌러도 하던 세션은 그대로');
 
     // T3: 테스트 기록은 끝 화면에서 한 번 남는다(돌아가기를 누르지 않고 뒤로 가도)
     await go('#more'); await go('#test'); const nl = S().log.length;
@@ -955,7 +984,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
       answer(false); click('[data-act="timer-preset"][data-p="one1"]'); await sleep(10);
       ok(asked.length === 1 && asked[0] === '돌고 있는 논술 교시 타이머(남은 99:00)를 멈추고 단답 1문 10분으로 바꿀까요?' && TM.preset === 'essay' && TM.remain === r0 && TM.running, 'T9: 다른 타이머를 고르면 묻고, 취소하면 그대로(timer-preset)');
       click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10);
-      ok(asked.length === 1 && TM.running && TM.remain === r0, 'T9: 돌고 있는 그 타이머를 다시 누르면 묻지 않고 그대로');
+      ok(asked.length === 1 && TM.running && TM.remain === r0, 'T9: 타이머 화면에서 돌고 있는 그 칸을 다시 누르면 묻지 않고 그대로');
       await go('#kichul/r/140'); click('[data-act="timer-go"][data-p="p1"]'); await sleep(30);
       ok(asked.length === 2 && /를 멈추고 1교시 단답 100분으로 바꿀까요\?$/.test(asked[1]) && w.location.hash === '#timer' && TM.preset === 'essay' && TM.remain === r0 && TM.running, 'T9: 다른 화면의 타이머 버튼도 묻고, 취소하면 돌던 타이머 화면으로(timer-go)');
       answer(true); click('[data-act="timer-preset"][data-p="custom"]'); await sleep(10);
@@ -965,6 +994,13 @@ const go = async h => { w.location.hash = h; await sleep(30); };
       ok(asked.length === 4 && new RegExp(`직접 ${c1 + 7}분으로 바꿀까요`).test(asked[3]) && TM.custom === c1 && TM.remain === r1 && TM.running, 'T9: 직접 분 맞추기도 묻고, 취소하면 그대로(timer-custom)');
       click('[data-act="timer-reset"]'); w.confirm = rc; w.Date.now = realNow; click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10);
       ok(TM.preset === 'essay' && !TM.running && asked.length === 4, 'T9: 멈춰 있는(처음 상태) 타이머는 묻지 않고 바꿈');
+      // 같은 타이머를 다른 화면의 타이머 버튼으로: 돌고 있으면 묻고(취소하면 그대로), 멈춰 두었으면 묻지 않고 새로(다음 문제)
+      w.Date.now = () => T; answer(false); await go('#timer'); click('[data-act="timer-toggle"]'); await sleep(10); T += 60000; await sleep(300);
+      await go('#kichul/r/140'); click('[data-act="timer-go"][data-p="essay"]'); await sleep(30);
+      ok(asked.length === 5 && asked[4] === '돌고 있는 논술 교시 타이머(남은 99:00)를 멈추고 논술 교시 100분으로 바꿀까요?' && w.location.hash === '#timer' && TM.preset === 'essay' && TM.running && TM.remain === 5940, 'T9: 돌고 있는 그 타이머를 다른 화면에서 다시 누르면 묻고, 취소하면 돌던 그대로(timer-go)');
+      click('[data-act="timer-toggle"]'); await sleep(10); await go('#kichul/r/140'); click('[data-act="timer-go"][data-p="essay"]'); await sleep(30);
+      ok(asked.length === 5 && w.location.hash === '#timer' && TM.preset === 'essay' && !TM.running && TM.remain === TM.total && TM.total === 6000, 'T9: 멈춰 둔 그 타이머는 다른 화면의 버튼(다음 문제)에서 묻지 않고 새로 맞춤(timer-go)');
+      w.confirm = rc; w.Date.now = realNow;
     }
 
     // E3: 기출 문항 창(카드가 든 창)에서 별표를 눌러도 그 창 그대로
