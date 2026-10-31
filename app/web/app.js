@@ -56,7 +56,8 @@ function load(){try{const r=PE_IO.get(KEY);if(r){const s=JSON.parse(r);const f=f
 function loadSets(){try{const r=PE_IO.get(SKEY);if(r){const o=JSON.parse(r);return Object.assign({sets:{},mocks:{},kichul:null,index:null,plan:null},o);}}catch(e){}return{sets:{},mocks:{},kichul:null,index:null,plan:null};}
 let S=load(); let SETS=loadSets();
 let saveT=null,saveT2=null,PLN=0;   /* PLN: 기록이 바뀔 때마다 올린다(오늘 몫·이번 주 계산은 한 번 그리는 동안만 기억, pm) */
-function save(){PLN++;clearTimeout(saveT);saveT=setTimeout(()=>{try{PE_IO.set(KEY,JSON.stringify(S));}catch(e){toast('저장 공간이 부족해요. 더보기 → 백업에서 정리하세요');}},60);}
+/* save(1): 오늘 몫·이번 주가 스스로 쓴 것(S.today·S.wk)만 바뀌었을 때. 그 둘의 기억만 지우고 숙제·카드·세트 복습 계산은 그대로 둔다 */
+function save(p){if(p)pmPlan();else PLN++;clearTimeout(saveT);saveT=setTimeout(()=>{try{PE_IO.set(KEY,JSON.stringify(S));}catch(e){toast('저장 공간이 부족해요. 더보기 → 백업에서 정리하세요');}},60);}
 function saveSets(){PLN++;clearTimeout(saveT2);saveT2=setTimeout(()=>{try{PE_IO.set(SKEY,JSON.stringify(SETS));}catch(e){toast('세트 저장 공간이 부족해요');}},60);}
 function flush(){PLN++;clearTimeout(saveT);clearTimeout(saveT2);try{PE_IO.set(KEY,JSON.stringify(S));PE_IO.set(SKEY,JSON.stringify(SETS));}catch(e){}}
 PE_IO.onHide(flush);
@@ -445,8 +446,11 @@ const QORD={1:['dd','eo','w'],2:['essay','dd','eo','w'],3:['redo','dd','fg'],4:[
 const QLINE={dd:['단답 손글씨',3],eo:['논술 목차 옮겨 적기',4],w:['새 용어 안 보고 쓰기',5],essay:['논술 실전 25분',8],redo:['모의 오답 다시 쓰기',9],fg:['그림·표 그리기',10]};
 /* 메모리만(S에 두지 않음): later 나중에 미룬 줄, open 펼친 칸, act 다음 오늘 화면에서 펼칠 줄, d 그 날짜(날이 바뀌면 비움) */
 const UI={later:{},open:{},act:null,d:null};
-/* 한 번 그리는 동안만 기억(save()·render()마다 PLN이 올라 새로 센다) */
+/* 한 번 그리는 동안만 기억(save()·render()마다 PLN이 올라 새로 센다). 키 첫 글자 t 할 일 목록·w 이번 주는 S.today·S.wk를 읽으므로
+   오늘 몫이 스스로 쓸 때(save(1))는 그 둘만 지운다(pmPlan). 숙제(h 세트마다)·핵심(c)·간격 온 카드(dc)·다시 볼 세트(ds)는 그대로 둔다 */
 let _pmk=-1,_pmc={};function pm(key,f){if(_pmk!==PLN){_pmk=PLN;_pmc={};}return key in _pmc?_pmc[key]:(_pmc[key]=f());}
+function pmPlan(){if(_pmk===PLN)for(const k in _pmc)if(k[0]==='t'||k[0]==='w')delete _pmc[k];}
+const dueP=()=>pm('dc',()=>dueCards(null)),dsrP=()=>pm('ds',dueSetReviews);   /* 오늘 몫이 읽을 때 한 번만 센다(돌려받은 배열은 고치지 않는다) */
 /* 날의 종류: exam 시험 날(본시험·실전 모의), pre3 시험 날 전 평일 3일, holi 평일 공휴일, 그 밖은 wd·sat·sun */
 function dayKind(t){const ex=[PLAN.target&&PLAN.target.d,PLAN.mock&&PLAN.mock.d].filter(Boolean);if(ex.includes(t))return'exam';const k=dayType(t);
   if(k==='wd'&&ex.some(e=>{let d=e;for(let n=0;n<3;){d=addDays(d,-1);if(dayType(d)!=='wd')continue;if(d===t)return true;n++;}return false;}))return'pre3';
@@ -456,6 +460,8 @@ function budgetOf(t,kind){kind=kind||dayKind(t);if(kind==='exam')return 0;
   const B=Object.assign({},BUDGET_DEF,S.settings.budget||{}),k={wd:'wd',pre3:'wd',holi:'sun',sat:'sat',sun:'sun'}[kind]||'wd';
   let v=Number(B[k])||BUDGET_DEF[k];if(kind==='sat'&&weekObj(weekIndex(t)).pre)v=Math.max(v,430);return v;}
 const wkStart=t=>addDays(t,-((parse(t).getDay()+6)%7)),wkEnd=t=>addDays(wkStart(t),6);   /* 주는 달력의 월~일 */
+/* 그 달력 주의 계획 주차(월요일의 주차, 시작일이 월요일이 아니어도 한 주 안에서 단계·목표가 바뀌지 않게). 시작 전 날은 음수 그대로 */
+const wkIdx=t=>{const w=weekIndex(t);return w<0?w:Math.max(0,weekIndex(wkStart(t)));};
 const dlab=d=>md(d)+'('+DAYK[parse(d).getDay()]+')';
 const nowMin=()=>{const d=new Date();return d.getHours()*60+d.getMinutes();};
 const hmOf=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
@@ -492,23 +498,24 @@ function hwParts(d){return pm('h'+d,()=>{const o={restMin:0};if(!SETS.sets[d]||d
 /* 이 세트의 숙제 필수(③ 숙제 a/b): 말하기·쓰기·단답·목차·틀린 이유(퀴즈를 다 풀고 틀린 것이 있을 때)·자기 전·그림·표(3단계)·논술 실전(2단계) */
 function reqParts(d){const P=hwParts(d);return[['say','말하기'],['write','쓰기'],['dd','단답'],['eo','목차'],['qz','틀린 이유'],['sl','자기 전'],['fg','그림·표'],['essay','논술 실전']]
   .filter(([k])=>P[k]&&P[k].n).map(([k,t])=>({k,t,a:Math.min(P[k].k,P[k].n),n:P[k].n,done:P[k].k>=P[k].n}));}
-/* 세트 핵심(용어 읽기 + 세트 퀴즈): r·q 남은 수, gap 남은 분, ok 다 함 */
-function setCore(d){return pm('c'+d,()=>{const st=setStatus(d);if(!st)return null;const r=Math.max(0,st.nc-st.read),q=Math.max(0,st.nq-st.qa);return{st,r,q,gap:r*MIN_PER.read+q*MIN_PER.quiz,ok:!r&&!q};});}
+/* 세트 핵심(용어 읽기 + 세트 퀴즈): st 용어·퀴즈 수와 한 수(setStatus의 nc·nq·read·qa와 같은 셈, 숙제는 세지 않아 hwItems를 부르지 않음), r·q 남은 수, gap 남은 분, ok 다 함 */
+function setCore(d){return pm('c'+d,()=>{const s=SETS.sets[d];if(!s)return null;const p=spGet(d),st={nc:(s.cards||[]).length,nq:(s.quiz||[]).length,read:Object.keys(p.read||{}).length,qa:Object.keys(p.quiz||{}).length},
+  r=Math.max(0,st.nc-st.read),q=Math.max(0,st.nq-st.qa);return{st,r,q,gap:r*MIN_PER.read+q*MIN_PER.quiz,ok:!r&&!q};});}
 /* 세트만의 과제가 논술 그림과 같은 그림이면(그리기 낱말 + 그림 설명과 낱말 3개 이상 같음) 그림·표 숙제 하나로 친다 */
 function figDup(d,i){const s=SETS.sets[d],x=s&&(s.tasks||[])[i],fg=s&&s.essay&&s.essay.fig;if(!x||!fg||!/그리|그림|그려|도$/.test(x))return false;
   const ws=v=>new Set(String(v).split(/[^가-힣A-Za-z0-9]+/).map(glStem).filter(w=>w.length>=2)),b=ws(fg);let n=0;ws(x).forEach(w=>{if(b.has(w))n++;});return n>=3;}
 /* 세트 복습 후보: 1·3일 차 먼저, 그다음 기한(처음 연 날 + 단계) 순, 같으면 단계 순. 평일은 1·3일 차 앞 2개만 필수, 토요일은 1·3일 차 필수, 일요일은 모두 필수 */
 function revCands(t,kind){kind=kind||dayKind(t);let nreq=0;
-  return dueSetReviews().map(x=>Object.assign({due:addDays(spGet(x.d).first,x.step)},x)).sort((a,b)=>(a.step>3)-(b.step>3)||(a.due<b.due?-1:a.due>b.due?1:a.step-b.step)).map((x,i)=>{
+  return dsrP().map(x=>Object.assign({due:addDays(spGet(x.d).first,x.step)},x)).sort((a,b)=>(a.step>3)-(b.step>3)||(a.due<b.due?-1:a.due>b.due?1:a.step-b.step)).map((x,i)=>{
     const e=x.step<=3,o={id:'rev:'+x.d+':'+x.step,k:'rev',d:x.d,step:x.step,due:x.due,min:revMin(x.d),roll:'다시 나와요',o:40+i/100,label:`세트 복습 ${dlab(x.d)} ${x.step}일 차`,sub:''};
     if(kind==='sat')return Object.assign(o,{need:e?'필수':'권장',p:e?3:5,blk:'catch',o:(e?40:80)+i/100});if(kind==='sun')return Object.assign(o,e?{need:'필수',p:3,blk:'core'}:{need:'필수',p:5,blk:'flush',o:10+i/100});
     if(e&&nreq<2){nreq++;return Object.assign(o,{need:'필수',p:3,blk:'am',o:20+i/100});}return Object.assign(o,{need:'권장',p:5,blk:'am',o:25+i/100,fold:1});});}
 /* 카드 복습에 나올 카드(복습·연습·오늘 같은 수): 간격이 돌아온 카드 − 오늘 계획한 세트 복습의 카드 − 오늘 이미 매긴 카드 */
 function cardsOut(t){t=t||todayStr();const F=S.today&&S.today.d===t?S.today:null,ds=F?F.rows.filter(r=>/^rev:/.test(r.id)).map(r=>r.id.split(':')[1]):revCands(t).filter(x=>x.need==='필수').map(x=>x.d),sk=new Set();
-  ds.forEach(d=>setIds(d).forEach(id=>sk.add(id)));return dueCards(null).filter(c=>!sk.has(c.id)&&pget(c.id).last!==t);}
+  ds.forEach(d=>setIds(d).forEach(id=>sk.add(id)));return dueP().filter(c=>!sk.has(c.id)&&pget(c.id).last!==t);}
 const planRevCards=t=>{const F=S.today&&S.today.d===t?S.today:null;return F?uniq([].concat(...F.rows.filter(r=>/^rev:/.test(r.id)).map(r=>setIds(r.id.split(':')[1])))):[];};
 /* 단계가 바뀐 주(그 주 동안, 지울 때까지): PE_PHASE_NOTE 한 줄 */
-function phaseStart(t){const w=weekIndex(t);if(w<1||w>PLAN.E)return null;const id=phaseObj(w).id;if(id===phaseObj(w-1).id||!PE_PHASE_NOTE[id]||(S.tk||{})['phase:'+id])return null;return{id,w,text:PE_PHASE_NOTE[id]};}
+function phaseStart(t){const w=wkIdx(t);if(w<1||w>PLAN.E)return null;const id=phaseObj(w).id;if(id===phaseObj(w-1).id||!PE_PHASE_NOTE[id]||(S.tk||{})['phase:'+id])return null;return{id,w,text:PE_PHASE_NOTE[id]};}
 /* 자동으로 끝을 아는 단계 할 일(PE_EXTRA auto) */
 function extraDone(x,id,t,W,D){const tk=S.tk||{},a=x.auto;
   if(a==='outline3'||a==='outline5')return Object.values(S.essayStat||{}).filter(s=>s&&s.last===t).length>=(a==='outline3'?3:5);
@@ -521,7 +528,7 @@ function extraDone(x,id,t,W,D){const tk=S.tk||{},a=x.auto;
 /* 오늘 할 수 있는 일 전부(끝난 것도 done으로). 읽기만 한다. 줄 {id, k 종류, need 필수·권장·여유, p 우선순위 0~7, blk 블록, o 블록 안 순서, min 남은 분,
    roll 못 하면, fold 시간이 되면에만, info 안내, onlyWeek 이번 주 줄에만, always 늘 넣음, hw 숙제 칸(필수·전체 목표), quota 주말 손글씨 몫} */
 function taskList(t){t=t||todayStr();return pm('t'+t,()=>taskCalc(t));}
-function taskCalc(t){const w=weekIndex(t),kind=dayKind(t),W=wkStart(t),dw=parse(t).getDay(),T=[],tk=S.tk||{},wkend=kind==='sat'||kind==='sun',study=isStudy(kind),pre=kind==='pre3',ph=phaseObj(w).id,cp=Math.max(1,ph),chk=exWeek(t)||ph===5;
+function taskCalc(t){const w=wkIdx(t),kind=dayKind(t),W=wkStart(t),dw=parse(t).getDay(),T=[],tk=S.tk||{},wkend=kind==='sat'||kind==='sun',study=isStudy(kind),pre=kind==='pre3',ph=phaseObj(w).id,cp=Math.max(1,ph),chk=exWeek(t)||ph===5;
   const mk=o=>{const x=Object.assign({need:'필수',p:6,o:50,blk:null,min:0,roll:'일요일까지',label:'',sub:''},o);T.push(x);return x;};
   if(w<0||t>PLAN.target.d)return T;
   /* P0: 원서접수(접수 7일 전~접수 끝), 접수 날짜 확인(21~8일 전, 이번 주 줄), 48시간 복기, 시행계획 공고(시험 전해 11/20~12/31, 이번 주 줄) */
@@ -557,8 +564,8 @@ function taskCalc(t){const w=weekIndex(t),kind=dayKind(t),W=wkStart(t),dw=parse(
     mk({id:'late:'+d,k:'late',d,blk:lb,o:30+i,p:2,onlyWeek:lb==='noon'&&i>0,label:`밀린 세트 ${dlab(d)}: ${g.join(' · ')}`,min:c.gap});});
   /* 지난 세트의 퀴즈 틀린 이유: 그 퀴즈를 다 푼 날에만, 그 세트 줄 바로 뒤 */
   const cx=(S.cal[t]||{}).x||{};Object.keys(SETS.sets).filter(d=>d<t&&cx['quiz:'+d]).forEach(d=>{const Q=hwParts(d).qz,i=late.indexOf(d);if(Q)mk(qzT(d,Q,lb,i>=0?30+i+.5:39));});
-  /* 평일에 9시가 지나도 오늘 세트가 없으면 손글씨 바닥으로 이번 주 가장 오래된 단답 1문 */
-  if(study&&!today&&!pre&&!chk&&nowMin()>=9*60){const g=sets.map(d=>[d,hwParts(d).dd]).find(([,x])=>x&&x.k<x.n);
+  /* 평일에 9시가 지나도 오늘 세트가 없으면 손글씨 바닥으로 이번 주 가장 오래된 단답 1문(공휴일은 아래 손글씨 몫 q.dd가 바닥을 맡는다: 같은 id·같은 칸을 두 번 만들지 않음) */
+  if(study&&kind!=='holi'&&!today&&!pre&&!chk&&nowMin()>=9*60){const g=sets.map(d=>[d,hwParts(d).dd]).find(([,x])=>x&&x.k<x.n);
     if(g)mk({id:'q.dd:'+W,k:'q.dd',quota:{q:'dd',nm:'단답 손글씨',un:'문',u:MIN_PER.dd,n:1,nc:1,a:0,list:[{d:g[0],left:1}],floorOnly:1},blk:'eve',o:25,p:4,label:'단답 손글씨 1문',sub:dlab(g[0]),prog:[0,1],min:MIN_PER.dd});}
   revCands(t,kind).forEach(x=>mk(x));
   /* 카드 복습: 오늘 몫은 평일 30장·주말 60장까지(세트 복습을 다 넣은 날에만, §3.7) */
@@ -590,9 +597,10 @@ function taskCalc(t){const w=weekIndex(t),kind=dayKind(t),W=wkStart(t),dw=parse(
   /* 단계·요일의 할 일(PE_EXTRA): 필수는 오늘 몫 줄, 권장은 시간이 되면 */
   ((PE_EXTRA[pre?'pre3':phaseKey(w)]||{})[kind==='sat'?'sat':kind==='sun'?'sun':'wd']||[]).forEach(x=>{if(x.dow&&x.dow!==dw)return;
     if(x.after==='essay'){const E2=Object.keys(SETS.sets).filter(d=>d<t&&diffDays(d,t)<=3&&(spGet(d).essay||{}).done).sort().pop();if(E2&&!tk[x.k+':'+E2])mk({id:x.k+':'+E2,k:x.k,d:E2,ex:x,fold:1,need:x.need,label:x.t,min:x.min,roll:''});return;}
+    if(x.auto==='score'&&!D)return;   /* 모의 점수 적기: 이번 주 모의가 있을 때만(그 모의 화면에서 적는다) */
     const id=x.k+':'+(wkend?W:t),req=x.need==='필수';
-    mk({id,k:x.k,ex:x,blk:x.blk||null,o:{'x.rot':40,'x.outline':50,'x.redo':50,kit:60,budget:5,redo:5,'x.trend':15,kichul:20,sum16:50,prep:55}[x.k]||60,p:req?4:6,need:x.need,fold:req?0:1,
-      label:x.t,min:x.min,roll:req?(x.k==='x.redo'?'일요일까지':'오늘만'):'',to:x.to||null,n:x.k==='x.rot'?(pre?30:50):null,done:extraDone(x,id,t,W,D)});});
+    mk(Object.assign({id,k:x.k,ex:x,blk:x.blk||null,o:{'x.rot':40,'x.outline':50,'x.redo':50,kit:60,budget:5,redo:5,'x.trend':15,kichul:20,sum16:50,prep:55}[x.k]||60,p:req?4:6,need:x.need,fold:req?0:1,
+      label:x.t,min:x.min,roll:req?(x.k==='x.redo'?'일요일까지':'오늘만'):'',to:x.to||null,n:x.k==='x.rot'?(pre?30:50):null,done:extraDone(x,id,t,W,D)},x.auto==='score'?{d:D}:null));});
   /* 지난주에서 넘어온 것(권장): 핵심이 빈 최근 세트 3개, 안 쓴 교시가 있는 지난주 모의(새 모의가 오기 전까지, 늘 접힌 줄) */
   const LW=addDays(W,-7),ls=Object.keys(SETS.sets).filter(d=>d>=LW&&d<W).sort().reverse().filter(d=>!setCore(d).ok).slice(0,3);
   if(ls.length)mk({id:'carry.sets:'+W,k:'carry.sets',ds:ls,blk:'catch',o:60,need:'권장',fold:kind==='sat'?0:1,label:`지난주 세트 읽기·퀴즈 ${ls.length}개`,sub:ls.map(dlab).join(' · '),min:ls.reduce((a,d)=>a+setCore(d).gap,0),roll:'이번 일요일까지'});
@@ -664,7 +672,7 @@ function canFreeze(t,now){const k=dayKind(t);if(now>=9*60||k==='sun'||k==='exam'
 const daySig=t=>[SETS.sets[t]?1:0,weekMock(t)||'',Object.keys(SETS.sets).filter(d=>d>=wkStart(t)&&d<=t).length].join('|');
 const rowRec=r=>{const o={id:r.id,m:r.m,tgt:r.tgt||null,blk:r.blk,o:r.o||0};if(r.q)o.q=r.q;if(r.dep)o.dep=r.dep;return o;};
 /* 줄인 목표는 그 주 동안 그대로(오늘 시간으로 줄인 날은 걸지 않음). 건 단계를 cph에 적어 두고, 시험 일정이 바뀌어 단계가 달라지면 푼다 */
-function ratchet(t,lv,user){if(lv<2||user)return;const W=wkStart(t),x=S.wk[W]||(S.wk[W]={});if(!x.cut){x.cut=true;x.cph=phaseObj(weekIndex(t)).id;}}
+function ratchet(t,lv,user){if(lv<2||user)return;const W=wkStart(t),x=S.wk[W]||(S.wk[W]={});if(!x.cut){x.cut=true;x.cph=phaseObj(wkIdx(t)).id;}}
 /* 고정 뒤 오직 하나 더하는 줄: 고정한 세트 퀴즈(밀린 세트 포함)를 다 풀고 틀린 것이 있으면 "틀린 이유" 줄을 그 뒤에 */
 function depInsert(t,F){let ch=0;const T=taskList(t);F.rows.slice().forEach(r=>{if(!/^(set\.quiz|late):/.test(r.id))return;const D=r.id.split(':')[1],qid='hw.qz:'+D;if(F.rows.some(x=>x.id===qid))return;
   const x=T.find(x=>x.id===qid);if(!x||x.done)return;F.rows.splice(F.rows.indexOf(r)+1,0,{id:qid,m:x.min,tgt:null,blk:r.blk,o:(r.o||0)+.5,dep:r.id});ch=1;});return ch;}
@@ -676,15 +684,18 @@ function planToday(t,o){o=o||{};t=t||todayStr();const now=o.now!=null?o.now:nowM
   weekSnap(t);let F=S.today;if(F&&(F.d!==t||F.v!==PLAN_V))F=S.today=null;
   if(!F){/* "오늘 시간"을 고르면 자료를 기다리지 않고 바로 고정(고른 시간을 S.today.user에 둔다) */
     const user=o.replan==='cap'&&o.user||null,P=dayPlan(t,{now,user});if(!user&&!canFreeze(t,now))return planView(t,P,null,now);
-    F=S.today={d:t,at:hmOf(now),v:PLAN_V,lv:P.lv,cap:P.capLeft,user,sig,dm:0,rows:P.rows.map(rowRec)};ratchet(t,P.lv,user);save();}
-  else if(o.replan){if(o.replan==='sched'){const x=S.wk[W];if(x&&x.cut&&x.cph!==phaseObj(weekIndex(t)).id){x.cut=false;delete x.cph;PLN++;}}
-    const lv=o.replan==='cap'?F.lv:weekBoard(t).lv,T=taskList(t),st=F.rows.map(r=>[r,rowStat(r,T.find(x=>x.id===r.id))]),done=st.filter(a=>a[1][1]).map(a=>a[0]);
+    F=S.today={d:t,at:hmOf(now),v:PLAN_V,lv:P.lv,cap:P.capLeft,user,sig,dm:0,rows:P.rows.map(rowRec)};ratchet(t,P.lv,user);save(1);}
+  else if(o.replan){if(o.replan==='sched'){const x=S.wk[W];if(x&&x.cut&&x.cph!==phaseObj(wkIdx(t)).id){x.cut=false;delete x.cph;pmPlan();}}
+    /* 시험 일정이 바뀌어 할 일 목록에서 사라진 줄(다른 단계의 할 일, 옮긴 시험 날의 일): 바꾸기 전에 끝났던 것만 남기고(o.pre = planPre()), 남은 것은 뺀다.
+       손글씨 몫(r.q)은 고른 세트의 칸으로 바로 센다 */
+    const lv=o.replan==='cap'?F.lv:weekBoard(t).lv,T=taskList(t),gone=r=>o.replan==='sched'&&!r.q&&!T.some(x=>x.id===r.id),
+      st=F.rows.map(r=>[r,gone(r)?(o.pre&&o.pre.get(r.id))||[r.m,false]:rowStat(r,T.find(x=>x.id===r.id))]),done=st.filter(a=>a[1][1]).map(a=>a[0]);
     if(o.replan==='cap')F.user=o.user||null;F.lv=lv;F.dm=(F.dm||0)+st.filter(a=>!a[1][1]).reduce((s,a)=>s+Math.max(0,a[0].m-a[1][0]),0);
     const P=dayPlan(t,{now,user:F.user,lv,keep:done,dm:F.dm+done.reduce((s,r)=>s+r.m,0)});
-    Object.assign(F,{rows:P.rows.map(rowRec),cap:P.capLeft,at:hmOf(now),sig});ratchet(t,F.lv,F.user);save();}
+    Object.assign(F,{rows:P.rows.map(rowRec),cap:P.capLeft,at:hmOf(now),sig});ratchet(t,F.lv,F.user);save(1);}
   else if(F.sig!==sig){const T=taskList(t),left=F.rows.reduce((s,r)=>s+rowStat(r,T.find(x=>x.id===r.id))[0],0);
-    const P=dayPlan(t,{now,user:F.user,lv:F.lv,keep:F.rows,used0:left,dm:planDoneMin(F)});F.rows=P.rows.map(rowRec);F.sig=sig;save();}
-  if(depInsert(t,F))save();
+    const P=dayPlan(t,{now,user:F.user,lv:F.lv,keep:F.rows,used0:left,dm:planDoneMin(F)});F.rows=P.rows.map(rowRec);F.sig=sig;save(1);}
+  if(depInsert(t,F))save(1);
   return planView(t,null,F,now);}
 /* 화면에 쓸 오늘 몫: 고정한 줄(남은 분·끝), 옮긴 것(갈 곳), 시간이 되면, 놓아준 것, 안내, 이번 주 줄, 지금 블록, 펼칠 줄 */
 function planView(t,P,F,now){if(F)P=dayPlan(t,{now,lv:F.lv,user:F.user,keep:F.rows,dm:planDoneMin(F),noFill:1});
@@ -693,7 +704,7 @@ function planView(t,P,F,now){if(F)P=dayPlan(t,{now,lv:F.lv,user:F.user,keep:F.ro
   /* 오늘 몫을 다 하면 시간이 되면 맨 앞에 "미리 하기" 2개까지(이번 주에 남은 필수 중 이른 것). 오늘 몫 줄이 되지 않고 남은 수에도 세지 않는다 */
   V.ahead=rows.length&&rows.every(r=>r.done)?P.moved.concat(P.onlyWeek.filter(x=>x.k==='late')).filter(x=>x.roll==='일요일까지').sort((a,b)=>(a.d||'')<(b.d||'')?-1:(a.d||'')>(b.d||'')?1:0).slice(0,2):[];
   /* 블록 머리 한 줄(할 일 아님): 4단계·시험 주는 자기 전 "수면 7시간", 4단계 일요일은 "반나절은 쉬어요" */
-  const ph=phaseObj(weekIndex(t)).id;V.notes={};if(ph>=4||exWeek(t))V.notes.bed='수면 7시간';if(ph===4&&V.kind==='sun')V.notes.day='반나절은 쉬어요';
+  const ph=phaseObj(wkIdx(t)).id;V.notes={};if(ph>=4||exWeek(t))V.notes.bed='수면 7시간';if(ph===4&&V.kind==='sun')V.notes.day='반나절은 쉬어요';
   V.curBlk=curBlock(t,now,rows);V.active=planActive(V);return V;}
 /* 지금 블록: 평일은 시각으로(끝난 블록의 남은 줄은 지금 블록에 보인다). 자기 전은 나머지를 다 했거나 23시가 지나면. 주말은 남은 첫 줄의 블록 */
 function curBlock(t,now,rows){t=t||todayStr();now=now!=null?now:nowMin();rows=rows||[];const k=dayKind(t);
@@ -703,18 +714,20 @@ function curBlock(t,now,rows){t=t||todayStr();now=now!=null?now:nowMin();rows=ro
 function planOrder(V){const bs=PLAN_BLOCKS[V.kind]||[],ci=bs.indexOf(V.curBlk),L=V.rows,bi=r=>bs.indexOf(r.blk),pin=L.filter(r=>r.blk==='pin').map(r=>Object.assign({vb:'pin'},r));
   if(!isStudy(V.kind)||ci<0)return L.map(r=>Object.assign({vb:r.blk},r));const R2=L.filter(r=>r.blk!=='pin'),past=r=>bi(r)<ci&&r.blk!=='bed';
   return pin.concat(R2.filter(r=>past(r)&&r.done).map(r=>Object.assign({vb:r.blk},r)),R2.filter(r=>past(r)&&!r.done).sort((a,b)=>((a.task||{}).need==='권장')-((b.task||{}).need==='권장')).map(r=>Object.assign({},r,{vb:V.curBlk})),R2.filter(r=>!past(r)).map(r=>Object.assign({vb:r.blk},r)));}
-/* 펼칠 줄(화면의 하나뿐인 파란 버튼): UI.act → 나중에가 아닌 첫 줄 → 나중에 미룬 줄. 자기 전은 그 블록이 지금이거나 나머지를 다 했을 때.
-   필수가 남지 않았으면 시간이 되면의 휴대폰 일(세트 복습·카드·오답·지난주 세트). 지난주 모의고사는 어느 날에도 펼치지 않는다 */
-function planActive(V){const L=planOrder(V).filter(r=>!r.done&&!(r.task&&r.task.never));if(UI.act){const a=L.find(r=>r.id===UI.act);if(a)return a;}
-  const o=L.filter(r=>!UI.later[r.id]).concat(L.filter(r=>UI.later[r.id]).sort((a,b)=>UI.later[a.id]-UI.later[b.id])),ok=r=>r.blk!=='bed'||V.curBlk==='bed'||o.every(x=>x===r||x.blk==='bed');
-  const r=o.find(ok);if(r)return r;const f=(V.fold||[]).find(x=>!x.never&&/^(rev|cards|wrong|carry\.sets)$/.test(x.k));return f?{id:f.id,m:f.min,blk:f.blk,task:f,fold:1}:null;}
-/* 이 줄 다음에 할 줄(오늘 순서): 뒤에 없으면 앞에서 넘긴 줄(before) */
-function nextAfter(id,V){V=V||planToday();const L=planOrder(V),i=L.findIndex(r=>r.id===id),ok=r=>!r.done&&r.id!==id&&!(r.task&&r.task.never);
-  const a=L.slice(i+1).find(ok);if(a)return{row:a,before:false};const b=L.slice(0,Math.max(0,i)).find(ok);return b?{row:b,before:true}:null;}
+/* 오늘 순서(펼칠 줄과 "다음"이 따르는 줄): 보이는 순서에서 날짜 일 핀(원서접수·48시간 복기: 버튼은 보조, 파란 버튼은 늘 목록 쪽)과
+   지난주 모의고사를 빼고, 나중에 미룬 줄은 미룬 차례대로 맨 뒤. 자기 전 줄은 그 블록이 지금이거나 남은 다른 줄이 없을 때만(bedOk) */
+function planQueue(V){const L=planOrder(V).filter(r=>r.blk!=='pin'&&!(r.task&&r.task.never));return L.filter(r=>!UI.later[r.id]).concat(L.filter(r=>UI.later[r.id]).sort((a,b)=>UI.later[a.id]-UI.later[b.id]));}
+const bedOk=(r,V,open)=>r.blk!=='bed'||V.curBlk==='bed'||open.every(x=>x===r||x.blk==='bed');
+/* 펼칠 줄(화면의 하나뿐인 파란 버튼): UI.act → 오늘 순서의 첫 줄. 필수가 남지 않았으면 시간이 되면의 휴대폰 일(세트 복습·카드·오답·지난주 세트) */
+function planActive(V){const o=planQueue(V).filter(r=>!r.done);if(UI.act){const a=o.find(r=>r.id===UI.act);if(a)return a;}
+  const r=o.find(r=>bedOk(r,V,o));if(r)return r;const f=(V.fold||[]).find(x=>!x.never&&x.blk!=='pin'&&/^(rev|cards|wrong|carry\.sets)$/.test(x.k));return f?{id:f.id,m:f.min,blk:f.blk,task:f,fold:1}:null;}
+/* 이 줄 다음에 할 줄(오늘 순서, 핀은 빼고 자기 전 규칙대로): 뒤에 없으면 앞에서 넘긴 줄(before) */
+function nextAfter(id,V){V=V||planToday();const Q=planQueue(V),i=Q.findIndex(r=>r.id===id),open=Q.filter(r=>!r.done&&r.id!==id),ok=r=>open.includes(r)&&bedOk(r,V,open);
+  const a=Q.slice(i+1).find(ok);if(a)return{row:a,before:false};const b=Q.slice(0,Math.max(0,i)).find(ok);return b?{row:b,before:true}:null;}
 /* 이번 주 약속(단계별 줄), 남은 필수 B분, 남은 시간 C분(오늘 공부 시간 − 오늘 한 분 + 남은 날의 공부 시간; 시계·"오늘 시간"과 무관), 넘침 단계, 점수.
    목표는 모두 월요일부터 정해 둔다(올 세트·모의 어림·돌아올 세트 복습). 그래서 한 일이 늘면 점수는 오르기만 하고, 줄은 할 수 없게 될 때만 빠진다 */
 function weekBoard(t){t=t||todayStr();return pm('w'+t,()=>wbCalc(t));}
-function wbCalc(t){const W=wkStart(t),E=addDays(W,6),w=weekIndex(t);if(w<0||t>PLAN.target.d)return{t,W,E,w,ph:0,chk:true,check:null,lines:[],B:0,C:0,r:0,lv:0,pct:null,reach:null,parts:[],cut:false,dm:0};const ph=phaseObj(w).id,cp=Math.max(1,ph),chk=exWeek(t)||ph===5,sc=chk?null:(PE_SCORE[cp]||PE_SCORE[1]),tk=S.tk||{},cut=!!(S.wk&&S.wk[W]&&S.wk[W].cut),L=[];
+function wbCalc(t){const W=wkStart(t),E=addDays(W,6),w=wkIdx(t);if(w<0||t>PLAN.target.d)return{t,W,E,w,ph:0,chk:true,check:null,lines:[],B:0,C:0,r:0,lv:0,pct:null,reach:null,parts:[],cut:false,dm:0};const ph=phaseObj(w).id,cp=Math.max(1,ph),chk=exWeek(t)||ph===5,sc=chk?null:(PE_SCORE[cp]||PE_SCORE[1]),tk=S.tk||{},cut=!!(S.wk&&S.wk[W]&&S.wk[W].cut),L=[];
   const M0=Object.assign({},PE_HW_MIN[1],PE_HW_MIN[ph]||{}),R0=Object.assign({},PE_HW[1],PE_HW[ph]||{}),fr0=(PE_SETRULE[ph]||PE_SETRULE[1]).fresh||0;for(const k in M0)M0[k]=Math.min(M0[k],R0[k]||0);
   /* 이번 주에 올 평일 세트(지난 평일에 세트가 없었으면 뺀다) */
   const exp=[];for(let i=0;i<5;i++){const d=addDays(W,i),pre=dayKind(d)==='pre3';if(SETS.sets[d]&&d<=t)exp.push({d,have:1,pre});else if(d>=t)exp.push({d,have:0,pre});}
@@ -732,7 +745,7 @@ function wbCalc(t){const W=wkStart(t),E=addDays(W,6),w=weekIndex(t);if(w<0||t>PL
   {const pairs=[],add=(d,f,rv)=>REVIEW_STEPS.forEach(st=>{const due=addDays(f,st);if(due>=W&&due<=E)pairs.push({d,st,due,done:(rv||{})[st]||null});});
     Object.keys(SETS.sets).forEach(d=>{const p=spGet(d),mine=d>=W&&d<=E;let f=p.first;if(!f&&mine)f=d<=t?t:d;if(!f||!mine&&f>=W)return;add(d,f,p.rev);});
     exp.forEach(x=>{if(!SETS.sets[x.d])add(x.d,x.d<=t?t:x.d,null);});
-    const val=x=>x.done?(x.done<=addDays(x.due,1)?1:.5):0,pot=x=>x.done?val(x):(addDays(x.due,1)>=t?1:.5),dn=dueSetReviews().map(x=>x.d),fut=uniq(pairs.filter(x=>!x.done&&x.due>t&&!dn.includes(x.d)).map(x=>x.d));
+    const val=x=>x.done?(x.done<=addDays(x.due,1)?1:.5):0,pot=x=>x.done?val(x):(addDays(x.due,1)>=t?1:.5),dn=dsrP().map(x=>x.d),fut=uniq(pairs.filter(x=>!x.done&&x.due>t&&!dn.includes(x.d)).map(x=>x.d));
     L.push({k:'rev',n:6,label:'세트 복습(이번 주에 돌아오는 것)',a:pairs.filter(x=>x.done).length,b:pairs.length,B:dn.concat(fut).reduce((s,d)=>s+revMin(d),0),ratio:pairs.length?pairs.reduce((s,x)=>s+val(x),0)/pairs.length:null,pairs,val,pot,dueNow:dn.length,fut:fut.length});}
   {const gs=weekObj(w).goals||[],gd=gs.filter((_,i)=>tk['goal:'+W+':'+i]).length,rp=!!tk['report:'+W];L.push({k:'close',n:7,label:'주간 리포트(일)',a:rp?1:0,b:1,B:rp?0:MIN_PER.report,ratio:gs.length?(rp?.6:0)+.4*gd/gs.length:(rp?1:0),gd,gn:gs.length});}
   const B=L.reduce((s,x)=>s+x.B,0),dm=S.today&&S.today.d===t?planDoneMin(S.today):0;let C=Math.max(0,budgetOf(t)-dm);for(let d=addDays(t,1);d<=E;d=addDays(d,1))C+=budgetOf(d);
@@ -752,7 +765,7 @@ function weekSnap(t){t=t||todayStr();const W=wkStart(t),LW=addDays(W,-7);if(week
   b.lines.filter(l=>l.hw&&l.a<l.b).forEach(l=>rel.push(`${l.label} ${l.b-l.a}${QK[l.k][1]}`));
   const ls=Object.keys(SETS.sets).filter(d=>d>=LW&&d<W).sort().reverse().filter(d=>!setCore(d).ok),lm=Object.keys(SETS.mocks).filter(d=>/^\d{4}-/.test(d)&&d>=LW&&d<W).sort().pop(),carry=[];
   if(ls.length)carry.push('carry.sets:'+W);ls.slice(3).forEach(d=>rel.push(`${dlab(d)} 세트 읽기·퀴즈`));if(lm&&mockParts(SETS.mocks[lm]).some(k=>!(S.mockp[lm]||{})[k]))carry.push('carry.mock:'+lm);
-  S.wk[LW]=Object.assign(x,{p:b.pct,parts,lv:b.lv,at:t,carry,rel});save();return S.wk[LW];}
+  S.wk[LW]=Object.assign(x,{p:b.pct,parts,lv:b.lv,at:t,carry,rel});save(1);return S.wk[LW];}
 /* 오늘 몫 줄의 "시작": 그 일을 하는 곳으로 한 번에. FLOW에 이 줄을 적어 끝 화면·세트 화면의 "다음"이 오늘 순서를 잇는다 */
 function taskGo(id,o){o=o||{};const t=todayStr(),x=taskList(t).find(r=>r.id===id);if(!x)return goTab('today');const D=x.d,k=x.k;
   const setGo=(d,tab)=>{SV[d]=tab;FLOW={id,from:'today',at:'set/'+d};nav('set/'+d,{from:'today'});};
@@ -762,26 +775,29 @@ function taskGo(id,o){o=o||{};const t=todayStr(),x=taskList(t).find(r=>r.id===id
   if(k==='carry.sets'){const d=x.ds[x.ds.length-1],c=setCore(d);return setGo(d,c.r?'cards':'quiz');}
   if(/^hw\./.test(k))return setGo(D,'tasks');
   if(x.quota){const s=x.quota.list[0];if(x.quota.q==='redo'||!s){if(!s)return goTab('today');const j=Object.keys(S.tk||{}).filter(q=>q.indexOf('x.redo:'+t+':')===0).length;return taskTick('x.redo:'+t+':'+j,x.quota.nm);}return setGo(s.d,'tasks');}
-  if(k==='mock'||k==='mock.g'||k==='carry.mock'){FLOW={id,from:'today',at:'mock/'+D};return nav('mock/'+D,{from:'today'});}
+  if(k==='mock'||k==='mock.g'||k==='carry.mock'||x.ex&&x.ex.auto==='score'){FLOW={id,from:'today',at:'mock/'+D};return nav('mock/'+D,{from:'today'});}   /* 모의 점수 적기도 그 모의 화면에서 */
   if(k==='rev')return sess(()=>startSetReview(D,{chain:o.chain}));
-  if(k==='cards')return sess(()=>startDueAll({k:x.kc,skip:planRevCards(t),weak:x.weak}));
+  if(k==='cards'){const F=S.today&&S.today.d===t?S.today:null,lv=F?F.lv:weekBoard(t).lv;   /* 오늘 몫의 장 수 그대로(dayPlan처럼 단계 2부터 하루 30장까지) */
+    return sess(()=>startDueAll({k:lv>=2?Math.min(x.kc,30):x.kc,skip:planRevCards(t),weak:x.weak}));}
   if(k==='wrong')return sess(()=>startWrong({skipQ:t}));
   if(k==='gq')return sess(()=>startGq(D,'next'));
   if(k==='new')return sess(()=>startStudy(null,{newOnly:true}));
   if(x.to==='start-outline')return sess(()=>startOutline());if(x.to==='start-cloze')return sess(()=>startCloze());if(x.to==='start-rot')return sess(()=>startRot(x.n||50));
   if(x.to==='dd-rand')return ddRandom();
-  if(k==='report'){const dw=parse(t).getDay();copy(weeklyReport(),'주간 리포트를 복사했어요. Claude 프로젝트에 붙여 넣으세요');if(x.w!==wkStart(t)||dw===0||dw===6){S.tk['report:'+x.w]=t;touchDay();save();}return render();}
+  if(k==='report'){const dw=parse(t).getDay();copy(weeklyReport(x.w),'주간 리포트를 복사했어요. Claude 프로젝트에 붙여 넣으세요');if(x.w!==wkStart(t)||dw===0||dw===6){S.tk['report:'+x.w]=t;touchDay();save();}return render();}
   if(x.to==='schedule')return nav('schedule',{from:'today'});if(x.to==='backup')return nav('backup',{from:'today'});if(x.to==='settings')return nav('settings',{from:'today'});
   if(k==='kichul'){const u=(weekObj(weekIndex(addDays(wkStart(t),7))).u||[])[0];return nav(u?'kichul/u/'+u:'kichul',{from:'today'});}
   if(x.to==='week'||k==='goal')return nav('week',{from:'today'});
-  return taskTick(id,x.label);}
+  return x.ex&&x.ex.auto?goTab('today'):taskTick(id,x.label);}   /* 기록으로 끝을 아는 일(auto)은 손으로 치지 않는다 */
 /* 앱이 볼 수 없는 일(교재·다시 쓰기·준비물 등)은 "다 했어요"로 S.tk에 */
 function taskTick(id,label){S.tk=S.tk||{};S.tk[id]=todayStr();touchDay();calMark('tk:'+id,'todo',label||id);save();render();}
 /* 카드 n장 돌리기: 카드 복습에 나올 카드 먼저, 모자라면 본 지 오래된 카드 */
 function startRot(n){n=n||50;const t=todayStr(),a=cardsOut(t).map(c=>c.id),sk=new Set(a),b=deck().filter(c=>!sk.has(c.id)&&pget(c.id).seen>0&&pget(c.id).last!==t).sort((x,y)=>(pget(x.id).last||'')<(pget(y.id).last||'')?-1:1).map(c=>c.id);
   startSession({kind:'rot',title:`카드 ${n}장 돌리기`,items:cardItems(a.concat(b).slice(0,n)),requeue:true});}
 /* 시험 일정·공부 시간이 바뀌면 오늘 몫을 다시 고른다(고정해 둔 날만) */
-function planChanged(why){if(S.today&&S.today.d===todayStr())planToday(todayStr(),{replan:why});}
+function planChanged(why,pre){if(S.today&&S.today.d===todayStr())planToday(todayStr(),{replan:why,pre});}
+/* 시험 일정을 바꾸기 직전, 고정한 오늘 몫 줄마다 [남은 분, 끝](바꾼 뒤 목록에서 사라진 줄은 이때 끝났던 것만 남긴다). 오늘 고정한 목록이 없으면 null */
+function planPre(){const t=todayStr(),F=S.today;if(!F||F.d!==t)return null;const T=taskList(t);return new Map(F.rows.map(r=>[r.id,rowStat(r,T.find(x=>x.id===r.id))]));}
 
 /* ════════ 11. 화면: 오늘 ════════ */
 function routineFor(ds){const w=weekIndex(ds),k=phaseKey(w),r=PE_ROUTINES[k]||PE_ROUTINES[1];return r[dayType(ds)]||r.wd;}
@@ -1949,11 +1965,11 @@ document.addEventListener('click',e=>{
   case'gloss':S.settings.gloss=D.v==='off'?'off':'on';save();return render();
   case'save-settings':{const np=Number($('#sNew').value),du=($('#sData')||{}).value;S.settings.newPerDay=Math.min(60,Math.max(1,np||10));if(du!==undefined)S.settings.dataUrl=du.trim();save();toast('저장했어요');return render();}
   /* 시험 일정 */
-  case'sch-save':{if(!SCH)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(SCH.start||''))return toast('준비 시작일을 확인하세요');S.settings.start=SCH.start;S.settings.target=SCH.target||'auto';SCH=null;recalcPlan();save();planChanged('sched');toast(repoPlanState()==='diff'?'시험 일정을 바꿨어요. 예약 작업에도 알려 주세요':'시험 일정을 바꿨어요');return render();}
+  case'sch-save':{if(!SCH)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(SCH.start||''))return toast('준비 시작일을 확인하세요');const pre=planPre();S.settings.start=SCH.start;S.settings.target=SCH.target||'auto';SCH=null;recalcPlan();save();planChanged('sched',pre);toast(repoPlanState()==='diff'?'시험 일정을 바꿨어요. 예약 작업에도 알려 주세요':'시험 일정을 바꿨어요');return render();}
   case'sch-cancel':SCH=null;return render();
   case'sch-copy':return copy(schReq(),'변경 요청을 복사했어요. Claude Code에 붙여 넣으세요');
-  case'sch-round-set':{const r=Number($('#schRound').value),d=$('#schRoundDate').value;if(!r||!/^\d{4}-\d{2}-\d{2}$/.test(d))return toast('회차와 날짜를 고르세요');S.settings.roundDates[r]=d;recalcPlan();save();planChanged('sched');toast(`제${r}회를 ${d}로 고쳤어요`);return render();}
-  case'sch-round-reset':{const r=Number($('#schRound').value);if(!r)return;delete S.settings.roundDates[r];recalcPlan();save();planChanged('sched');toast(`제${r}회를 예상일로 되돌렸어요`);return render();}
+  case'sch-round-set':{const r=Number($('#schRound').value),d=$('#schRoundDate').value;if(!r||!/^\d{4}-\d{2}-\d{2}$/.test(d))return toast('회차와 날짜를 고르세요');const pre=planPre();S.settings.roundDates[r]=d;recalcPlan();save();planChanged('sched',pre);toast(`제${r}회를 ${d}로 고쳤어요`);return render();}
+  case'sch-round-reset':{const r=Number($('#schRound').value);if(!r)return;const pre=planPre();delete S.settings.roundDates[r];recalcPlan();save();planChanged('sched',pre);toast(`제${r}회를 예상일로 되돌렸어요`);return render();}
   case'backup-copy':return copy(JSON.stringify({state:S,sets:SETS}),'백업을 복사했어요. 메모 앱에 붙여 두세요');
   case'backup-dl':{PE_IO.saveFile('gisulsa-backup-'+todayStr()+'.json',JSON.stringify({state:S,sets:SETS})).catch(()=>toast('파일로 저장하지 못했어요'));return;}
   case'restore':{let j,st;try{j=JSON.parse($('#restoreText').value);st=j.state||j;if(!st.settings||!st.cards)throw 0;}catch(err){return toast('백업 형식이 아니에요');}

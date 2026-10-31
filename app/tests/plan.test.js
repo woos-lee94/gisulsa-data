@@ -73,6 +73,9 @@ const BLANK = (() => { const s = clone(ST); s.sp = {}; s.cards = {}; s.mockp = {
 let appJs = fs.readFileSync(path.join(SITE, 'app.js'), 'utf8');
 const gradeRe = /const MOCK_GRADE_SINCE='[^']*'/;
 const gradePatched = gradeRe.test(appJs); appJs = appJs.replace(gradeRe, "const MOCK_GRADE_SINCE='2026-10-31'");
+// 무거운 기록 계산을 부른 횟수(검사 24): 숙제 항목(hwItems)·간격 온 카드(dueCards)·다시 볼 세트(dueSetReviews)
+const CNT = ['function hwItems(d){', 'function dueCards(units){', 'function dueSetReviews(){'], cntPatched = CNT.every(f => appJs.split(f).length === 2);
+CNT.forEach((f, i) => { appJs = appJs.replace(f, f + `(window.__cnt=window.__cnt||[0,0,0])[${i}]++;`); });
 const html = fs.readFileSync(path.join(SITE, 'index.html'), 'utf8')
   .replace(/<script src="([^"]+)\?v=\d+"><\/script>/g, (m, src) => `<script>${src === 'app.js' ? appJs : fs.readFileSync(path.join(SITE, src), 'utf8')}</script>`)
   .replace(/<link rel="stylesheet" href="https:[^>]+>/, '');
@@ -157,6 +160,7 @@ function runWeek(W, sets, st) {
   await sleep(700);
   pe = w.__pe;
   ok(gradePatched, '예시 계산용 MOCK_GRADE_SINCE를 2026-10-31로 맞춤');
+  ok(cntPatched, '검사용 호출 수 세기(hwItems·dueCards·dueSetReviews)를 붙임');
   ok(Object.keys(pe.SETS().sets).length === 10 && pe.SETS().mocks['2026-10-31'] && pe.SETS().mocks['2026-10-31'].p2.length === 2, '가짜 저장소: 세트 10개(10/19~10/30), 10/31 모의(1교시 + 논술 2문)');
   ok(Object.values(REFS).flat().every(id => pe.deck().some(c => c.id === id)), '복제 세트가 가리키는 카드가 모두 덱에 있음');
   ok(pe.setIds('2026-10-29').length === 10 && pe.setIds('2026-10-29')[0] === 'D20261029-1', '복제 세트의 새 용어는 날짜마다 다른 카드(D20261029-1…)');
@@ -445,18 +449,79 @@ function runWeek(W, sets, st) {
     pe.UI().later = { 'hw.sl:2026-10-29': 1 }; pe.planToday(THU, { replan: 'reset' });
     ok(pe.S().today.user === 60 && !Object.keys(pe.UI().later).length && pe.S().today.rows[0].id === R0[0].id, '20. 오늘 몫 다시 짜기: 오늘 시간 그대로, 나중에 비움, 끝낸 줄 그대로');
     // 시험 일정: 단계 2로 고정(줄인 목표) → 시작일을 바꿔 이번 주가 준비 주가 되면 줄인 목표를 풀고, 남은 줄은 새 후보에서만
-    const st = clone(ST); st.settings.budget = { sat: 200 }; scene('2026-10-31T08:00:00', st); pe.planToday(SAT);
+    const st = clone(ST); st.settings.budget = { sat: 200 }; scene('2026-10-31T08:00:00', st); const dm0 = pe.planToday(SAT).doneMin;
     ok(pe.S().wk['2026-10-26'].cut && pe.S().wk['2026-10-26'].cph === 1, '20. (준비) 토요일 단계 2 고정, 줄인 목표 1단계에 걸림');
     pe.S().settings.budget = {}; await go('#schedule'); const inp = d.querySelector('#schStart'); inp.value = '2026-10-26'; inp.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(30);
     click('[data-act="sch-save"]'); await sleep(30);
     const T = pe.taskList(SAT), F = pe.S().today, V = pe.planToday(SAT);
     ok(pe.S().settings.start === '2026-10-26' && pe.weekIndex(SAT) === 0 && !pe.S().wk['2026-10-26'].cut, '20. 시험 일정 저장: 이번 주가 준비 주(0단계)가 되어 줄인 목표를 풂');
     ok(V.rows.filter(r => !r.done).every(r => T.some(x => x.id === r.id)) && F.rows.length === V.rows.length && line(pe.weekBoard(SAT), 'dd').b === 5 && V.lv === 1, '20. 다시 고른 줄은 모두 새 후보(옛 id 없음), 단계 1, 단답 목표는 줄이지 않은 5문');
+    ok(F.rows.every(r => T.some(x => x.id === r.id) || V.rows.find(v => v.id === r.id).done) && V.doneMin === dm0, `20. 고정한 줄은 모두 새 후보이거나 끝난 줄, 오늘 한 분 ${V.doneMin} 그대로`);
     await go('#today');
     // 복원은 S.today를 비운다
     scene('2026-10-29T07:40:00', ST); pe.planToday(THU); const bk = JSON.stringify({ state: pe.S(), sets: pe.SETS() });
     await go('#backup'); d.querySelector('#restoreText').value = bk; click('[data-act="restore"]'); await sleep(60);
     ok(pe.S().today === null && pe.S().wk && pe.S().tk, '20. 복원하면 S.today = null(다른 날·기기의 고정 목록을 쓰지 않음)'); }
+
+  // 21. 시험 일정을 바꿔 할 일 목록에서 사라진 줄(시험 전 3일의 "카드 30장 돌리기"): 안 한 것은 빼고(오늘 한 분 그대로), 바꾸기 전에 끝낸 것만 그 자리에
+  { const X = clone(FIX), T0 = '2027-01-27'; X.sets[T0] = cloneSet(T0, 14, refsFor(2));
+    for (const rot of [false, true]) {
+      scene(T0 + 'T07:00:00', BLANK, X); pe.planToday(T0); const R0 = pe.S().today.rows.map(r => Object.assign({}, r));
+      ok(pe.dayKind(T0) === 'pre3' && R0.map(r => r.id).join() === 'set.read:2027-01-27,x.rot:2027-01-27,set.quiz:2027-01-27,x.outline:2027-01-27', '21. (준비) 시험 전 3일 1/27 고정: 읽기·카드 30장·퀴즈·목차 5문');
+      applyRows(rot ? [R0[0], R0[1]] : [R0[0]], T0); at(T0 + 'T08:00:00'); const dm0 = pe.planToday(T0).doneMin;
+      await go('#schedule'); d.querySelector('#schRound').value = String(pe.PLAN().mock.r); d.querySelector('#schRoundDate').value = '2027-02-06'; click('[data-act="sch-round-set"]'); await sleep(30);
+      const T = pe.taskList(T0), V = pe.planToday(T0), F = pe.S().today, rid = F.rows.map(r => r.id), xr = V.rows.find(r => r.id === 'x.rot:2027-01-27');
+      ok(pe.PLAN().mock.d === '2027-02-06' && pe.dayKind(T0) === 'wd' && !T.some(x => x.id === 'x.rot:2027-01-27'), '21. 제141회를 2/6으로 옮기면 1/27은 보통 평일(카드 30장 돌리기는 할 일이 아님)');
+      ok(V.doneMin === dm0 && dm0 === (rot ? 25 : 10) && rid[0] === 'set.read:2027-01-27' && V.rows[0].done, `21. ${rot ? '카드 30장을 끝낸 뒤' : '카드 30장 전'}: 오늘 한 분 ${V.doneMin} 그대로(기록 ${dm0}), 끝낸 읽기는 그 자리`);
+      ok(F.rows.every(r => T.some(x => x.id === r.id) || V.rows.find(v => v.id === r.id).done) && new Set(rid).size === rid.length, '21. 고정한 줄은 모두 새 후보이거나 바꾸기 전에 끝난 줄(id 겹침 없음)');
+      ok(rot ? xr && xr.done && xr.left === 0 : !xr, rot ? '21. 바꾸기 전에 끝낸 카드 30장 돌리기는 끝낸 줄로 남음' : '21. 안 한 카드 30장 돌리기는 빠짐(끝난 것으로 세지 않음)');
+      await go('#today'); } }
+
+  // 22. 평일 공휴일(12/25)에 세트가 아직 없을 때 10:00: 손글씨 바닥은 공휴일 손글씨 몫 q.dd 하나가 맡음(같은 id·같은 칸을 두 번 만들지 않음)
+  const HOL = clone(FIX); ['2026-12-21', '2026-12-22', '2026-12-23', '2026-12-24'].forEach(x => HOL.sets[x] = cloneSet(x, 9, refsFor(1)));
+  scene('2026-12-25T10:00:00', BLANK, HOL);
+  { const T = pe.taskList('2026-12-25'), I = T.map(x => x.id), P = pe.dayPlan('2026-12-25'), q = P.rows.find(r => r.id === 'q.dd:2026-12-21');
+    ok(pe.dayKind('2026-12-25') === 'holi' && new Set(I).size === I.length && I.filter(x => /^q\.dd:/.test(x)).length === 1, '22. 공휴일 세트 없이 10:00: 할 일 id 겹침 없음, 단답 몫 줄은 하나');
+    pe.planToday('2026-12-25'); const F = pe.S().today.rows.map(r => r.id);
+    ok(new Set(ids(P)).size === P.rows.length && new Set(F).size === F.length && q && JSON.stringify(q.q) === '[["2026-12-21",1],["2026-12-22",1]]', `22. 오늘 몫의 단답 몫은 가장 오래된 세트부터 반까지(${q && JSON.stringify(q.q)}), 고정한 줄 id 겹침 없음`); }
+
+  // 23. 날짜 일 핀(원서접수·48시간 복기)은 펼칠 줄도 "다음"도 아님. "다음"은 펼칠 줄과 같은 규칙(나중에 미룬 줄은 뒤로, 자기 전은 다른 줄을 다 한 뒤)
+  scene('2026-12-22T07:40:00', BLANK, HOL);
+  { const V = pe.planToday('2026-12-22');
+    ok(V.rows[0].id === 'apply:141' && V.active && V.active.id === 'set.read:2026-12-22' && V.rows.every(r => { const n = pe.nextAfter(r.id, V); return !n || n.row.blk !== 'pin'; }), '23. 원서접수 핀이 맨 위여도 펼칠 줄은 용어 읽기, 어느 줄의 "다음"도 핀이 아님');
+    scene('2027-01-31T09:00:00', BLANK); const V2 = pe.planToday('2027-01-31');
+    ok(V2.rows.some(r => r.id === 'recap:141') && V2.active && V2.active.blk !== 'pin', `23. 시험 다음 날 48시간 복기 핀: 펼칠 줄은 목록 쪽(${V2.active && V2.active.id})`);
+    scene('2026-10-29T07:40:00', ST); const V3 = pe.planToday(THU), n3 = pe.nextAfter('hw.eo:2026-10-29', V3);
+    ok(n3 && n3.row.id === 'set.read:2026-10-29' && n3.before, '23. 목차 다음: 자기 전은 아직(다른 줄이 남음) → 앞에서 넘긴 첫 줄(용어 읽기)');
+    pe.UI().later = { 'set.read:2026-10-29': 1 }; const V4 = pe.planToday(THU), n4 = pe.nextAfter('hw.eo:2026-10-29', V4);
+    ok(V4.active && V4.active.id === 'rev:2026-10-27:1' && n4 && n4.row.id === 'set.read:2026-10-29' && !n4.before, '23. 나중에 미룬 용어 읽기는 오늘 순서 맨 뒤(펼칠 줄은 세트 복습, 목차 다음은 미룬 용어 읽기)');
+    pe.UI().later = {}; applyRows(pe.S().today.rows.filter(r => !/^hw\.(eo|sl):/.test(r.id)), THU); const V5 = pe.planToday(THU), n5 = pe.nextAfter('hw.eo:2026-10-29', V5);
+    ok(n5 && n5.row.id === 'hw.sl:2026-10-29' && !n5.before, '23. 다른 줄을 다 하면 목차 다음은 자기 전 5분'); }
+
+  // 24. 한 번 계산하는 비용(명세 위험 7): 숙제 항목은 이번 주 세트마다 한 번(≤7), 간격 온 카드·다시 볼 세트는 한 번. 오늘 몫이 스스로 저장해도 그 기억을 지우지 않음
+  scene('2026-10-29T07:40:00', ST); pe.weekSnap(THU);
+  { w.__cnt = [0, 0, 0]; pe.planToday(THU); const a = w.__cnt.slice(); w.__cnt = [0, 0, 0]; pe.planToday(THU); pe.weekBoard(THU); const b = w.__cnt.slice();
+    ok(pe.S().today && a[0] <= 7 && a[1] === 1 && a[2] === 1, `24. 목요일 고정하는 계산: 숙제 항목 ${a[0]}번(≤7), 간격 온 카드 ${a[1]}번, 다시 볼 세트 ${a[2]}번`);
+    ok(b[0] <= 2 * 7 && b[1] <= 2 && b[2] <= 2, `24. 고정한 뒤 오늘 몫 + 이번 주(따로 셈): ${b.join('·')}`);
+    scene('2026-11-02T07:00:00', ST); w.__cnt = [0, 0, 0]; pe.planToday(MON); const c = w.__cnt.slice();
+    ok(c[0] <= 7 && c[1] === 1 && c[2] === 1, `24. 월요일 첫 계산(지난주 고정 포함): ${c.join('·')}`); }
+
+  // 25. 시작일이 월요일이 아니어도(2026-10-21 수) 한 달력 주 안에서 단계·약속 줄이 바뀌지 않음(계획 주차 = 그 주 월요일의 주차). 시작 전 날은 비어 있음
+  { const st = clone(BLANK); st.settings.start = '2026-10-21'; scene('2027-01-04T07:00:00', st);
+    const sig = t => { at(t + 'T07:00:00'); const B = pe.weekBoard(t); return B.ph + '|' + B.lines.map(l => l.k).join(',') + '|' + line(B, 'mock').b; }, S7 = [0, 1, 2, 3, 4, 5, 6].map(i => sig(add('2027-01-04', i)));
+    ok(pe.weekIndex('2027-01-04') !== pe.weekIndex('2027-01-06') && S7.every(x => x === S7[0]) && S7[0].indexOf('1|') === 0, `25. 시작 10/21(수): 1/4~1/10 한 주 내내 같은 단계·같은 약속 줄(${S7[0]})`);
+    at('2026-10-22T07:00:00'); const a = pe.taskList('2026-10-22'); at('2026-10-20T07:00:00'); const b = pe.taskList('2026-10-20');
+    ok(a.some(x => x.id === 'set.read:2026-10-22') && b.length === 0, '25. 첫 달력 주: 시작 뒤(10/22)는 할 일이 있고 시작 전(10/20)은 없음'); }
+
+  // 26. 어느 날 어느 시각에도 할 일 id와 오늘 몫 줄 id는 겹치지 않음(10/19 ~ 시험 날, 07:00·10:00·22:00, 단계마다 세트·모의가 있는 저장소)
+  { const X = clone(HOL); X.sets['2027-01-27'] = cloneSet('2027-01-27', 14, refsFor(2)); X.sets['2027-01-04'] = cloneSet('2027-01-04', 11, refsFor(2));
+    ['2027-02-22', '2027-02-23'].forEach(x => X.sets[x] = cloneSet(x, 18, refsFor(3))); X.sets['2027-04-12'] = cloneSet('2027-04-12', 25, refsFor(4));
+    X.mocks['2027-02-27'] = cloneMock('2027-02-27', { p1: clone(MOCK0.p1), p2: P6(2), p3: P6(3), p4: P6(4) });
+    scene('2026-10-19T07:00:00', ST, X); const bad = []; let n = 0;
+    for (let t = '2026-10-19'; t <= pe.PLAN().target.d; t = add(t, 1)) for (const hh of ['07', '10', '22']) {
+      at(t + 'T' + hh + ':00:00'); const I = pe.taskList(t).map(x => x.id), P = ids(pe.dayPlan(t)); n++;
+      if (new Set(I).size !== I.length || new Set(P).size !== P.length) bad.push(t + ' ' + hh + '시'); }
+    ok(!bad.length && n > 600, `26. ${n}번(날 × 시각) 모두 id 겹침 없음 ${bad.slice(0, 3).join(' | ')}`); }
 
   // 시작(taskGo)·다음 줄(nextAfter): 줄마다 한 번에 그 자리로
   scene('2026-10-29T07:40:00', ST);
@@ -472,6 +537,18 @@ function runWeek(W, sets, st) {
   { pe.planToday(SUN); pe.taskGo('report:2026-10-26'); await sleep(20); ok(pe.S().tk['report:2026-10-26'] === SUN, 'taskGo 일요일 주간 리포트 → 복사하고 이번 주 리포트로 침'); }
   scene('2026-11-02T07:00:00', ST);
   { pe.taskGo('report:2026-10-26'); await sleep(20); ok(pe.S().tk['report:2026-10-26'] === MON, 'taskGo 월요일 "지난주 리포트 아직" → 지난주(10/26)로 침'); }
+  // 카드 복습은 오늘 몫의 장 수(단계 2부터 하루 30장), 모의 점수 적기는 그 주 모의 화면으로(손으로 치지 않음)·모의가 없는 주엔 그 줄도 없음
+  { const st = clone(ST); st.settings.budget = { sat: 200 }; scene('2026-10-31T08:00:00', st); const V = pe.planToday(SAT), c = pe.taskList(SAT).find(x => x.id === 'cards:2026-10-31');
+    pe.taskGo('cards:2026-10-31'); await sleep(40);
+    ok(V.lv === 2 && c && c.kc > 30 && pe.SES().kind === 'cards' && pe.SES().items.length === 30, `taskGo 카드 복습(단계 2): 주말 몫 ${c && c.kc}장이 아니라 오늘 몫 30장으로 시작`);
+    pe.goTab('today'); await sleep(40); scene('2026-10-31T08:00:00', ST); pe.planToday(SAT); pe.taskGo('cards:2026-10-31'); await sleep(40);
+    ok(pe.SES().kind === 'cards' && pe.SES().items.length === 48, 'taskGo 카드 복습(단계 1): 48장 그대로'); pe.goTab('today'); await sleep(40); }
+  { const X = clone(FIX); ['2027-02-22', '2027-02-23'].forEach(x => X.sets[x] = cloneSet(x, 18, refsFor(3))); X.mocks['2027-02-27'] = cloneMock('2027-02-27', { p1: clone(MOCK0.p1), p2: P6(2), p3: P6(3), p4: P6(4) });
+    scene('2027-02-28T09:00:00', BLANK, X); const x = pe.taskList('2027-02-28').find(r => r.id === 'x.trend:2027-02-22');
+    pe.taskGo('x.trend:2027-02-22'); await sleep(40);
+    ok(x && x.d === '2027-02-27' && w.location.hash === '#mock/2027-02-27' && !pe.S().tk['x.trend:2027-02-22'] && !((pe.S().cal['2027-02-28'] || {}).x || {})['tk:x.trend:2027-02-22'], 'taskGo 모의 점수 적기 → 그 주 모의 화면(S.tk·달력 할 일로 치지 않음)');
+    pe.goTab('today'); await sleep(40); scene('2027-03-07T09:00:00', BLANK, X);
+    ok(!pe.taskList('2027-03-07').some(r => /^x\.trend:/.test(r.id)), '모의가 없는 3단계 일요일엔 "모의 점수 적기" 줄 없음'); }
 
   // 그 밖: 숙제 필수·핵심·같은 그림
   scene('2026-10-29T07:40:00', ST);
