@@ -47,7 +47,8 @@ const IO={
   _hide(){hideFns.forEach(f=>{try{f();}catch(e){}});},
   _wake(){document.dispatchEvent(new Event('visibilitychange'));},
   _toast(m){toast(m);},
-  _go(h){location.hash=h;},
+  /* 알림을 눌러 연 화면: 앱의 라우터로(탭은 탭 첫 화면으로 바꿔 씀, 방문 기록을 늘리지 않음) */
+  _go(h){const pe=window.__pe;if(pe&&pe.go)return pe.go(h);location.replace('#'+String(h||'today').replace(/^#/,''));},
   /* 승인·관리자 상태가 바뀌면(콘솔에서 관리자 지정 등) 앱이 알려 준다. 아이디가 보이는 화면이면 바로 다시 그린다 */
   _member(m){if(!N)return;N.member=m&&m.id?m:null;if(/^#(more|settings|admin)\b/.test(location.hash)&&window.__pe)window.__pe.render();}
 };

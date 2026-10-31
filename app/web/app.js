@@ -339,26 +339,79 @@ function syncLine(){const s=S.sync||{};const n=Object.keys(SETS.sets).length;
 function paintSyncBits(){document.querySelectorAll('[data-syncline]').forEach(el=>el.innerHTML=syncLine());}
 
 /* ════════ 10. 라우터 ════════ */
-const TAB_OF={set:'today',sess:'',memo:'',cal:'today',dandap:'',kichul:'test',mock:'test',guide:'test',admin:'more',plan:'more',schedule:'more',timer:'more',prompts:'more',imp:'more',settings:'more',backup:'more',about:'more',archive:'review',wrong:'review',stats:'test'};
-const TABS=['today','review','study','test','more'];
-let R={tab:'today',page:null,a:null,b:null};
-function parseHash(){const h=decodeURIComponent((location.hash||'').replace(/^#\/?/,''));const p=h.split('/');const r={tab:'today',page:null,a:p[1]||null,b:p[2]||null};
-  if(TABS.includes(p[0]))r.tab=p[0];else if(p[0]&&TAB_OF[p[0]]!==undefined){r.page=p[0];r.tab=TAB_OF[p[0]]||(SES&&SES.from)||'today';}return r;}
-function nav(h){closeModal();if(('#'+h)===location.hash)render();else location.hash=h;}
-function back(){if(history.length>1&&document.referrer!==undefined&&R.page){history.back();}else nav(R.tab||'today');}
-window.addEventListener('hashchange',()=>{closeModal();R=parseHash();if(R.page!=='sess')SES_SAVE();if(R.page!=='memo')memoStop();render();window.scrollTo(0,0);});
-let SES=null;function SES_SAVE(){/* 세션은 메모리에만 */}
+/* 주소는 늘 바꿔 쓴다(location.replace): 방문 기록이 쌓이지 않아 끝난 세션·외우기의 빈 화면이 기록에 남지 않는다(앱의 기기 뒤로 가기 몸짓은 끄고 왼쪽 가장자리 밀기를 여기서 받는다).
+   위로(위쪽 뒤로·닫기, 가장자리 밀기)는 goUp: 들어온 곳(RET) → 정해 둔 부모(PARENT). 탭은 goTab: 그 탭 첫 화면으로 바꿔 쓰고 RET를 비운다.
+   주소가 바뀌면 route(): 창을 닫고, SES 없는 #sess·MEMO 없는 #memo는 위로, 모르는 주소는 오늘로 바꿔 쓰고, #set/날짜/탭은 #set/날짜로 맞춘 뒤 그린다. 주소는 앞의 # 없이 nh()로 한 꼴로 쓴다 */
+const TABS=['today','review','study','test','more'],TAB_ALIAS={};
+const PARENT={set:'today',cal:'today',week:'today',mock:'test',kichul:'test',dandap:'test',stats:'test',archive:'review',wrong:'review',
+  guide:'more',timer:'more',plan:'more',schedule:'more',settings:'more',backup:'more',about:'more',prompts:'more',imp:'more',admin:'more'};
+const PAGES={set:vSet,sess:vSess,memo:vMemo,cal:vCal,dandap:vDandap,kichul:vKichul,mock:vMock,guide:vGuide,admin:vAdmin,plan:vPlan,schedule:vSchedule,timer:vTimer,prompts:vPrompts,imp:vImport,settings:vSettings,backup:vBackup,about:vAbout,archive:vArchive,wrong:vWrong,stats:vStats};
+const UP_LABEL={today:'오늘',review:'복습',study:'암기',test:'테스트',more:'더보기',set:'세트',kichul:'기출','kichul/u':'단원별',mock:'모의고사',cal:'달력'};
+const SET_TABS=['cards','quiz','essay','tasks'];
+let R={tab:'today',page:null,a:null,b:null},RET={},FLOW=null;   /* RET: 화면 → 들어온 주소. FLOW: 오늘 화면의 줄이 연 흐름 {id, from, at} */
+let SES=null;
+const nh=h=>{h=String(h||'');try{h=decodeURIComponent(h);}catch(e){}return h.replace(/^#\/?/,'');};
+const curH=()=>nh(location.hash)||'today';
+const isTab=h=>{const p=nh(h).split('/')[0];return TABS.includes(p)||!!TAB_ALIAS[p];};
+const tabKey=h=>{const p=nh(h).split('/')[0];return TAB_ALIAS[p]||p;};
+const hashR=h=>{const p=nh(h).split('/');return{page:p[0],a:p[1]||null,b:p[2]||null};};
+function retOk(h,page){const p=nh(h).split('/')[0];return!!h&&p!==page&&!(p==='sess'&&!SES)&&!(p==='memo'&&!MEMO);}
+/* 위 화면: 세션·외우기는 연 곳, 기출 회차·단원은 그 목록, 그 밖은 들어온 곳 → 부모. SES·MEMO가 없어도 오류 없이 오늘 */
+function upOf(r){r=r||R;
+  if(r.page==='sess')return nh(SES&&SES.from)||'today';
+  if(r.page==='memo')return nh(MEMO&&MEMO.from)||'today';
+  if(r.page==='kichul'&&r.b)return r.a==='u'?'kichul/u':'kichul';
+  const ret=nh(RET[r.page]);return retOk(ret,r.page)?ret:(PARENT[r.page]||'today');}
+/* h에서 위로 올라가다 page를 만나면(앞 화면으로 되돌아가는 링크) 그 화면의 RET를 그대로 둔다: 뒤로가 두 화면 사이를 맴돌지 않게 */
+function upHas(h,page){for(let k=0;k<6&&h&&!isTab(h);k++){h=upOf(hashR(h));if(nh(h).split('/')[0]===page)return true;}return false;}
+/* 아래 탭 강조: 흐름을 시작한 탭(세션·외우기는 연 곳, 화면은 들어온 곳 → 부모를 따라 올라간다) */
+function tabOf(h,k){h=nh(h)||'today';k=k||0;const p=h.split('/')[0];
+  if(TABS.includes(p))return p;if(TAB_ALIAS[p])return TAB_ALIAS[p];if(k>5)return'today';
+  if(p==='sess')return tabOf(SES&&SES.from,k+1);if(p==='memo')return tabOf(MEMO&&MEMO.from,k+1);
+  const ret=nh(RET[p]);return tabOf(retOk(ret,p)?ret:(PARENT[p]||'today'),k+1);}
+const upLabel=h=>{h=nh(h);return UP_LABEL[h]||UP_LABEL[h.split('/')[0]]||'뒤로';};
+function parseHash(){const h=curH(),p=h.split('/');const r={tab:'today',page:null,a:p[1]||null,b:p[2]||null};
+  if(isTab(p[0]))r.tab=tabKey(p[0]);else if(PAGES[p[0]]){r.page=p[0];r.tab=tabOf(h);}return r;}
+/* 집중 모드: 세션·가리며 외우기, 타이머가 도는 그 모의고사(아래 탭을 숨기고 위쪽은 "닫기") */
+const isFocus=()=>R.page==='sess'||R.page==='memo'||(R.page==='mock'&&TM.running&&!!TM.ctx&&TM.ctx.D===R.a);
+function rep(h){h=nh(h)||'today';if(curH()===h){R=parseHash();return render();}location.replace('#'+h);}
+function hop(h){h=nh(h)||'today';return isTab(h)?goTab(tabKey(h)):rep(h);}
+/* 앞으로: 탭 주소는 goTab, 그 밖은 들어온 곳을 RET에 적고 바꿔 쓴다(o.from: 들어온 곳을 따로 줄 때) */
+function nav(h,o){o=o||{};closeModal();h=nh(h)||'today';if(isTab(h))return goTab(tabKey(h));
+  const p=h.split('/')[0],from=nh(o.from)||curH();if(p!=='sess'&&p!=='memo'&&from.split('/')[0]!==p&&!upHas(from,p))RET[p]=from;
+  rep(h);}
+/* 위로: 뒤로·닫기·가장자리 밀기. 세션·외우기는 지우지 않는다(이어서 할 수 있게). 외우기 안에서 연 외우기는 바깥 외우기로(T5) */
+function goUp(up){closeModal();
+  if(!up&&R.page==='memo'&&MEMO&&MEMO.outer){const o=MEMO.outer;memoStop();MEMO=o;return render();}
+  hop(up||upOf(R));}
+/* 탭: 그 탭 첫 화면으로 바꿔 쓴다(탭이 쌓이지 않음). 지금 탭을 다시 누르면 맨 위로 */
+function goTab(tab){closeModal();tab=tabKey(tab);if(!TABS.includes(tab))tab='today';FLOW=null;RET={};
+  if(curH()===tab){R=parseHash();render();return window.scrollTo(0,0);}
+  location.replace('#'+tab);}
+/* 흐름을 다른 화면에서 시작하면 오늘 줄의 흐름(FLOW)을 놓는다 */
+function flowKeep(o){if(!(o&&o.keepFlow)&&!(FLOW&&curH()===FLOW.at))FLOW=null;}
+function route(){closeModal();
+  try{R=parseHash();
+    if((R.page==='sess'&&!SES)||(R.page==='memo'&&!MEMO))return hop(upOf(R));
+    if(!R.page&&!isTab(curH()))return goTab('today');
+    if(R.page==='set'&&R.b){if(SET_TABS.includes(R.b))SV[R.a]=R.b;return rep('set/'+R.a);}
+  }catch(e){console.error(e);R=parseHash();}
+  if(R.page!=='memo')memoStop();render();window.scrollTo(0,0);}
+window.addEventListener('hashchange',route);
+const kbEl=t=>!!t&&(t.tagName==='TEXTAREA'||t.tagName==='INPUT'&&!/^(checkbox|radio|button|submit|reset|range|color|file|image)$/i.test(t.type||''));
 function render(){R=parseHash();document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===R.tab));
+  if(!R.page&&R.tab==='today')FLOW=null;document.body.classList.toggle('focus',isFocus());
   const v=$('#view');let html='';
   try{
     if(!R.page)html=({today:vToday,review:vReview,study:vStudy,test:vTest,more:vMore}[R.tab]||vToday)();
-    else html=({set:vSet,sess:vSess,memo:vMemo,cal:vCal,dandap:vDandap,kichul:vKichul,mock:vMock,guide:vGuide,admin:vAdmin,plan:vPlan,schedule:vSchedule,timer:vTimer,prompts:vPrompts,imp:vImport,settings:vSettings,backup:vBackup,about:vAbout,archive:vArchive,wrong:vWrong,stats:vStats}[R.page]||vToday)();
+    else html=(PAGES[R.page]||vToday)();
   }catch(e){html=`<div class="empty" style="margin-top:24px"><b>화면을 그리는 중 오류가 났어요</b>${esc(e.message)}</div>`;console.error(e);}
-  v.innerHTML=html;paintNavBadges();paintPill();if(R.page==='timer')paintTimer();if(R.page==='memo')paintMemo();
+  v.innerHTML=html;document.body.classList.toggle('kb',kbEl(document.activeElement));paintNavBadges();paintPill();if(R.page==='timer')paintTimer();if(R.page==='memo')paintMemo();
   if(R.page==='sess'&&SES&&!SES.answered&&SES.items[SES.i]&&SES.items[SES.i].type==='fill'){const f=v.querySelector('.fill-in');if(f)try{f.focus({preventScroll:true});}catch(e){}}}
 function softRender(){if(R.page==='sess')return paintNavBadges();if(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return paintNavBadges();render();}
 function paintNavBadges(){const rv=dueSetReviews().length+(Object.keys(S.wrong).length?1:0);const b=document.querySelector('#nav button[data-tab="review"]');if(b){let nb=b.querySelector('.nb');const n=dueSetReviews().length;if(n){if(!nb){nb=document.createElement('span');nb.className='nb';b.appendChild(nb);}nb.textContent=n;}else if(nb)nb.remove();}}
-const topbar=(title)=>`<div class="topbar"><button class="back" data-act="back">${icon('back')}뒤로</button><div class="ttl">${esc(title)}</div></div>`;
+/* 위쪽 막대: 왼쪽은 올라갈 곳 이름(오늘·세트·더보기…, 그 밖은 "뒤로"), 집중 모드에서는 "닫기" */
+const topbar=(title)=>`<div class="topbar"><button class="back" data-act="back">${isFocus()?'닫기':icon('back')+esc(upLabel(upOf(R)))}</button><div class="ttl">${esc(title)}</div></div>`;
 const sec=(title,meta,body)=>`<section class="sec"><div class="sec-h"><h2>${esc(title)}</h2>${meta?`<span class="meta">${meta}</span>`:''}</div>${body}</section>`;
 function row(o){const tag=o.act?'button':'div';const attrs=o.act?` data-act="${o.act}"${o.data?Object.keys(o.data).map(k=>` data-${k}="${esc(o.data[k])}"`).join(''):''}`:'';
   return`<${tag} class="row${o.ic?'':' noic'}"${attrs}>${o.ic?`<span class="ic ${o.tone||''}">${icon(o.ic)}</span>`:''}<span class="tx"><span class="tt">${o.t}</span>${o.d?`<span class="ds">${o.d}</span>`:''}</span>${o.v!=null?`<span class="val${o.zero?' zero':''}">${o.v}</span>`:''}${o.badge?o.badge:''}${o.act?'<span class="chev"></span>':''}</${tag}>`;}
@@ -678,8 +731,12 @@ function vStudy(){const rg=S.range||'week',f=rangeFilter(rg);const pool=deck().f
 /* SES.kind: 세션을 연 곳(rev 세트 복습, flash 세트 카드 넘겨 보기, gq 용어 퀴즈, wrong 오답, cards 카드 복습, study·free·stars·mcq·recall·cloze·fill·outline).
    SES.done: 끝낸 항목 번호(답 고름·매김·채점·빈칸 채점, 넘겨 보기는 뒷면 본 카드). SES.acc: "이어서"로 이어 붙인 세션이 앞 세션에서 한 수 {d,step,a,n} */
 /* 항목이 없으면 알리기만 하고 하던 세션(멈춰 둔 넘겨 보기 등)은 그대로 둔다 */
-function startSession(o){const s=Object.assign({i:0,back:false,answered:null,stats:{ok:0,mid:0,no:0},done:{},kind:null,from:R.page?('#'+R.page+(R.a?'/'+R.a:'')):'#'+R.tab},o);if(!s.items.length)return toast('이 범위에 문제가 없어요');SES=s;nav('sess');}
-function vSess(){if(!SES)return topbar('학습')+`<div class="empty" style="margin-top:20px"><b>진행 중인 학습이 없어요</b><div class="btns"><button class="btn" data-act="go" data-h="study">암기 탭으로</button></div></div>`;
+/* from: 연 곳(주소 그대로, #set/날짜·#kichul/u/3 등). #sess에서 다시 시작하면(끝 화면의 이어서 등) 처음 연 곳을 물려받는다 */
+function startSession(o){const s=Object.assign({i:0,back:false,answered:null,stats:{ok:0,mid:0,no:0},done:{},kind:null},o);s.from=nh(o.from)||(R.page==='sess'&&SES?nh(SES.from):curH());if(!s.items.length)return toast('이 범위에 문제가 없어요');
+  flowKeep(o);SES=s;nav('sess');}
+/* 같은 #sess 화면에서 다음 세션으로(연 곳·오늘 줄 흐름은 그대로) */
+const chainSession=o=>startSession(Object.assign({},o,{from:SES&&SES.from,keepFlow:true}));
+function vSess(){if(!SES)return topbar('학습')+`<div class="empty" style="margin-top:20px"><b>진행 중인 학습이 없어요</b><div class="btns"><button class="btn" data-act="go" data-h="today">오늘로</button></div></div>`;
   const it=SES.items[SES.i];if(!it)return sessDone();const n=SES.items.length;
   const head=`${topbar(SES.title||'학습')}<div class="prog"><div class="bar"><i style="width:${Math.round((SES.i+1)/n*100)}%"></i></div><span>${SES.i+1} / ${n}</span></div>`;
   if(it.type==='card'){const c=card(it.id);if(!c)return head+skipBtn();const p=pget(c.id);const gotG=SES.graded?SES.graded[SES.i]:null;
@@ -688,7 +745,7 @@ function vSess(){if(!SES)return topbar('학습')+`<div class="empty" style="marg
       :`<div class="term">${esc(c.t)}</div><p class="hint">정의, 원리, 특징, 유의사항을 30초 안에 말해 보고 탭하세요</p>`}</div>
     ${SES.back?`<div class="grade3">${[[0,'모름'],[1,'애매'],[2,'앎']].map(([g,l])=>`<button class="g${g}${gotG===g?' on':''}" data-act="sess-grade" data-g="${g}">${l}<small>${gotG===g?'고른 것':nextLabel(c.id,g)}</small></button>`).join('')}</div>${gotG!=null?'<p class="note" style="text-align:center">다시 고르면 바꿔요</p>':''}`
       :`<div class="btns"><button class="btn" data-act="sess-flip">뒷면 보기</button></div>`}
-    <div class="btns sessnav"><button class="btn sec" data-act="sess-prev" ${SES.i?'':'disabled'}>‹ 이전</button><button class="btn sec" data-act="sess-skip">${SES.i+1<n?'다음 ›':'끝내기'}</button></div>
+    <div class="btns sessnav"><button class="btn sec" data-act="sess-prev" ${SES.i?'':'disabled'}>‹ 이전</button><button class="btn sec" data-act="sess-skip">${SES.i+1<n?(SES.done[SES.i]?'다음 ›':'건너뛰기'):'끝내기'}</button></div>
     <div class="btns"><button class="btn ghost" data-act="memo-sess">이 카드부터 가리며 외우기${sessCardIds().length>1?` (${sessCardIds().length}장)`:''}</button></div>`;}
   if(it.type==='mcq'){const c=card(it.id);const ans=SES.answered;
     return head+`<div class="qcard"><p class="qnum">이 설명에 맞는 용어는?${c.x&&c.x.length?' (기출 '+c.x.length+'회)':''}</p><p class="qtext" style="font-weight:500">${esc(c.d)}</p>
@@ -748,7 +805,7 @@ function sessDone(){const s=SES.stats,n=s.ok+s.mid+s.no,t=todayStr(),rd=SES.revD
 function sessAdvance(){SES.i++;SES.back=false;SES.answered=null;if(SES.rkey)resumeSet(SES.rkey,SES.i,SES.items.length);render();window.scrollTo(0,0);}
 /* 끝 화면 "이어서 · 남은 n문제": 안 한 항목만 새 세션으로. 한 수(acc)는 앞 세션에 더해 세고, 끝나면 같은 세트 복습으로 친다 */
 function sessRest(){const s=SES;if(!s)return;const dn=Object.keys(s.done).length,rd=s.revD||s.setD,r0=(s.rv||[])[0]||{};
-  startSession({kind:s.kind,title:s.title,items:s.items.filter((_,i)=>!s.done[i]),onDone:s.onDone,rv:s.rv,revD:s.revD,setD:s.setD,log:s.log,requeue:s.requeue,chain:s.chain,from:s.from,
+  chainSession({kind:s.kind,title:s.title,items:s.items.filter((_,i)=>!s.done[i]),onDone:s.onDone,rv:s.rv,revD:s.revD,setD:s.setD,log:s.log,requeue:s.requeue,chain:s.chain,
     acc:s.acc?Object.assign({},s.acc,{a:s.acc.a+dn}):{d:rd||r0.d||null,step:rd?reviewDue(rd):r0.step||null,a:dn,n:s.items.length}});window.scrollTo(0,0);}
 /* 카드 넘겨 보기: 이전 카드로(이미 매긴 카드는 뒷면부터), 세트 카드는 뒷면을 본 것만 읽음 */
 function sessPrev(){if(!SES||SES.i<=0)return;SES.i--;SES.back=!!(SES.graded&&SES.graded[SES.i]!=null);SES.answered=null;if(SES.rkey)resumeSet(SES.rkey,SES.i,SES.items.length);render();window.scrollTo(0,0);}
@@ -889,11 +946,14 @@ document.addEventListener('touchend',tpLost);
 document.addEventListener('touchcancel',tpLost);
 /* 이어 하기 키: 세트는 memo:set:날짜, 그 밖(암기 탭 memo:study, 복습 탭 memo:rev·memo:wrong·memo:stars)은 그날 카드 목록째로.
    세션에서 넘어온 것(memo:sess)과 카드 한 장(memo:one)은 늘 새로 */
-function startMemo(o,fresh){
-  if(!fresh&&MEMO&&MEMO.key===o.key&&!MEMO.fin){memoStop();return nav('memo');}
-  memoStop();const r=fresh?null:resumeGet(o.key);if(r&&r.ids)o.items=r.ids.map(id=>({id}));
-  MEMO=Object.assign({i:0,run:false,phase:'show',left:null,cnt:0,done:false,t0:0,started:Date.now(),from:R.page?('#'+R.page+(R.a?'/'+R.a:'')):'#'+R.tab},o);
-  if(!MEMO.items.length){toast('외울 카드가 없어요');MEMO=null;return;}
+/* from: 연 곳(주소 그대로, 세션·끝 화면에서 열면 sess). 이어서 열면 연 곳을 새로 적는다(T4). 외울 카드가 없으면 알리기만 하고 하던 외우기는 그대로.
+   가리며 외우기 안에서 연 외우기(카드 창의 "가리며 외우기")는 바깥 외우기를 outer에 두고, 끝내거나 닫으면 그 카드로 돌아간다(T5) */
+function startMemo(o,fresh){const inMemo=R.page==='memo'&&MEMO&&!MEMO.fin,from=nh(o.from)||curH();
+  if(!fresh&&MEMO&&MEMO.key===o.key&&!MEMO.fin){memoStop();if(!inMemo)MEMO.from=from;flowKeep(o);return nav('memo');}
+  const r=fresh?null:resumeGet(o.key);if(r&&r.ids)o.items=r.ids.map(id=>({id}));
+  if(!o.items||!o.items.length)return toast('외울 카드가 없어요');
+  const outer=inMemo?MEMO:(o.outer||null);memoStop();flowKeep(o);
+  MEMO=Object.assign({i:0,run:false,phase:'show',left:null,cnt:0,done:false,t0:0,started:Date.now()},o,{from:outer?nh(outer.from):from,outer});
   if(r&&r.i<MEMO.items.length){MEMO.i=r.i;toast(`${r.i+1}번째 카드부터 이어서 해요`);}
   memoSeen();nav('memo');}
 function memoItem(){return MEMO&&MEMO.items[MEMO.i];}
@@ -930,15 +990,16 @@ function paintMemo(){const box=document.getElementById('memoBox');if(!box||!MEMO
   const cl=document.getElementById('memoClock');
   if(cl)cl.innerHTML=MEMO.done?(last?'<b>다 했어요</b> <span>마지막 카드예요. 아래 완료를 누르세요</span>':'<b>다 했어요</b> <span>다시 하거나 다음 카드로 넘기세요</span>'):`<b class="${MEMO.phase}">${MEMO.phase==='show'?'보기':'가림'}</b> ${Math.ceil(left/1000)}초 <span>${c.reps?`${Math.min(MEMO.cnt+1,c.reps)} / ${c.reps}회`:`${MEMO.cnt+1}회째, 무한 반복`}</span>`;
   const bar=document.getElementById('memoBar');if(bar)bar.style.width=(MEMO.done?0:Math.round(left/memoDur()*100))+'%';
-  const b=document.getElementById('memoPlay');if(b)b.textContent=MEMO.run?'일시정지':MEMO.done?'다시 하기':(MEMO.left!=null?'계속':'시작');}
+  const b=document.getElementById('memoPlay');if(b){b.textContent=MEMO.run?'일시정지':MEMO.done?'다시 하기':(MEMO.left!=null?'계속':'시작');b.classList.toggle('sec',!!(MEMO.edit||last&&MEMO.done));}
+  const fb=document.querySelector('.mctl [data-act="memo-finish"]');if(fb)fb.classList.toggle('sec',!MEMO.done||!!MEMO.edit);}   /* 파란 버튼은 하나: 테이프를 붙이는 중이면 "다 붙였어요", 마지막 카드를 다 돌았으면 "완료" */
 function memoDoneHTML(){const n=MEMO.items.length,min=Math.max(1,Math.round((MEMO.fin-MEMO.started)/60000));
   return topbar(MEMO.title||'가리며 외우기')+`<div class="sheet" style="margin-top:18px"><p class="sheet-k">끝</p><h3>${esc(MEMO.title||'가리며 외우기')} 완료</h3>
   <ul class="steps"><li><span class="dot on"></span><span class="k">외운 카드</span><span class="v">${n}장</span></li><li><span class="dot on"></span><span class="k">이번에 걸린 시간</span><span class="v">${min}분</span></li></ul>
   <p class="ds" style="margin:6px 0 12px">학습 달력에 빨간 동그라미로 남았어요.</p>
   <button class="btn" data-act="memo-close">돌아가기</button><div class="btns"><button class="btn sec" data-act="memo-again">처음부터 다시</button><button class="btn sec" data-act="go" data-h="cal">학습 달력</button></div></div>`;}
-function vMemo(){if(!MEMO)return topbar('가리며 외우기')+`<div class="empty" style="margin-top:20px"><b>진행 중인 외우기가 없어요</b><div class="btns"><button class="btn" data-act="go" data-h="study">암기 탭으로</button></div></div>`;
+function vMemo(){if(!MEMO)return topbar('가리며 외우기')+`<div class="empty" style="margin-top:20px"><b>진행 중인 외우기가 없어요</b><div class="btns"><button class="btn" data-act="go" data-h="today">오늘로</button></div></div>`;
   if(MEMO.fin)return memoDoneHTML();
-  const it=memoItem(),c=card(it.id),cf=memoCfg(),n=MEMO.items.length,last=MEMO.i+1>=n;if(!c)return topbar(MEMO.title||'가리며 외우기')+skipBtn();
+  const it=memoItem(),c=card(it.id),cf=memoCfg(),n=MEMO.items.length,last=MEMO.i+1>=n,fin=last&&MEMO.done&&!MEMO.edit;if(!c)return topbar(MEMO.title||'가리며 외우기')+skipBtn();
   const pk=new Set(memoPicks(c.id)),tp=cf.mode==='tape'?memoTapes(c):[],ed=cf.mode==='tape'&&MEMO.edit;
   const seg=(k,arr,lab)=>`<div class="seg">${arr.map(v=>`<button class="${cf[k]===v?'on':''}" data-act="memo-cfg" data-k="${k}" data-v="${v}">${lab(v)}</button>`).join('')}</div>`;
   const how=cf.mode==='pick'?'고른 줄':cf.mode==='rand'?`무작위 ${cf.n}줄`:cf.mode==='tape'?'테이프':'전체';
@@ -947,10 +1008,9 @@ function vMemo(){if(!MEMO)return topbar('가리며 외우기')+`<div class="empt
   <div class="memo${cf.mode==='tape'?' tape':''}${ed?' editing':''}${MEMO.phase==='hide'&&!MEMO.done?' hiding':''}" id="memoBox">${memoLinesHTML(c)}</div>
   ${cf.mode==='tape'?`<div class="btns tapebar"><button class="btn sm${ed?'':' sec'}" data-act="memo-tape-edit">${ed?'다 붙였어요':'테이프 붙이기'}</button>${tp.length?`<button class="btn sm ghost" data-act="memo-tape-clear">이 카드 테이프 모두 떼기</button>`:''}</div>`
     :`<div class="btns tapebar"><button class="btn sm ghost" data-act="memo-tape-on">손가락으로 그어 테이프로 가리기</button></div>`}
-  <div class="btns"><button class="btn" id="memoPlay" data-act="memo-play">시작</button></div>
-  <div class="btns sessnav"><button class="btn sec" data-act="memo-prev" ${MEMO.i?'':'disabled'}>‹ 이전</button>${last?'<button class="btn" data-act="memo-finish">완료</button>':'<button class="btn sec" data-act="memo-next">다음 ›</button>'}</div>
+  <div class="mctl"><button class="btn sec" data-act="memo-prev" ${MEMO.i?'':'disabled'}>‹ 이전</button><button class="btn${fin||MEMO.edit?' sec':''}" id="memoPlay" data-act="memo-play">시작</button>${last?`<button class="btn${fin?'':' sec'}" data-act="memo-finish">완료</button>`:'<button class="btn sec" data-act="memo-next">다음 ›</button>'}</div>
   <p class="note">${cf.mode==='tape'?(ed?'가릴 곳을 0.3초 꾹 누른 뒤 그대로 그으세요(여러 줄도 이어서). 그냥 밀면 화면이 움직여요. 짧게 누르면 그 낱말, 붙은 테이프를 누르면 떼요.':tp.length?`테이프 ${tp.length}곳만 가려요. 테이프 붙이기를 눌러 더하거나 뗄 수 있어요.`:'아직 테이프가 없어 용어만 남기고 전체를 가려요. 테이프 붙이기를 눌러 가릴 곳을 그으세요.'):cf.mode==='pick'?(pk.size?'노란 테두리 줄만 가려요. 줄을 탭해 더하거나 빼세요.':'가릴 줄을 탭해서 고르세요. 고르기 전에는 전체를 가려요.'):cf.mode==='rand'?`가릴 때마다 정의·키워드 중 ${cf.n}줄을 무작위로 골라 가려요. 줄을 탭하면 고른 줄 가리기로 바뀌어요.`:'용어만 남기고 전체를 가려요. 가리고 싶은 줄을 탭하면 그 줄만 가리기로 바뀌어요.'}</p>
-  <details class="d" id="memoCfg"${MEMO.cfgOpen?' open':''}><summary>설정: 보기 ${cf.show}초, 가림 ${cf.hide}초, ${how}, ${cf.reps?cf.reps+'회':'무한 반복'}${cf.reps?(cf.auto?', 다음 카드로':', 멈춤'):''}</summary><div class="in-d">
+  <details class="d" id="memoCfg"${MEMO.cfgOpen?' open':''}><summary>설정 · 보기 ${cf.show}초 · 가림 ${cf.hide}초 · ${how} · ${cf.reps?cf.reps+'회':'무한 반복'}</summary><div class="in-d">
     <label class="f">보이는 시간</label>${seg('show',MEMO_SHOW,v=>v+'초')}
     <label class="f">가리는 시간</label>${seg('hide',MEMO_HIDE,v=>v+'초')}
     <label class="f">가릴 것</label>${seg('mode',['all','pick','rand','tape'],v=>({all:'전체',pick:'고른 줄',rand:'무작위',tape:'테이프'})[v])}
@@ -1368,12 +1428,22 @@ document.addEventListener('touchstart',e=>{glCancel();glFired=0;const tg=e.targe
 document.addEventListener('touchmove',e=>{if(!glT||!e.touches||!e.touches[0])return;if(Math.abs(e.touches[0].clientX-glXY[0])+Math.abs(e.touches[0].clientY-glXY[1])>10)glCancel();},{passive:true});
 document.addEventListener('touchend',e=>{glCancel();if(glFired&&e.cancelable)e.preventDefault();},{passive:false});
 document.addEventListener('touchcancel',glCancel);
-/* 옆으로 밀기: 카드·가리며 외우기는 다음(왼쪽)·이전(오른쪽), 학습 달력은 다음 달·이전 달 */
+/* 옆으로 밀기: 카드·가리며 외우기는 다음(왼쪽)·이전(오른쪽), 학습 달력은 다음 달·이전 달. 화면 양쪽 가장자리 24px 안에서 시작한 것은 뺀다(가장자리 밀기와 겹치지 않게) */
 let swXY=null;
-document.addEventListener('touchstart',e=>{const t=e.touches&&e.touches[0];swXY=t&&e.target.closest&&e.target.closest('.fc,.memo,.calsw')&&!e.target.closest('.editing')?[t.clientX,t.clientY]:null;},{passive:true});
+document.addEventListener('touchstart',e=>{const t=e.touches&&e.touches[0];swXY=t&&t.clientX>24&&t.clientX<window.innerWidth-24&&e.target.closest&&e.target.closest('.fc,.memo,.calsw')&&!e.target.closest('.editing')?[t.clientX,t.clientY]:null;},{passive:true});
 document.addEventListener('touchend',e=>{const t=e.changedTouches&&e.changedTouches[0];if(!swXY||!t||glFired){swXY=null;return;}const dx=t.clientX-swXY[0],dy=t.clientY-swXY[1];swXY=null;
   if(Math.abs(dx)<=60||Math.abs(dy)>=50)return;
   if(R.page==='sess'&&SES){if(dx<0)sessAdvance();else sessPrev();}else if(R.page==='memo'&&MEMO)memoGo(MEMO.i+(dx<0?1:-1));else if(R.page==='cal')calShift(dx<0?1:-1,true);},{passive:true});
+/* 왼쪽 가장자리(20px 안)에서 오른쪽으로 밀기 = 뒤로(앱의 기기 뒤로 가기 몸짓은 껐다): 창이 열려 있으면 닫고, 아니면 위로(goUp). 탭 첫 화면에서는 그대로.
+   테이프를 긋는 중, 입력 칸을 쓰는 중, 두 손가락, 옆으로 밀리는 칸(세그먼트 등) 위에서는 하지 않는다. 0.7초 안에 70px 넘게, 위아래로는 60px 안에서 */
+let edXY=null;
+const hScroll=el=>{for(;el&&el.nodeType===1&&el!==document.body;el=el.parentElement)if(el.scrollWidth>el.clientWidth+1&&/auto|scroll/.test(getComputedStyle(el).overflowX))return true;return false;};
+document.addEventListener('touchstart',e=>{const t=e.touches&&e.touches[0],tg=e.target;
+  edXY=t&&e.touches.length===1&&t.clientX<=20&&!tpDrag&&!(tg&&tg.closest&&tg.closest('#memoBox.editing'))&&!kbEl(document.activeElement)&&!hScroll(tg)?[t.clientX,t.clientY,Date.now()]:null;},{passive:true});
+document.addEventListener('touchend',e=>{const t=e.changedTouches&&e.changedTouches[0],s=edXY;edXY=null;if(!s||!t||glFired||tpDrag)return;
+  const dx=t.clientX-s[0],dy=t.clientY-s[1];if(dx<70||Math.abs(dy)>=60||Date.now()-s[2]>700)return;
+  if($('#modal-wrap').innerHTML)return closeModal();if(R.page)goUp();},{passive:true});
+document.addEventListener('touchcancel',()=>{edXY=null;});
 document.addEventListener('contextmenu',e=>{if(glAt(e.target,e.clientX,e.clientY))e.preventDefault();});
 document.addEventListener('click',e=>{if(glFired&&Date.now()-glFired<1500){glFired=0;e.preventDefault();e.stopPropagation();}},true);
 document.addEventListener('click',e=>{
@@ -1382,14 +1452,14 @@ document.addEventListener('click',e=>{
   if(!b)return;const a=b.dataset.act,D=b.dataset;
   switch(a){
   case'go':closeModal();return nav(D.h);
-  case'back':return back();
+  case'back':return goUp();
   case'modal-close':return closeModal();
   case'sync':return sync(true);
   case'chk':{const t=todayStr();S.checks[t]=S.checks[t]||{};S.checks[t][D.i]=b.checked;touchDay();save();return render();}
   /* 세트 */
   case'set-tab':SV[D.d]=D.t;return render();
   case'set-open':{const i=Number(D.i);const key=D.d+':o';SV[key]=SV[key]===i?null:i;if(SV[key]===i){const p=sp(D.d);p.read[i]=1;introduce(setCardId(D.d,i));touchDay();calSetRead(D.d);save();}return render();}
-  case'set-flash':{const rk='flash:'+D.d;if(SES&&SES.rkey===rk&&SES.i<SES.items.length)return nav('sess');
+  case'set-flash':{const rk='flash:'+D.d;if(SES&&SES.rkey===rk&&SES.i<SES.items.length){if(R.page!=='sess')SES.from=curH();flowKeep();return nav('sess');}   /* 이어서: 연 곳을 새로(T4) */
     const s=SETS.sets[D.d];const items=(s.cards||[]).map((_,i)=>({type:'card',id:setCardId(D.d,i),si:i})).filter(x=>x.id);const r=resumeGet(rk),i0=r&&r.i<items.length?r.i:0;
     /* 이어서 할 때 그 앞 카드 가운데 이미 본 것(세트의 읽음: 뒷면을 봤거나 펼쳐 읽음)은 끝낸 것으로 센다. 넘기기만 한 카드는 "이어서"로 남는다 */
     const rs=spGet(D.d).read||{},done={};items.slice(0,i0).forEach((x,j)=>{if(rs[x.si])done[j]=1;});
@@ -1432,8 +1502,9 @@ document.addEventListener('click',e=>{
   case'rev-open':return openModal(revSheet(D.d));
   case'memo-study':return startMemo({key:'memo:study',label:'암기 탭',title:'가리며 외우기',items:memoStudyIds().map(id=>({id}))});
   case'memo-finish':return memoFinish();
-  case'memo-close':{const f=MEMO&&MEMO.from;MEMO=null;return nav(f?f.replace(/^#/,''):'study');}
-  case'memo-again':{if(!MEMO)return;const o={key:MEMO.key,label:MEMO.label,title:MEMO.title,items:MEMO.items,setD:MEMO.setD,revSets:MEMO.revSets,from:MEMO.from};MEMO=null;return startMemo(o,true);}
+  /* 끝 화면의 돌아가기: 끝낸 외우기는 지우고 연 곳으로(외우기 안에서 연 것이면 바깥 외우기로). 위쪽 닫기·가장자리 밀기는 지우지 않는다 */
+  case'memo-close':{if(MEMO&&MEMO.outer){const o=MEMO.outer;memoStop();MEMO=o;return render();}const up=upOf(R);MEMO=null;return goUp(up);}
+  case'memo-again':{if(!MEMO)return;const o={key:MEMO.key,label:MEMO.label,title:MEMO.title,items:MEMO.items,setD:MEMO.setD,revSets:MEMO.revSets,from:MEMO.from,outer:MEMO.outer};MEMO=null;return startMemo(o,true);}
   case'memo-play':if(MEMO&&MEMO.edit){MEMO.edit=false;render();}return MEMO&&MEMO.run?memoPause():memoPlay();
   case'memo-prev':return MEMO&&memoGo(MEMO.i-1);
   case'memo-next':return MEMO&&memoGo(MEMO.i+1);
@@ -1488,8 +1559,8 @@ document.addEventListener('click',e=>{
     sessDid();return sessAdvance();}
   case'sess-skip':return sessAdvance();
   case'sess-rest':return sessRest();
-  /* 테스트 기록은 끝 화면에서 이미 남겼다(sessDone). 여기서는 돌아가기만 */
-  case'sess-close':{const from=SES&&SES.from;SES=null;return nav(from?from.replace(/^#/,''):'today');}
+  /* 테스트 기록은 끝 화면에서 이미 남겼다(sessDone). 끝난 세션을 지우고 연 곳으로 */
+  case'sess-close':{const up=upOf(R);SES=null;return goUp(up);}
   case'wrong-del':delete S.wrong[D.k];save();return render();
   /* 테스트·모의 */
   case'gen-mock':return genMock();
@@ -1534,9 +1605,12 @@ document.addEventListener('change',e=>{if(e.target.id==='rangeSel'){S.range=e.ta
   else if(e.target.id==='schStart'||e.target.id==='schTarget'){SCH=SCH||{start:S.settings.start,target:S.settings.target||'auto'};
     if(e.target.id==='schStart'){if(!e.target.value)return;SCH.start=e.target.value;if(SCH.target!=='auto'&&!eligibleRounds(SCH.start).some(x=>x.r===Number(SCH.target)))SCH.target='auto';}
     else SCH.target=e.target.value==='auto'?'auto':Number(e.target.value);render();}});
+/* 입력 칸을 쓰는 동안(자판이 올라옴) 아래에 붙은 막대를 숨긴다 */
+document.addEventListener('focusin',e=>{if(kbEl(e.target))document.body.classList.add('kb');});
+document.addEventListener('focusout',e=>{if(kbEl(e.target))document.body.classList.remove('kb');});
 document.addEventListener('keydown',e=>{const t=e.target;if(e.key!=='Enter'||!t.classList||!t.classList.contains('fill-in'))return;e.preventDefault();
   const all=Array.from(document.querySelectorAll('.fill-in'));const k=all.indexOf(t);if(k<all.length-1)all[k+1].focus();else fillCheck(false);});
-$('#nav').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b){closeModal();nav(b.dataset.tab);}});
+$('#nav').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b)goTab(b.dataset.tab);});
 let calHid=0;
 document.addEventListener('visibilitychange',()=>{if(document.hidden){memoPause();calHid=Date.now();}if(!document.hidden){if(Date.now()-calHid>10*60000)calOpen();sync(false);if(!R.page)render();}});
 window.addEventListener('online',()=>sync(true));
@@ -1544,7 +1618,7 @@ window.addEventListener('online',()=>sync(true));
 /* ════════ 23. 시작 ════════ */
 PE_IO.init({toast});recalcPlan();applyLook();setPreset('essay');R=parseHash();
 if(!location.hash)history.replaceState(null,'','#today');
-calOpen();render();sync(true);
+calOpen();route();sync(true);
 window.__pe={S:()=>S,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession,
-  enough,setReviewItems,startDueAll,startWrong,budgetOf,dayKind,TM:()=>TM};
+  enough,setReviewItems,startDueAll,startWrong,budgetOf,dayKind,TM:()=>TM,go:h=>nav(h),goUp,goTab,R:()=>R};
 })();

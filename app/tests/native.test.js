@@ -179,9 +179,12 @@ function open(opt = {}) {
   A.pe.S().sync.last = 0; const nf = dev.fetched.length;
   A.w.PE_IO._wake(); await sleep(100);
   ok(dev.fetched.length > nf, '돌아오면 받아 오기 다시 확인');
-  // 알림을 눌러 연 화면
-  A.w.PE_IO._go('review'); await sleep(30);
-  ok(/오답 노트/.test(A.txt()), '알림 → 복습 화면');
+  // 알림을 눌러 연 화면: 앱의 라우터로(탭 첫 화면으로 바꿔 쓰고 방문 기록은 그대로)
+  const hl = A.w.history.length;
+  A.w.PE_IO._go('review'); await sleep(60);
+  ok(/오답 노트/.test(A.txt()) && A.w.location.hash === '#review' && A.w.history.length === hl && A.d.querySelector('#nav button.on').dataset.tab === 'review', '알림 → 복습 화면(방문 기록 그대로)');
+  A.w.PE_IO._go('set/2026-10-19'); await sleep(60);
+  ok(A.w.location.hash === '#set/2026-10-19' && A.w.history.length === hl && /복습/.test(A.d.querySelector('.topbar [data-act="back"]').textContent), '알림 → 세트 화면(위쪽은 보던 화면 "복습", 방문 기록 그대로)');
 
   // 전체 초기화: 확인 창 두 번
   await A.go('#backup');

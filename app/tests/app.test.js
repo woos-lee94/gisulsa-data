@@ -283,7 +283,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     while (pe.MEMO().i + 1 < pe.MEMO().items.length) { click('[data-act="memo-next"]'); await sleep(5); }
     click('[data-act="memo-finish"]'); await sleep(10);
     ok(Object.keys(S().sp[D0].rev || {}).length > 0, '가리며 외우기를 끝내도 그 날 복습으로 침');
-    click('[data-act="memo-close"]'); await sleep(30);
+    click('[data-act="memo-close"]'); await sleep(60);
     await go('#review');
     ok(!/일 차/.test(txt()) && view().querySelector('[data-act="rev-open"][data-d="' + D0 + '"]') && /지난 세트 다시 외우기/.test(txt()), '복습을 마친 세트는 지난 세트에서 다시 열기');
     S().sp[D0].rev = {}; S().resume = {}; pe.render();
@@ -300,7 +300,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(/틀리거나 애매한 카드 가리며 외우기 \(1장\)/.test(txt()) && new RegExp(`방금 본 카드 가리며 외우기 \\(${ses.items.length}장\\)`).test(txt()), '끝 화면: 틀린 카드만·모두 가리며 외우기');
     click('[data-act="memo-sess"][data-only="miss"]'); await sleep(30);
     ok(pe.MEMO().items.length === 1 && pe.MEMO().items[0].id === ses.items[0].id, '틀리거나 애매한 카드만');
-    click('[data-act="back"]'); await sleep(60); click('[data-act="sess-close"]'); await sleep(20);
+    click('[data-act="back"]'); await sleep(60); click('[data-act="sess-close"]'); await sleep(60);
     // 별표 카드 가리며 외우기
     pe.S().cards[q1.id] = Object.assign(pe.S().cards[q1.id] || {}, { star: true }); await go('#review');
     const hasStar = !!view().querySelector('[data-act="memo-stars"]'); if (hasStar) { click('[data-act="memo-stars"]'); await sleep(30); }
@@ -670,7 +670,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     const cx = () => Object.values((S().cal[tdy] || {}).x || {});
     ok(M().fin && /가리며 외우기 완료/.test(txt()) && /외운 카드/.test(txt()) && !S().resume['memo:set:2026-10-19'], '완료: 끝 화면, 이어 하기 자리 지움');
     ok(cx().some(v => v[0] === 'term' && /가리며 외우기 완료: 10월 19일 세트 10장/.test(v[1])) && !cx().some(v => /가리며 외우기: 10월 19일/.test(v[1])), '달력에 완료로 남음(진행 기록은 완료로 바뀜)');
-    click('[data-act="memo-close"]'); await sleep(20);
+    click('[data-act="memo-close"]'); await sleep(60);
     ok(w.location.hash === '#set/2026-10-19' && !M() && /가리며 외우기\(보였다 가렸다 반복\)/.test(txt()), '돌아가기 → 세트 화면(이어 하기 없음)');
     click('[data-act="memo-set"]'); await sleep(20);
     ok(M().i === 0 && !M().fin, '완료 뒤에는 처음부터');
@@ -1032,6 +1032,230 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     await go('#backup'); d.querySelector('#restoreText').value = JSON.stringify(old); click('[data-act="restore"]'); await sleep(40);
     ok(JSON.stringify(S().tk) === '{}' && S().today === null && JSON.stringify(S().wk) === '{}' && JSON.stringify(S().settings.budget) === '{"wd":180,"sat":300,"sun":240}' && Object.keys(S().cards).length === Object.keys(bk.state.cards).length && JSON.stringify(S().sp) === JSON.stringify(bk.state.sp), '예전 백업(새 열쇠 없음)을 복원하면 tk·today·wk·공부 시간은 기본값, 나머지 기록은 그대로');
     const K = JSON.parse(keep); Object.keys(K).forEach(k => { S()[k] = K[k]; }); pe.render(); await go('#today');
+  }
+
+  // 내비게이션: 주소는 늘 바꿔 쓴다(앱 안에서 움직여도 방문 기록이 늘지 않음). 위쪽 뒤로·닫기·왼쪽 가장자리 밀기는 위 화면(들어온 곳 → 부모)으로, 탭은 그 탭 첫 화면으로.
+  // 끝난 세션·외우기의 빈 화면은 어디로도 닿지 않고, 아래 탭 강조는 흐름을 시작한 탭, 세션·외우기는 집중 모드(아래 탭 숨김, 위쪽 "닫기")
+  {
+    const D0 = '2026-10-19', mw = () => d.querySelector('#modal-wrap');
+    const keep = JSON.stringify({ cards: S().cards, wrong: S().wrong, sp: S().sp, log: S().log, tk: S().tk, resume: S().resume, daily: S().daily, cal: S().cal, mockp: S().mockp, qp: S().qp, essayStat: S().essayStat, memoCfg: S().settings.memo || null });
+    S().settings.memo = { show: 10, hide: 5, mode: 'all', n: 2, reps: 3, auto: 1 };
+    const cssTxt = fs.readFileSync(path.join(SITE, 'styles.css'), 'utf8');
+    const H = () => w.location.hash, L = () => w.history.length, tabOn = () => [...d.querySelectorAll('#nav button.on')].map(b => b.dataset.tab).join();
+    const upTxt = () => { const b = d.querySelector('.topbar [data-act="back"]'); return b ? b.textContent.trim() : ''; };
+    const tap = async (sel, root) => { click(sel, root); await sleep(60); };
+    const back = () => tap('.topbar [data-act="back"]'), tab = t => tap(`#nav button[data-tab="${t}"]`);
+    const edge = async (x0, x1, dy, el) => { el = el || view(); const a = new w.Event('touchstart', { bubbles: true }); a.touches = [{ clientX: x0, clientY: 300 }]; el.dispatchEvent(a); const b = new w.Event('touchend', { bubbles: true }); b.changedTouches = [{ clientX: x1, clientY: 300 + (dy || 0) }]; el.dispatchEvent(b); await sleep(60); };
+    const emptyFlow = () => /진행 중인 (학습|외우기)가 없어요/.test(txt()), focus = () => d.body.classList.contains('focus');
+    const primaries = () => view().querySelectorAll('.btn:not(.sec):not(.ghost)').length;
+    const toSet = async () => { await tab('today'); await tap(`#view [data-act="go"][data-h="set/${D0}"]`); };
+    const cardsTab = async () => { click('[data-act="set-tab"][data-t="cards"]'); await sleep(20); if (view().querySelector('[data-act="resume-clear"]')) await tap('[data-act="resume-clear"]'); };
+
+    // 탭은 바꿔 쓰기만 해서 쌓이지 않고(T7), 탭 첫 화면에서 가장자리를 밀어도 아무 데도 가지 않는다(I)
+    await go('#today'); let hl = L();
+    await tab('review'); await tab('test'); await tab('more');
+    ok(H() === '#more' && L() === hl && tabOn() === 'more', 'T7: 탭을 세 번 바꿔도 방문 기록이 그대로(탭이 쌓이지 않음)');
+    await edge(8, 150);
+    ok(H() === '#more' && L() === hl && !emptyFlow(), 'I: 탭 첫 화면에서 왼쪽 가장자리 밀기는 그대로');
+    await tap('#nav button[data-tab="more"]');
+    ok(H() === '#more' && L() === hl, '지금 탭을 다시 눌러도 그대로(맨 위로)');
+
+    // D: 오늘 → 세트 → ④ 논술 → 답안 작성 요령 → 모범 답안 → 뒤로 → 뒤로(아래 탭은 내내 오늘)
+    await toSet(); hl = L();
+    ok(H() === '#set/' + D0 && tabOn() === 'today' && upTxt() === '오늘', 'D: 오늘 → 세트(위쪽 "오늘", 아래 탭 오늘)');
+    click('[data-act="set-tab"][data-t="essay"]'); await sleep(20);
+    await tap('[data-act="go"][data-h="guide"]');
+    ok(H() === '#guide' && tabOn() === 'today' && upTxt() === '세트', 'D: 세트 ④ → 답안 작성 요령(위쪽 "세트", 아래 탭은 오늘 그대로)');
+    click('[data-act="guide-tab"][data-t="ex"]'); await sleep(20);
+    await back();
+    ok(H() === '#set/' + D0 && view().querySelector('[data-act="set-tab"][data-t="essay"].on') && tabOn() === 'today', 'D: 뒤로 → 세트 ④ 논술 탭 그대로');
+    await back();
+    ok(H() === '#today' && L() === hl && tabOn() === 'today', 'D: 뒤로 → 오늘(방문 기록 그대로)');
+    await toSet(); click('[data-act="set-tab"][data-t="essay"]'); await sleep(20); await tap('[data-act="go"][data-h="guide"]');
+    pe.go('set/' + D0); await sleep(60);
+    ok(H() === '#set/' + D0 && upTxt() === '오늘', '앞 화면으로 되돌아가는 링크(요령 → 세트)는 세트의 들어온 곳(오늘)을 덮지 않음');
+    await back(); ok(H() === '#today' && L() === hl, '그래서 뒤로가 두 화면 사이를 맴돌지 않고 오늘로');
+    await edge(8, 150);
+    ok(H() === '#today' && L() === hl && !view().querySelector('.topbar'), '오늘(탭 첫 화면)에서는 더 올라가지 않음(위쪽 뒤로 없음, 가장자리 밀기도 그대로)');
+
+    // T11·O: 오늘 → 세트 → 단답 답안지 → 10분 타이머(깊이 3)도 오늘 탭. 알림(PE_IO._go)은 오늘 첫 화면으로, 열린 창은 닫힘
+    const termOpen = async () => { await cardsTab(); if (!view().querySelector('.acc.open')) { click('[data-act="set-open"][data-i="0"]'); await sleep(20); } };
+    await toSet(); hl = L(); await termOpen();
+    await tap('.acc.open [data-act="go"][data-h^="dandap/"]');
+    ok(/^#dandap\//.test(H()) && upTxt() === '세트' && tabOn() === 'today', 'T11: 세트 → 단답 답안지(위쪽 "세트", 아래 탭 오늘)');
+    await tap('[data-act="timer-go"][data-p="one1"]');
+    ok(H() === '#timer' && upTxt() === '뒤로' && tabOn() === 'today', 'T11: → 10분 타이머도 아래 탭 오늘');
+    mw().innerHTML = '<div class="modal" data-act="modal-close"><div class="msheet" data-stop="1">창</div></div>';
+    w.PE_IO._go('today'); await sleep(60);
+    ok(H() === '#today' && !mw().innerHTML && L() === hl && tabOn() === 'today', 'O: 깊이 3에서 알림(PE_IO._go) → 오늘 첫 화면(창 닫힘, 방문 기록 그대로)');
+    // K: 깊은 흐름에서 탭 더보기 → 더보기 첫 화면(들어온 곳 기록은 비움)
+    await toSet(); await termOpen(); await tap('.acc.open [data-act="go"][data-h^="dandap/"]'); await tap('[data-act="timer-go"][data-p="one1"]');
+    await tab('more');
+    ok(H() === '#more' && L() === hl && tabOn() === 'more', 'K: 깊이 3에서 탭 더보기 → 더보기 첫 화면(방문 기록 그대로)');
+    await go('#timer');
+    ok(upTxt() === '더보기' && tabOn() === 'more', 'K: 탭을 바꾸면 들어온 곳 기록을 비움(타이머의 위 화면은 더보기)');
+    await back(); ok(H() === '#more', 'K: 뒤로 → 더보기');
+
+    // E·T6·T10: 테스트 → 기출 → 단원별(회차별과 오가도 기록 그대로) → 한 단원 → 이 단원 카드 외우기 → 끝 → 돌아가기 → 뒤로 → 뒤로
+    await tab('test'); hl = L(); const rg0 = S().range;
+    await tap('[data-act="go"][data-h="kichul"]');
+    ok(H() === '#kichul' && upTxt() === '테스트' && tabOn() === 'test', 'E: 테스트 → 기출 문제은행(위쪽 "테스트")');
+    await tap('.seg [data-h="kichul/u"]'); await tap('.seg [data-h="kichul"]'); await tap('.seg [data-h="kichul/u"]');
+    ok(H() === '#kichul/u' && L() === hl && upTxt() === '테스트', 'T10: 회차별 ↔ 단원별을 바꿔도 방문 기록이 그대로(뒤로는 테스트)');
+    const uh = view().querySelector('[data-h^="kichul/u/"]').dataset.h, cu = pe.deck().find(c => Number(c.u) === Number(uh.split('/')[2]));
+    S().cards[cu.id] = Object.assign({ box: 1, ok: 0, ng: 0, star: false }, S().cards[cu.id] || {}, { seen: 1, due: '2000-01-01', last: '2000-01-01' });
+    await tap(`[data-h="${uh}"]`);
+    ok(H() === '#' + uh && upTxt() === '단원별' && tabOn() === 'test', 'E: 단원 화면(위쪽 "단원별")');
+    await tap('[data-act="study-unit"]');
+    ok(H() === '#sess' && pe.SES().from === uh && focus() && upTxt() === '닫기' && tabOn() === 'test', 'T6: 단원 화면에서 연 세션은 그 주소 그대로(#kichul/u/N), 집중 모드');
+    pe.SES().i = pe.SES().items.length; pe.render(); await sleep(10);
+    await tap('[data-act="sess-close"]');
+    ok(H() === '#' + uh && !pe.SES() && S().range === rg0 && !focus(), 'E: 끝 → 돌아가기 → 그 단원 화면(범위 그대로)');
+    await back(); ok(H() === '#kichul/u', 'E: 뒤로 → 단원별');
+    await back(); ok(H() === '#test' && L() === hl && tabOn() === 'test', 'E: 뒤로 → 테스트(방문 기록 그대로)');
+    // T6: 기출 회차 문항 창 → 카드 가리며 외우기 → 완료 → 돌아가기 → 그 회차 화면
+    await go('#kichul/r/140'); hl = L();
+    ok(upTxt() === '기출' && tabOn() === 'test', '기출 회차 화면(위쪽 "기출")');
+    click('.paper-q[data-id="140-1-05"]'); await sleep(20);
+    await tap('[data-act="memo-one"]', mw());
+    ok(H() === '#memo' && pe.MEMO().from === 'kichul/r/140' && !mw().innerHTML && tabOn() === 'test', 'T6: 기출 회차 문항 창 → 가리며 외우기(연 곳 #kichul/r/140)');
+    click('[data-act="memo-finish"]'); await sleep(20);
+    await tap('[data-act="memo-close"]');
+    ok(H() === '#kichul/r/140' && !pe.MEMO() && L() === hl, 'T6: 완료 → 돌아가기 → 그 회차 화면');
+
+    // F: 복습 창이 열린 채 알림(_go('review')) → 복습 첫 화면, 창 닫힘. 가장자리 밀기는 열린 창부터 닫는다
+    await tab('review'); click(`[data-act="rev-open"][data-d="${D0}"]`); await sleep(20); hl = L();
+    const hadSheet = !!mw().innerHTML; w.PE_IO._go('review'); await sleep(60);
+    ok(hadSheet && H() === '#review' && !mw().innerHTML && /오답 노트/.test(txt()) && tabOn() === 'review' && L() === hl, 'F: 복습 창이 열린 채 알림(_go review) → 창이 닫히고 복습');
+    click(`[data-act="rev-open"][data-d="${D0}"]`); await sleep(20); const hadSheet2 = !!mw().innerHTML;
+    await edge(6, 140);
+    ok(hadSheet2 && !mw().innerHTML && H() === '#review', '가장자리 밀기: 열린 창을 먼저 닫음');
+
+    // T4: 세트에서 연 카드 넘겨 보기를 복습 창에서 이어 열면 같은 세션, 돌아가는 곳은 복습
+    await toSet(); await cardsTab();
+    await tap('[data-act="set-flash"]'); const sF = pe.SES();
+    click('[data-act="sess-skip"]'); await sleep(10); click('[data-act="sess-skip"]'); await sleep(10);
+    await back(); await tab('review'); click(`[data-act="rev-open"][data-d="${D0}"]`); await sleep(20);
+    await tap('[data-act="set-flash"]', mw());
+    ok(H() === '#sess' && pe.SES() === sF && sF.i === 2 && sF.from === 'review' && tabOn() === 'review', 'T4: 복습 창에서 이어 열면 같은 세션, 연 곳은 복습');
+    await back(); ok(H() === '#review' && pe.SES() === sF, 'T4: 닫기 → 복습(세션은 그대로)');
+
+    // H·집중 모드: 오늘 → 세트 → 카드 넘겨 보기(아래 탭 숨김, "닫기") → 가운데서 왼쪽 가장자리 밀기 → 세트(세션 그대로) → 뒤로 → 오늘
+    await toSet(); hl = L(); await cardsTab();
+    await tap('[data-act="set-flash"]');
+    ok(H() === '#sess' && focus() && upTxt() === '닫기' && tabOn() === 'today' && cssTxt.includes('body.focus nav.tabs{display:none}'), '집중 모드: 세션은 아래 탭을 숨기고 위쪽은 "닫기"(강조는 연 탭)');
+    for (let k = 0; k < 5; k++) { click('[data-act="sess-skip"]'); await sleep(5); }
+    const sH = pe.SES(), iW = w.innerWidth;
+    await edge(iW - 8, iW - 160, 0, view().querySelector('.fc'));
+    ok(H() === '#sess' && sH.i === 5, '오른쪽 가장자리 24px 안에서 시작한 밀기는 카드를 넘기지 않음');
+    await edge(6, 40); await edge(6, 160, 90); await edge(60, 220);
+    ok(H() === '#sess' && sH.i === 5, '짧게(70px 안)·비스듬히(위아래 60px 넘게)·가장자리 밖에서 민 것은 뒤로 아님');
+    await edge(6, 130, 0, view().querySelector('.fc'));
+    ok(H() === '#set/' + D0 && pe.SES() === sH && sH.i === 5 && !focus() && /카드 넘겨 보기 이어서 \(6\/10\)/.test(txt()), 'H: 카드 위 왼쪽 가장자리에서 밀기 → 세트 화면(카드는 안 넘어가고 세션 그대로, 이어서 6/10)');
+    await back();
+    ok(H() === '#today' && L() === hl && tabOn() === 'today', 'H: 뒤로 → 오늘(방문 기록 그대로)');
+    await toSet(); await tap('[data-act="set-flash"]');
+    ok(pe.SES() === sH && sH.i === 5 && H() === '#sess', 'H: 다시 누르면 같은 세션 6번째 카드부터');
+    // T1·P: 끝 → 돌아가기 → 세트 → 뒤로 → 오늘. 세션·외우기가 없을 때 #sess·#memo는 오늘로(빈 화면 없음)
+    sH.i = sH.items.length; pe.render(); await sleep(10);
+    ok(/완료/.test(txt()) && upTxt() === '닫기', 'T1: 끝 화면');
+    await tap('[data-act="sess-close"]');
+    ok(H() === '#set/' + D0 && !pe.SES() && L() === hl, 'T1: 돌아가기 → 세트 화면(끝난 세션은 지움)');
+    await back(); ok(H() === '#today' && L() === hl, 'T1: 뒤로 → 오늘');
+    w.location.hash = '#sess'; await sleep(80);
+    ok(H() === '#today' && !emptyFlow() && tabOn() === 'today', 'P: 세션이 없을 때 #sess → 오늘(빈 화면 없음)');
+    w.location.hash = '#memo'; await sleep(80);
+    ok(!pe.MEMO() && H() === '#today' && !emptyFlow(), 'P: 외우기가 없을 때 #memo → 오늘');
+    w.location.hash = '#nope/1'; await sleep(80);
+    ok(H() === '#today' && tabOn() === 'today', '모르는 주소 → 오늘(주소와 화면이 늘 같음)');
+    w.location.hash = '#set/' + D0 + '/quiz'; await sleep(80);
+    ok(H() === '#set/' + D0 && view().querySelector('[data-act="set-tab"][data-t="quiz"].on'), '#set/날짜/탭 주소 → #set/날짜(그 탭을 열어 둠)');
+
+    // T2: 세션 → 이 카드부터 가리며 외우기 → 완료 → 돌아가기(세션으로) → 세션 끝 → 돌아가기(세트) → 뒤로(오늘)
+    await toSet(); hl = L(); await cardsTab();
+    await tap('[data-act="set-flash"]'); const s2 = pe.SES(); click('[data-act="sess-skip"]'); await sleep(10);
+    await tap('[data-act="memo-sess"]');
+    ok(H() === '#memo' && pe.MEMO().from === 'sess' && focus() && tabOn() === 'today', 'T2: 세션 → 이 카드부터 가리며 외우기(연 곳은 세션)');
+    while (pe.MEMO().i + 1 < pe.MEMO().items.length) { click('[data-act="memo-next"]'); await sleep(5); }
+    click('[data-act="memo-finish"]'); await sleep(20); await tap('[data-act="memo-close"]');
+    ok(H() === '#sess' && pe.SES() === s2 && !pe.MEMO() && !emptyFlow(), 'T2: 완료 → 돌아가기 → 보던 세션');
+    s2.i = s2.items.length; pe.render(); await sleep(10); await tap('[data-act="sess-close"]');
+    ok(H() === '#set/' + D0 && !pe.SES(), 'T2: 세션 끝 → 돌아가기 → 세트');
+    await back();
+    ok(H() === '#today' && L() === hl && !emptyFlow(), 'T2: 뒤로 한 번에 오늘(빈 화면 없음, 방문 기록 그대로)');
+
+    // M: 오늘 → 세트 → ① 가리며 외우기(아래에 붙은 조작 막대) → 완료 → 돌아가기 → 세트 → 뒤로 → 오늘
+    await toSet(); hl = L(); await cardsTab();
+    await tap('[data-act="memo-set"]');
+    ok(H() === '#memo' && pe.MEMO().from === 'set/' + D0 && focus() && upTxt() === '닫기' && view().querySelector('.mctl #memoPlay') && view().querySelector('.mctl [data-act="memo-prev"]') && view().querySelector('.mctl [data-act="memo-next"]') && cssTxt.includes('.mctl{position:sticky'), 'M: 세트 → 가리며 외우기(집중 모드, 시작·이전·다음은 아래에 붙은 막대)');
+    ok(primaries() === 1 && view().querySelector('#memoPlay:not(.sec)') && /설정 · 보기 10초 · 가림 5초 · 전체 · 3회/.test(txt()), '가리며 외우기: 파란 버튼은 시작 하나, 설정 요약은 짧게');
+    while (pe.MEMO().i + 1 < pe.MEMO().items.length) { click('[data-act="memo-next"]'); await sleep(5); }
+    ok(view().querySelector('.mctl [data-act="memo-finish"].sec') && primaries() === 1, '마지막 카드: 완료는 회색(파란 버튼은 시작 하나)');
+    click('[data-act="memo-finish"]'); await sleep(20);
+    await tap('[data-act="memo-close"]');
+    ok(H() === '#set/' + D0 && !pe.MEMO() && !focus(), 'M: 완료 → 돌아가기 → 세트(끝난 외우기는 지움)');
+    await back();
+    ok(H() === '#today' && L() === hl, 'M: 뒤로 → 오늘(방문 기록 그대로)');
+
+    // J: 끝 화면 → 틀리거나 애매한 카드 가리며 외우기 → 닫기 → 같은 끝 화면(세션 그대로, 아래 탭은 연 탭)
+    await tab('study'); hl = L(); await tap('[data-act="start-free"]'); const sJ = pe.SES();
+    click('[data-act="sess-flip"]'); await sleep(10); click('[data-act="sess-grade"][data-g="0"]'); await sleep(10);
+    sJ.i = sJ.items.length; pe.render(); await sleep(10);
+    await tap('[data-act="memo-sess"][data-only="miss"]');
+    ok(H() === '#memo' && pe.MEMO().from === 'sess' && tabOn() === 'study', 'J: 끝 화면 → 틀린 카드 가리며 외우기(아래 탭 암기)');
+    await back();
+    ok(H() === '#sess' && pe.SES() === sJ && /완료/.test(view().querySelector('.sheet h3').textContent) && tabOn() === 'study' && L() === hl, 'J: 닫기 → 같은 끝 화면(세션 그대로)');
+    await tap('[data-act="sess-close"]'); ok(H() === '#study' && !pe.SES(), 'J: 돌아가기 → 암기 탭');
+
+    // C·T5: 복습 → 오답 카드 가리며 외우기 → (낱말 꾹 → 카드 창) 가리며 외우기 → 완료 → 돌아가기 → 바깥 외우기 그 카드 → 닫기 → 복습
+    const wids = pe.deck().slice(0, 3).map(c => c.id); wids.forEach(id => { S().wrong['C:' + id] = { type: 'card', since: '2026-10-01', n: 1, last: '2026-10-01', streak: 0 }; }); delete S().resume['memo:wrong'];
+    await tab('review'); hl = L(); await tap('[data-act="memo-wrong"]');
+    const mOut = pe.MEMO(); click('[data-act="memo-next"]'); await sleep(10); const iOut = mOut.i;
+    const cardBtn = () => { const b = d.createElement('button'); b.dataset.act = 'card-modal'; b.dataset.id = wids[2]; view().appendChild(b); return b; };
+    click('[data-act="card-modal"]', cardBtn().parentNode); await sleep(10);
+    await tap('[data-act="memo-one"]', mw());
+    ok(H() === '#memo' && pe.MEMO() !== mOut && pe.MEMO().outer === mOut && pe.MEMO().items.length === 1 && tabOn() === 'review', 'T5: 외우기 안에서 카드 창 → 가리며 외우기(바깥 외우기를 기억)');
+    click('[data-act="memo-finish"]'); await sleep(20); await tap('[data-act="memo-close"]');
+    ok(H() === '#memo' && pe.MEMO() === mOut && mOut.i === iOut && !emptyFlow(), 'C: 완료 → 돌아가기 → 바깥 외우기 그 카드');
+    click('[data-act="card-modal"]', cardBtn().parentNode); await sleep(10); await tap('[data-act="memo-one"]', mw()); const inner = pe.MEMO().outer === mOut;
+    await edge(6, 140);
+    ok(inner && H() === '#memo' && pe.MEMO() === mOut && mOut.i === iOut, 'T5: 안쪽 외우기에서 가장자리 밀기 → 바깥 외우기 그 카드');
+    await back();
+    ok(H() === '#review' && pe.MEMO() === mOut && L() === hl, 'C: 닫기 → 복습(외우기는 그대로)');
+
+    // 위쪽 이름: 들어온 곳(오늘 → 달력은 "오늘", 더보기 → 달력은 "더보기")
+    await tab('today'); await tap('.calbtn'); ok(H() === '#cal' && upTxt() === '오늘' && tabOn() === 'today', '오늘 → 학습 달력(위쪽 "오늘")');
+    await tab('more'); await tap('#view [data-act="go"][data-h="cal"]'); ok(H() === '#cal' && upTxt() === '더보기' && tabOn() === 'more', '더보기 → 학습 달력(위쪽 "더보기", 아래 탭 더보기)');
+
+    // G: 모의고사 1교시 타이머가 도는 중 → 뒤로 → 세트 ④ "25분 타이머" → 묻고, 취소하면 100분 타이머 그대로
+    {
+      let T = 3e12; const realNow = w.Date.now; w.Date.now = () => T; const rc = w.confirm, asked = []; w.confirm = m => { asked.push(m); return false; }; const TM = pe.TM();
+      await go('#mock/2026-10-24'); await tap('[data-act="timer-go"][data-p="p1"]');
+      ok(H() === '#timer' && TM.preset === 'p1' && upTxt() === '모의고사', 'G: 모의고사 → 1교시 타이머(위쪽 "모의고사")');
+      click('[data-act="timer-toggle"]'); await sleep(10); T += 768000; await sleep(300);
+      await back(); ok(H() === '#mock/2026-10-24' && TM.running && TM.remain === 5232, 'G: 1교시 타이머가 도는 채로 뒤로 → 모의고사(남은 87:12)');
+      await toSet(); click('[data-act="set-tab"][data-t="essay"]'); await sleep(20);
+      await tap('[data-act="timer-go"][data-p="one2"]');
+      ok(asked.length === 1 && asked[0] === '돌고 있는 1교시 단답 타이머(남은 87:12)를 멈추고 논술 1문 25분으로 바꿀까요?' && TM.preset === 'p1' && TM.running && TM.remain === 5232 && H() === '#timer', 'G: 세트 ④ 25분 타이머 → 묻고, 취소하면 100분 타이머 그대로(타이머 화면)');
+      click('[data-act="timer-toggle"]'); click('[data-act="timer-reset"]'); await sleep(10); w.Date.now = realNow; w.confirm = rc;
+    }
+
+    // N: 더보기 → 백업 → 복원 → 오늘 첫 화면 → 탭 더보기. 초기화도 오늘 첫 화면으로(뒤에 백업으로 되돌림). 입력 칸을 쓰는 동안은 body.kb, 가장자리 밀기도 안 함
+    await tab('more'); hl = L(); await tap('[data-act="go"][data-h="backup"]');
+    ok(H() === '#backup' && upTxt() === '더보기' && tabOn() === 'more', 'N: 더보기 → 백업(위쪽 "더보기")');
+    const bk = JSON.stringify({ state: S(), sets: pe.SETS() }), ta = d.querySelector('#restoreText');
+    ta.value = bk; ta.focus(); await edge(6, 140);
+    ok(d.body.classList.contains('kb') && H() === '#backup', '입력 칸을 쓰는 동안 body.kb(아래 붙은 막대 숨김), 가장자리 밀기는 하지 않음');
+    click('[data-act="restore"]'); await sleep(80);
+    ok(H() === '#today' && L() === hl && tabOn() === 'today' && !d.body.classList.contains('kb'), 'N: 복원 → 오늘 첫 화면(방문 기록 그대로)');
+    await tab('more'); ok(H() === '#more' && L() === hl && tabOn() === 'more', 'N: 그다음 탭 더보기');
+    await tap('[data-act="go"][data-h="backup"]'); click('[data-act="reset"]'); await sleep(300);
+    ok(H() === '#today' && L() === hl && !Object.keys(S().cards).length, 'N: 초기화 → 오늘 첫 화면(방문 기록 그대로)');
+    await go('#backup'); d.querySelector('#restoreText').value = bk; click('[data-act="restore"]'); await sleep(80);
+    ok(Object.keys(S().cards).length > 0 && H() === '#today', '(되돌림) 백업으로 복원');
+
+    const K = JSON.parse(keep); S().settings.memo = K.memoCfg || undefined; delete K.memoCfg; if (!S().settings.memo) delete S().settings.memo;
+    Object.keys(K).forEach(k => { S()[k] = K[k]; }); pe.render(); await go('#today');
   }
 
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
