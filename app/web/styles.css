@@ -704,3 +704,48 @@ body.kb .nextbar{display:none}
 .hwf .btn.sm{flex:0 1 auto}
 .hwf .how{margin:0 0 0 auto}.hwf .how[open]{flex-basis:100%;margin:0}
 .hwf .how summary{padding:6px 0}
+/* ── 모의고사 단계(교시 → 채점), 지금 교시, 다 쓴 교시 한 줄, 채점 단계. 화면 안 타이머(.tline: 남은 시간·문제·버튼 하나), 시간 끝 알약 ── */
+.stepper{display:flex;margin:14px 0 4px;padding:0;list-style:none}
+.stepper li{flex:1 1 0;min-width:0;position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:.8rem;font-weight:700;color:var(--ink3);text-align:center}
+.stepper li+li::before{content:"";position:absolute;top:12px;left:calc(-50% + 17px);right:calc(50% + 17px);height:2px;border-radius:1px;background:var(--rule)}
+.stepper li.done+li::before{background:var(--ok)}
+.stepper i{position:relative;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;border:2px solid var(--rule);background:var(--sheet);font-style:normal;font-size:.8rem;font-weight:800;color:var(--ink3);font-variant-numeric:tabular-nums}
+.stepper li.cur{color:var(--blue)}.stepper li.cur i{border-color:var(--blue);color:var(--blue)}
+.stepper li.done{color:var(--ink2)}.stepper li.done i{border-color:var(--ok);background:var(--ok);color:#fff}
+:root[data-theme="dark"] .stepper li.done i{color:#08142E}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .stepper li.done i{color:#08142E}}
+.mtip{margin:10px 4px 0}
+.mguide{margin:8px 4px 0;padding-left:18px;color:var(--ink2);font-size:.86rem;line-height:1.5}
+.mcur{margin-top:18px}
+.mcur .tline{margin:0 0 10px}
+.mnot{margin:8px 4px 0;text-align:right}.mnot .lnk{padding:6px 2px;font-size:.88rem;font-weight:600;color:var(--ink2)}
+.mdone{display:flex;align-items:center;gap:10px;margin:12px 0 0;padding:10px 14px;border-radius:var(--r-md);background:var(--sheet)}
+.mdone .mdk{flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--ok);color:#fff;font-size:.8rem;font-weight:800}
+:root[data-theme="dark"] .mdone .mdk{color:#08142E}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .mdone .mdk{color:#08142E}}
+.mdone .mdt{flex:1;min-width:0;font-weight:600;color:var(--ink2)}
+.mdone .lnk{flex:none;padding:6px 2px;font-size:.88rem;font-weight:600}
+.mpart{margin:12px 0 0}.mpart .in-d{padding:0 8px 8px}
+.mfold{margin-top:18px}
+.msteps{margin:0;padding:0;list-style:none;counter-reset:ms}
+.msteps>li{counter-increment:ms;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:8px 0;border-top:1px solid var(--rule2)}
+.msteps>li:first-child{border-top:0;padding-top:2px}
+.msteps>li::before{content:counter(ms);flex:none;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--paper);color:var(--ink2);font-size:.76rem;font-weight:800}
+.msteps>li>span{flex:1 1 150px;min-width:0}
+.msteps>li>.btn.sm{flex:0 1 auto}
+.msteps .mscore{flex-basis:100%;padding:2px 0 0 32px}
+.mgd{display:flex;align-items:center;gap:8px;margin:10px 0 0;font-weight:700;color:var(--ok)}
+.mgd .lnk{margin-left:auto;padding:6px 2px;font-size:.88rem;font-weight:600}
+.mlinks{display:flex;justify-content:center;align-items:center;gap:6px;margin:14px 0 0;color:var(--ink3);font-size:.9rem}
+.mlinks .lnk{padding:8px 4px;font-weight:600}
+.tline{display:flex;flex-wrap:wrap;align-items:center;gap:2px 12px;padding:10px 12px 10px 14px;border-radius:var(--r-md);background:var(--blue-soft)}
+.tline .tlt{font-size:2rem;font-weight:800;line-height:1.1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--ink)}
+.tline .tlp{flex:1 1 110px;min-width:0;font-size:.86rem;font-weight:600;line-height:1.35;color:var(--ink2)}
+.tline .btn.sm{flex:0 0 auto;min-height:40px}
+.tline.urgent .tlt{color:var(--amber)}
+.tline.end{background:var(--amber-soft)}.tline.end .tlt{color:var(--amber)}
+.steps3 .tline,.hwf .tline{flex:1 1 100%;margin:2px 0}
+.steps3 .tline{background:var(--sheet);margin:4px 0 2px;flex-wrap:nowrap}.steps3 .tline .tlt{font-size:1.6rem}.steps3 .tline .tlp{flex:1 1 0;min-width:56px}
+.qcard~.tline,.sec>.tline{margin-top:12px}
+.tpill.end{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber)}
+.tend{margin:4px 0 0;text-align:center;font-size:1.06rem;font-weight:800;color:var(--amber)}
