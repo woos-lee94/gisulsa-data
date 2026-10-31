@@ -1053,10 +1053,10 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(mw().querySelector('.qnum') && mw().querySelector('.qnum').textContent === qn && mw().querySelectorAll('[data-act="star"]').length === nst && !!S().cards[sid].star === !st0 && mw().querySelector('[data-act="star"]').textContent === (st0 ? '☆ 별표' : '★ 별표 해제'), 'E3: 기출 문항 창에서 별표를 눌러도 창은 그대로(버튼만 바뀜)');
     click('[data-act="star"]', mw()); await sleep(10); click('#modal-wrap .modal'); await sleep(10);
 
-    // E2: 앱 모의고사를 새로 만들면 "다 썼어요"를 비우고 시작
+    // E2: 앱 모의고사를 새로 만들면 "다 썼어요"를 비우고 시작(교시 단계는 모두 안 쓴 것, 아래 막대는 "1교시 시작")
     S().mockp.app = { p1: true, p2: true }; await go('#test'); click('[data-act="gen-mock"]'); await sleep(30);
-    const mds = [...view().querySelectorAll('[data-act="mock-done"]')];
-    ok(w.location.hash === '#mock/app' && !S().mockp.app && mds.length >= 4 && mds.every(x => !x.checked), 'E2: 새 앱 모의고사는 다 썼어요가 비어 있음');
+    const stp = [...view().querySelectorAll('.stepper li')];
+    ok(w.location.hash === '#mock/app' && !S().mockp.app && stp.length >= 5 && !view().querySelector('.stepper li.done, .mdone') && view().querySelector('.nextbar [data-act="mock-start"][data-k="p1"]'), 'E2: 새 앱 모의고사는 다 썼어요가 비어 있음(교시 단계 모두 ○, 아래 막대 "1교시 시작")');
 
     // E5: 단원 진도의 "이 단원 카드 외우기"는 범위(S.range)를 바꾸지 않는다
     const rg0 = S().range, cu = pe.deck()[0], u0 = Number(cu.u);
@@ -1370,17 +1370,20 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     await tab('today'); await tap('.calbtn'); ok(H() === '#cal' && upTxt() === '오늘' && tabOn() === 'today', '오늘 → 학습 달력(위쪽 "오늘")');
     await tab('more'); await tap('#view [data-act="go"][data-h="cal"]'); ok(H() === '#cal' && upTxt() === '더보기' && tabOn() === 'more', '더보기 → 학습 달력(위쪽 "더보기", 아래 탭 더보기)');
 
-    // G: 모의고사 1교시 타이머가 도는 중 → 뒤로 → 세트 ④ "25분 타이머" → 묻고, 취소하면 100분 타이머 그대로
+    // G: 모의고사 "1교시 시작"(이 화면에서 타이머, 집중 모드) → 닫기 → 세트 ④ "타이머 25분" → 묻고, 취소하면 100분 타이머 그대로. 위쪽 알약 → 그 모의고사 화면
     {
-      let T = 3e12; const realNow = w.Date.now; w.Date.now = () => T; const rc = w.confirm, asked = []; w.confirm = m => { asked.push(m); return false; }; const TM = pe.TM();
-      await go('#mock/2026-10-24'); await tap('[data-act="timer-go"][data-p="p1"]');
-      ok(H() === '#timer' && TM.preset === 'p1' && upTxt() === '모의고사', 'G: 모의고사 → 1교시 타이머(위쪽 "모의고사")');
-      click('[data-act="timer-toggle"]'); await sleep(10); T += 768000; await sleep(300);
-      await back(); ok(H() === '#mock/2026-10-24' && TM.running && TM.remain === 5232, 'G: 1교시 타이머가 도는 채로 뒤로 → 모의고사(남은 87:12)');
+      let T = 3e12; const realNow = w.Date.now; w.Date.now = () => T; const rc = w.confirm, asked = []; w.confirm = m => { asked.push(m); return false; }; const TM = pe.TM(), pill = () => d.querySelector('#tpill-wrap .tpill');
+      await go('#mock/2026-10-24'); await tap('.nextbar [data-act="mock-start"][data-k="p1"]');
+      ok(H() === '#mock/2026-10-24' && TM.preset === 'p1' && TM.running && d.body.classList.contains('focus') && upTxt() === '닫기' && view().querySelector('.tline[data-timer="p1"]') && !pill(), 'G: 모의고사 "1교시 시작" → 이 화면에서 100분 타이머(집중 모드, 위쪽 "닫기", 화면 안 타이머라 알약 없음)');
+      T += 768000; await sleep(300);
+      await back(); ok(H() !== '#mock/2026-10-24' && TM.running && TM.remain === 5232 && !d.body.classList.contains('focus') && pill() && /87:12/.test(pill().textContent), 'G: 1교시 타이머가 도는 채로 닫기 → 위쪽 알약(남은 87:12)');
       await toSet(); click('[data-act="set-tab"][data-t="essay"]'); await sleep(20);
-      await tap('[data-act="timer-go"][data-p="one2"]');
-      ok(asked.length === 1 && asked[0] === '돌고 있는 1교시 단답 타이머(남은 87:12)를 멈추고 논술 1문 25분으로 바꿀까요?' && TM.preset === 'p1' && TM.running && TM.remain === 5232 && H() === '#timer', 'G: 세트 ④ 25분 타이머 → 묻고, 취소하면 100분 타이머 그대로(타이머 화면)');
-      click('[data-act="timer-toggle"]'); click('[data-act="timer-reset"]'); await sleep(10); w.Date.now = realNow; w.confirm = rc;
+      await tap('[data-act="tl-start"][data-p="one2"]');
+      ok(asked.length === 1 && asked[0] === '돌고 있는 1교시 단답 타이머(남은 87:12)를 멈추고 논술 1문 25분으로 바꿀까요?' && TM.preset === 'p1' && TM.running && TM.remain === 5232 && H() === '#set/' + D0, 'G: 세트 ④ 타이머 25분 → 묻고, 취소하면 100분 타이머 그대로(그 화면 그대로)');
+      await tap('#tpill-wrap .tpill');
+      ok(H() === '#mock/2026-10-24' && view().querySelector('.tline[data-timer="p1"]') && !pill() && d.body.classList.contains('focus'), 'G: 위쪽 알약 → 그 모의고사 화면(화면 안 타이머, 알약 숨김, 집중 모드)');
+      await go('#timer'); click('[data-act="timer-toggle"]'); click('[data-act="timer-reset"]'); click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10); w.Date.now = realNow; w.confirm = rc;
+      ok(TM.preset === 'essay' && !TM.running && !TM.ctx && !pill(), '(정리) 타이머를 처음으로, 논술 교시로');
     }
 
     // N: 더보기 → 백업 → 복원 → 오늘 첫 화면 → 탭 더보기. 초기화도 오늘 첫 화면으로(뒤에 백업으로 되돌림). 입력 칸을 쓰는 동안은 body.kb, 가장자리 밀기도 안 함

@@ -737,8 +737,8 @@ function runWeek(W, sets, st) {
     scene('2026-10-29T07:40:00', ST); await show('#today'); const hl = L();
     click('#view [data-task="hw.dd:2026-10-29"]'); await sleep(60);
     const fc = V$().querySelector('.hw.focus'), stB = fc ? [...fc.querySelectorAll('.steps3 li')].map(li => [...li.querySelectorAll('button')].map(b => b.dataset.act + ':' + (b.dataset.h || b.dataset.p || '')).join()) : [];
-    ok(H() === '#set/2026-10-29' && V$().querySelector('[data-act="set-tab"][data-t="tasks"].on') && fc && fc.querySelector('[data-k^="dd"]') && stB.length === 3 && /^go:dandap\/D20261029-\d+\/2026-10-29$/.test(stB[0]) && stB[1] === 'timer-go:one1' && /^copy-dd/.test(stB[2]) && tabOn() === 'today',
-      'A: 오늘 단답 줄 → 세트 ③, 단답 카드를 펼침(이렇게 해요 ① 답안지 → #dandap/카드/날짜 ② 타이머 10분 ③ 첨삭 요청 복사)');
+    ok(H() === '#set/2026-10-29' && V$().querySelector('[data-act="set-tab"][data-t="tasks"].on') && fc && fc.querySelector('[data-k^="dd"]') && stB.length === 3 && /^go:dandap\/D20261029-\d+\/2026-10-29$/.test(stB[0]) && stB[1] === 'tl-start:one1' && /^copy-dd/.test(stB[2]) && tabOn() === 'today',
+      'A: 오늘 단답 줄 → 세트 ③, 단답 카드를 펼침(이렇게 해요 ① 답안지 → #dandap/카드/날짜 ② 타이머 10분(카드 안 타이머) ③ 첨삭 요청 복사)');
     ok(prim().length === 1 && bar() && T_(bar()) === '다 썼어요 · 단답 1문' && bar().dataset.act === 'hw-bulk', 'A: 이 화면의 파란 버튼은 아래 막대 "다 썼어요 · 단답 1문" 하나');
     await tap('.hw.focus .steps3 [data-h^="dandap/"]');
     ok(/^#dandap\/D20261029-\d+\/2026-10-29$/.test(H()) && prim().length === 1 && T_(prim()[0]) === '다 썼어요(숙제에 표시)' && tabOn() === 'today', 'A: 답안지(#dandap/카드/날짜): 파란 버튼 "다 썼어요(숙제에 표시)"');
@@ -924,6 +924,107 @@ function runWeek(W, sets, st) {
       for (let i = 0; i < 10; i++) pe.S().sp[THU].read[i] = 1; pe.render(); calls.length = 0; await tap('.nextbar .btn');
       ok(calls.some(c => c[0] === 'into' && /qcard/.test(c[1]) && c[2] === 'center'), '"다음: 세트 퀴즈" → 퀴즈 카드는 가운데로');
       w.HTMLElement.prototype.scrollIntoView = si0; w.scrollTo = st0; pe.goTab('today'); await sleep(40); }
+  }
+
+  // 40. 모의고사 단계(토 08:00, 시계 고정): 오늘 "1교시 시작" → 모의 화면 아래 막대가 하나뿐인 파란 버튼(1교시 시작 · 타이머 100분 → 1교시 다 썼어요 → 2교시 시작 · 타이머 50분 → 2교시 다 썼어요 → 채점 받았어요 → 다음 오늘 줄).
+  //     타이머는 이 화면 안(.tline), 도는 동안 집중 모드, 0이 되면 시간 끝 창(다 썼어요 · 5분 더 · 닫기), 다른 화면에서는 알림과 위쪽 알약. 채점·열어보기는 다 쓸 때까지 접힌 채 늘 있음
+  {
+    const T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), H = () => w.location.hash, L = () => w.history.length, tap = async (sel, root) => { click(sel, root); await sleep(60); };
+    const bar = () => V$().querySelector('.nextbar .btn'), mw = () => d.querySelector('#modal-wrap'), pill = () => d.querySelector('#tpill-wrap .tpill'), toastT = () => d.querySelector('#toast').textContent;
+    const TM = pe.TM(), MD = '2026-10-31', MH = '#mock/' + MD, pr = () => pe.S().mockp[MD] || {}, tick = async iso => { at(iso); await sleep(320); };
+    const steps = () => [...V$().querySelectorAll('.stepper li')].map(li => (li.classList.contains('done') ? '✓' : li.classList.contains('cur') ? '●' : '○') + T_(li.querySelector('span'))).join(' ');
+    scene('2026-10-31T08:00:00', ST); pe.goTab('today'); await sleep(40); await show('#today'); const hl = L();
+    await tap('.prow.now .btn');
+    const gf = V$().querySelector('details.mgrade'), rf = V$().querySelector('details.mrev'), p2f = V$().querySelector('details.mpart');
+    ok(H() === MH && steps() === '●1교시 ○2교시 ○채점' && V$().querySelectorAll('.mcur .paper-q').length === 13 && p2f && !p2f.open && p2f.querySelectorAll('.paper-q').length === 2 && /쉬는 시간 · 답안 사진 찍기/.test(V$().textContent),
+      '40. 오늘 "1교시 시작" → 모의 화면: 단계 ①1교시 ②2교시 ③채점, 지금 1교시 13문, 2교시는 접은 칸(2문), 쉬는 시간 줄');
+    ok(gf && !gf.open && gf.querySelector('[data-act="copy-mock"]') && gf.querySelector('[data-act="mock-score"][data-k="p2"]') && rf && !rf.open && rf.querySelector('[data-act="mock-reveal"]'), '40. 채점·다 쓴 뒤 열어보기는 접힌 채(채점 요청 복사·점수 칸·열기 버튼은 그 안에 있음)');
+    ok(prim().length === 1 && T_(bar()) === '1교시 시작 · 타이머 100분' && bar().dataset.act === 'mock-start' && !TM.running, '40. 파란 버튼은 아래 막대 "1교시 시작 · 타이머 100분" 하나');
+    await tap('.nextbar [data-act="mock-start"]');
+    ok(H() === MH && TM.preset === 'p1' && TM.running && TM.ctx && TM.ctx.kind === 'mock' && TM.ctx.D === MD && TM.ctx.pk === 'p1' && d.body.classList.contains('focus') && T_(d.querySelector('.topbar .back')) === '닫기', '40. 1교시 시작 → 이 화면에 머묾, 1교시 100분 타이머, 집중 모드(위쪽 "닫기")');
+    ok(V$().querySelector('.mcur .tline[data-timer="p1"]') && !pill() && T_(bar()) === '1교시 다 썼어요' && bar().dataset.act === 'mock-part' && prim().length === 1, '40. 화면 안 타이머(알약 없음), 아래 막대 "1교시 다 썼어요"');
+    await tick('2026-10-31T08:30:00'); const tl = V$().querySelector('.tline');
+    ok(TM.remain === 4200 && T_(tl.querySelector('.tlt')) === '70:00' && T_(tl.querySelector('.tlp')) === '4번째 문제 · 이 문제 남은 10:00' && T_(tl.querySelector('button')) === '일시정지', '40. 30분 뒤: 화면 안 타이머 70:00 · 4번째 문제(다시 그리지 않고 글자만)');
+    await tick('2026-10-31T09:40:00'); const sh = mw();
+    ok(TM.remain === 0 && !TM.running && TM.ended && TM.ended.ctx.pk === 'p1' && /시간 끝 · 1교시 단답/.test(sh.textContent) && sh.querySelectorAll('.btn:not(.sec):not(.ghost)').length === 1 && T_(sh.querySelector('.btn:not(.sec)')) === '다 썼어요' && sh.querySelector('[data-act="timer-more"]') && sh.querySelector('[data-act="sheet-close"]') && !d.body.classList.contains('focus'),
+      '40. 이 화면에서 0이 되면 시간 끝 창(파란 "다 썼어요" · 5분 더 · 닫기), 집중 모드는 끝');
+    click('#modal-wrap [data-act="timer-more"]'); await sleep(20);
+    ok(!mw().innerHTML && TM.running && TM.remain === 300 && !TM.ended && d.body.classList.contains('focus'), '40. 5분 더 → 5분 타이머가 이어서 돌고 창은 닫힘');
+    await tick('2026-10-31T09:45:00');
+    ok(/시간 끝 · 1교시 단답/.test(mw().textContent), '40. 5분이 끝나면 다시 시간 끝 창');
+    click('#modal-wrap [data-act="mock-part"]'); await sleep(20);
+    ok(pr().p1 === true && !mw().innerHTML && !TM.running && !TM.ctx && !TM.ended && !pill() && steps() === '✓1교시 ●2교시 ○채점' && V$().querySelector('.mdone [data-act="mock-undo"][data-k="p1"]') && T_(bar()) === '2교시 시작 · 타이머 50분' && H() === MH,
+      '40. 창의 "다 썼어요" → S.mockp[D].p1, 1교시 한 줄(되돌리기), 타이머는 멈춤, 아래 막대 "2교시 시작 · 타이머 50분"');
+    ok(JSON.stringify(((pe.S().cal[SAT] || {}).x || {})['mock:' + MD + ':p1']) === '["mock","10월 31일 모의고사 1교시 다 씀"]', '40. 달력: 10월 31일 모의고사 1교시 다 씀');
+    click('.mdone [data-act="mock-undo"]'); await sleep(10);
+    ok(!('p1' in pr()) && steps() === '●1교시 ○2교시 ○채점' && T_(bar()) === '1교시 시작 · 타이머 100분' && !((pe.S().cal[SAT] || {}).x || {})['mock:' + MD + ':p1'], '40. 되돌리기 → p1 지움(달력도), 다시 1교시 시작');
+    click('.mnot [data-act="mock-part"]'); await sleep(10);
+    ok(pr().p1 === true && T_(bar()) === '2교시 시작 · 타이머 50분' && !TM.running, '40. 타이머 없이 다 썼어요 → p1 그대로 적음');
+    await tap('.nextbar [data-act="mock-start"]');
+    await sleep(300);
+    ok(TM.preset === 'custom' && TM.total === 3000 && TM.parts === 2 && TM.running && TM.ctx.pk === 'p2' && V$().querySelector('.mcur .tline[data-timer="custom"]') && T_(bar()) === '2교시 다 썼어요' && /지금: 2교시 논술 2문/.test(V$().textContent), '40. 2교시 시작 → 문제당 25분 × 2문 = 50분 타이머(문제마다 알림), 아래 막대 "2교시 다 썼어요"');
+    await tick('2026-10-31T10:15:00');
+    ok(/2번째 문제 시간/.test(toastT()) && T_(V$().querySelector('.tline .tlp')) === '2번째 문제 · 이 문제 남은 20:00', '40. 25분이 지나면 "2번째 문제 시간"(30분 뒤 2번째 문제 20:00 남음)');
+    await tap('.nextbar [data-act="mock-part"]');
+    const gf2 = V$().querySelector('details.mgrade'), rf2 = V$().querySelector('details.mrev');
+    ok(pr().p2 === true && !TM.running && !TM.ctx && steps() === '✓1교시 ✓2교시 ●채점' && gf2.open && !rf2.open && rf2.querySelector('[data-act="mock-reveal"]') && gf2.querySelector('[data-act="copy-mock"]') && T_(bar()) === '채점 받았어요' && bar().dataset.act === 'mock-graded' && prim().length === 1 && H() === MH, '40. 2교시 다 썼어요 → 채점 단계(채점 칸 펼침, 열어보기는 접힌 채 그 안에 열기 버튼), 아래 막대 "채점 받았어요"');
+    const si = V$().querySelector('[data-act="mock-score"][data-k="p1"]'); si.value = '62'; si.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(10);
+    ok(pr().sc && pr().sc.p1 === 62, '40. 점수 칸 1교시 62 → S.mockp[D].sc.p1');
+    await tap('.nextbar [data-act="mock-graded"]');
+    ok(pr().g === SAT && steps() === '✓1교시 ✓2교시 ✓채점' && V$().querySelector('details.mrev').open && V$().querySelector('details.mrev [data-act="mock-reveal"]') && /채점 받았어요 ✓ · 10\/31/.test(V$().querySelector('.mgd').textContent) && /^✓ 끝 · 다음: 밀린 세트 10\/28\(수\)/.test(T_(bar())) && prim().length === 1 && H() === MH && L() === hl,
+      '40. 채점 받았어요 → S.mockp[D].g, 열어보기 칸 펼침(답은 열기를 눌러야), 아래 막대 "✓ 끝 · 다음: 밀린 세트 …"(모의고사 한 번을 이 화면에서 끝까지, 방문 기록 그대로)');
+    await tap('.nextbar .btn');
+    ok(H() === '#set/2026-10-28' && L() === hl && pe.FLOW() && /^late:/.test(pe.FLOW().id), '40. "다음" → 밀린 세트(오늘 줄 이어 감, 방문 기록 그대로)');
+    // 가리며 외우기 화면에서 0이 되면 창은 띄우지 않고 알림과 "⏱ 시간 끝 · 1교시" 알약. 알약 → 그 모의 화면에서 시간 끝 창. 다음 타이머를 시작하면 지움
+    scene('2026-10-31T11:00:00', ST); pe.goTab('today'); await sleep(40); await show(MH); await tap('.nextbar [data-act="mock-start"]');
+    await tap('.topbar [data-act="back"]');
+    ok(H() === '#practice' && TM.running && pill() && T_(pill()) === '⏱ 100:00' && !d.body.classList.contains('focus'), '40. 닫기 → 연습(모의고사의 위 화면), 타이머는 계속(위쪽 알약 ⏱ 100:00)');
+    await tap('#tpill-wrap .tpill');
+    ok(H() === MH && V$().querySelector('.tline[data-timer="p1"]') && !pill() && d.body.classList.contains('focus'), '40. 알약 → 그 모의 화면(화면 안 타이머·집중 모드)');
+    pe.go('set/2026-10-30'); await sleep(60); click('[data-act="set-tab"][data-t="cards"]'); await sleep(10); await tap('[data-act="memo-set"]');
+    ok(H() === '#memo' && TM.running && pill() && /⏱ 100:00|⏱ 99:5\d/.test(T_(pill())), '40. 1교시 타이머를 켠 채 가리며 외우기 → 위쪽 알약');
+    await tick('2026-10-31T12:40:00');
+    ok(H() === '#memo' && !mw().innerHTML && TM.ended && /1교시 시간이 끝났어요/.test(toastT()) && pill() && T_(pill()) === '⏱ 시간 끝 · 1교시', '40. 외우기 화면에서 0: 창 없음, 알림 "1교시 시간이 끝났어요", 알약 "⏱ 시간 끝 · 1교시"');
+    await tap('#tpill-wrap .tpill');
+    ok(H() === MH && /시간 끝 · 1교시 단답/.test(mw().textContent) && !pill(), '40. 알약 → 그 모의 화면에서 시간 끝 창');
+    click('#modal-wrap [data-act="sheet-close"]'); await sleep(10);
+    ok(!mw().innerHTML && T_(bar()) === '1교시 다 썼어요' && T_(V$().querySelector('.tline .tlp')) === '시간이 끝났어요' && V$().querySelector('.tline [data-act="timer-more"]'), '40. 닫기 → 아래 막대 "1교시 다 썼어요", 화면 안 타이머 "시간이 끝났어요 · 5분 더"');
+    pe.render(); await sleep(10);
+    ok(!mw().innerHTML, '40. 창은 한 번만(다시 그려도 다시 뜨지 않음)');
+    pe.goTab('today'); await sleep(40);
+    ok(pill() && T_(pill()) === '⏱ 시간 끝 · 1교시', '40. 다른 화면에서는 적을 때까지 "⏱ 시간 끝 · 1교시"');
+    // 세트 ④ 논술 25분(화면 안 타이머): 시작하면 끝난 모의 타이머는 지움. 손글씨로 다 썼어요를 치면 그 타이머는 멈춤
+    pe.go('set/2026-10-30'); await sleep(60); click('[data-act="set-tab"][data-t="essay"]'); await sleep(10);
+    await tap('[data-act="tl-start"][data-p="one2"]');
+    ok(TM.preset === 'one2' && TM.running && !TM.ended && TM.ctx.kind === 'essay' && TM.ctx.D === '2026-10-30' && V$().querySelector('.tline[data-timer="one2"]') && !V$().querySelector('[data-act="tl-start"]') && !pill(), '40. ④ 타이머 25분 → 그 화면 안 타이머(알약 없음), 끝난 모의 타이머는 지움');
+    await tick('2026-10-31T12:41:00');
+    ok(T_(V$().querySelector('.tline .tlt')) === '24:00' && T_(V$().querySelector('.tline .tlp')) === '논술 1문 25분', '40. ④ 화면 안 타이머 24:00 · 논술 1문 25분');
+    // T9: 다른 타이머가 도는 동안 모의 "1교시 시작"도 묻고, 취소하면 그대로(그 화면 그대로)
+    const rc = w.confirm, asked = []; w.confirm = m => { asked.push(m); return false; };
+    await show(MH); await tap('.nextbar [data-act="mock-start"]');
+    ok(asked.length === 1 && asked[0] === '돌고 있는 논술 1문 타이머(남은 24:00)를 멈추고 1교시 단답 100분으로 바꿀까요?' && TM.preset === 'one2' && TM.running && H() === MH && T_(bar()) === '1교시 시작 · 타이머 100분', '40. T9: 논술 1문 타이머가 도는 중 "1교시 시작" → 묻고, 취소하면 그대로');
+    w.confirm = rc; pe.go('set/2026-10-30'); await sleep(60); click('[data-act="set-tab"][data-t="essay"]'); await sleep(10);
+    click('[data-act="set-essay-done"]'); await sleep(10);
+    ok(pe.S().sp['2026-10-30'].essay.done && !TM.running && !TM.ctx && !V$().querySelector('.tline') && V$().querySelector('[data-act="tl-start"][data-p="one2"]'), '40. 손글씨로 다 썼어요 → 그 25분 타이머는 멈추고 시작 버튼으로');
+    // 자리 없는 타이머(타이머 화면): 다른 화면에서 끝나면 "⏱ 시간 끝" 알약 → 타이머 화면 "시간이 끝났어요 · 돌아가기", 본 뒤에는 알약 없음
+    await show('#timer'); click('[data-act="timer-preset"][data-p="one1"]'); await sleep(10); click('[data-act="timer-toggle"]'); await sleep(10); pe.goTab('more'); await sleep(40);
+    await tick('2026-10-31T12:52:00');
+    ok(pill() && T_(pill()) === '⏱ 시간 끝' && /시간 종료/.test(toastT()), '40. 타이머 화면 타이머가 다른 화면에서 끝나면 알림과 "⏱ 시간 끝" 알약');
+    await tap('#tpill-wrap .tpill');
+    ok(H() === '#timer' && /시간이 끝났어요/.test(V$().textContent) && V$().querySelector('[data-act="back"]') && !pill(), '40. 알약 → 타이머 화면 "시간이 끝났어요 · 돌아가기"');
+    pe.goTab('today'); await sleep(40);
+    ok(!pill(), '40. 본 뒤에는 알약 없음');
+    await show('#timer'); click('[data-act="timer-reset"]'); click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10); pe.goTab('today'); await sleep(40);
+  }
+  // 41. 숙제 단답 카드의 타이머 10분은 카드 안 타이머, "다 썼어요 · 단답 1문"을 치면 멈춤
+  {
+    const T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), TM = pe.TM();
+    scene('2026-10-29T07:40:00', ST); await show('#today'); click('#view [data-task="hw.dd:2026-10-29"]'); await sleep(60);
+    click('.hw.focus [data-act="tl-start"][data-p="one1"]'); await sleep(20);
+    ok(TM.preset === 'one1' && TM.running && TM.ctx.kind === 'dd' && V$().querySelector('.hw.focus .steps3 .tline[data-timer="one1"]') && !d.querySelector('#tpill-wrap .tpill'), '41. 펼친 단답 카드 ② 타이머 10분 → 카드 안 타이머(알약 없음)');
+    click('.nextbar [data-act="hw-bulk"]'); await sleep(20);
+    ok(!TM.running && !TM.ctx && !V$().querySelector('.tline'), '41. "다 썼어요 · 단답 1문" → 그 10분 타이머는 멈춤');
+    await show('#timer'); click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10); pe.goTab('today'); await sleep(40);
   }
 
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
