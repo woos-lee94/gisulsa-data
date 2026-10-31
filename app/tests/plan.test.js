@@ -594,6 +594,55 @@ function runWeek(W, sets, st) {
     const X = { sets: {}, mocks: {} }; X.sets['2026-10-19'] = clone(FIX.sets['2026-10-19']); scene('2026-11-03T07:00:00', BLANK, X); await show('#today');
     ok(V$().querySelector('.norows') && /오늘 세트를 기다리는 중/.test(V$().querySelector('.norows').textContent) && prim().length === 1 && prim()[0].dataset.act === 'sync', '31. 평일 07:00 세트 전·할 일 없음: "오늘 세트를 기다리는 중" 카드에 지금 받아 오기'); await go('#today'); }
 
+  // 32. 오늘의 "핵심만" 머리 줄은 고정한 단계(S.today.lv)를 따른다: 단계 3으로 고정해 줄인 목표가 걸리면 지금 단계는 2로 내려가도
+  //     오늘은 "핵심만 · 다음 주에 새로 시작해요"와 놓아준 것을 함께, 이번 주 줄은 지금 단계("줄인 목표 · 남은 시간에 맞췄어요")
+  { const st = clone(ST); st.mockp['2026-10-31'] = { p2: true }; scene('2026-11-01T09:00:00', st); await show('#today');
+    const B = pe.weekBoard(SUN), dsx = [...V$().querySelectorAll('.dsx')].map(x => x.textContent).join(' | '), fr = [...V$().querySelectorAll('details.pf > summary')].find(x => /놓아준 것/.test(x.textContent));
+    ok(pe.S().today.lv === 3 && B.lv === 2 && pe.S().wk['2026-10-26'].cut === true && /핵심만 · 다음 주에 새로 시작해요/.test(dsx) && fr && /놓아준 것 · \d+개/.test(fr.textContent) && /줄인 목표 · 남은 시간에 맞췄어요/.test(V$().querySelector('.wksec').textContent),
+      `32. 고정 단계 3·지금 단계 ${B.lv}: 오늘 머리 "핵심만"과 놓아준 것, 이번 주 줄은 지금 단계`); }
+  // 33~35. 접는 칸은 쓰는 동안 열린 채(UI.open), 시간이 되면에서 손으로 친 일은 끝낸 줄로 남아 다시 누르면 되돌림
+  scene('2026-10-29T07:40:00', ST);
+  { await show('#today'); const fold = () => V$().querySelector('details.pf[data-fold="fold"]'), xb = () => V$().querySelector('[data-task="x.book:2026-10-29"]');
+    ok(fold() && !fold().open, '33. 시간이 되면은 처음엔 접힘');
+    click('details.pf[data-fold="fold"] > summary'); await sleep(10);
+    ok(fold().open && pe.UI().open.fold === true, '33. 요약을 누르면 열리고 UI.open에 적음');
+    click('[data-act="tk"][data-id="x.book:2026-10-29"]'); await sleep(20);
+    ok(pe.S().tk['x.book:2026-10-29'] === THU && fold().open && xb() && xb().classList.contains('done') && xb().querySelector('.tkc.on') && /시간이 되면 · \d+개 · 1개 했어요/.test(fold().querySelector('summary').textContent), '33·34. 교재 줄을 치면 칸은 열린 채, 그 줄은 ✓ 끝낸 줄로 남음');
+    click('[data-act="tk"][data-id="x.book:2026-10-29"]'); await sleep(20);
+    ok(!pe.S().tk['x.book:2026-10-29'] && fold().open && xb() && !xb().classList.contains('done'), '34. 끝낸 줄을 다시 누르면 되돌림(칸은 그대로 열림)');
+    click('details.pf[data-fold="fold"] > summary'); await sleep(10); pe.render(); await sleep(10);
+    ok(!fold().open && pe.UI().open.fold === false, '33. 닫으면 다시 그려도 닫힌 채');
+    await show('#week'); const gl = () => V$().querySelector('#wkGoals'); click('#wkGoals > summary'); await sleep(10);
+    click('#wkGoals [data-act="tk"]'); await sleep(20);
+    ok(pe.S().tk['goal:2026-10-26:0'] === THU && gl().open && gl().querySelector('.tkc.on'), '33. 이번 주 목표를 치면 목표 칸은 열린 채');
+    at('2026-10-30T07:40:00'); await show('#today');
+    ok(!Object.keys(pe.UI().open).length, '33. 날이 바뀌면 연 칸 기억(UI.open)을 비움'); }
+  // 35. 필수를 다 해 시간이 되면의 세트 복습이 펼친 줄일 때, 그 세트 복습을 하다 닫으면 그 줄의 버튼이 "이어서 · 2/15"(위의 이어서 줄은 숨김), 이번 주 "다음"도 이어서
+  scene('2026-10-29T07:40:00', ST);
+  { applyRows(pe.planToday(THU).rows, THU); await show('#today'); const p0 = prim();
+    ok(p0.length === 1 && p0[0].dataset.act === 'task' && /시작 · 10\/19 세트부터/.test(p0[0].textContent) && p0[0].closest('.prow.now.nonum'), '35. 필수를 다 하면 시간이 되면의 세트 복습이 펼친 줄(시작 · 10/19 세트부터)');
+    p0[0].dispatchEvent(new w.MouseEvent('click', { bubbles: true })); await sleep(60);
+    const sR = pe.SES(), it = sR.items[0]; if (it.type === 'card') { click('[data-act="sess-flip"]'); await sleep(5); click('[data-act="sess-grade"][data-g="2"]'); } else { click('[data-act="sess-pick"][data-k="0"]'); await sleep(5); click('[data-act="sess-next"]'); }
+    await sleep(10); click('.topbar [data-act="back"]'); await sleep(60); await show('#today');
+    ok(w.location.hash === '#today' && pe.SES() === sR && sR.i === 1 && !V$().querySelector('.resume') && prim().length === 1 && prim()[0].dataset.act === 'resume' && prim()[0].textContent === '이어서 · 2/15', '35. 하다 만 세트 복습은 펼친 줄의 버튼이 "이어서 · 2/15"(이어서 줄 숨김)');
+    await show('#week'); ok(prim().length === 1 && prim()[0].dataset.act === 'resume' && /^다음: 세트 복습/.test(prim()[0].textContent), '35. 이번 주 "다음"도 같은 세션을 이어서');
+    pe.goTab('today'); await sleep(40); }
+  // 36. 지금 할 세트 복습이 없고 일요일까지 돌아올 것만 있으면 "세트 복습 · 일요일까지 n개"("남은 0개"라고 하지 않음)
+  scene('2026-10-29T07:40:00', ST);
+  { const T = pe.taskList(THU).filter(x => x.k === 'rev'); applyRows(T.map(x => ({ id: x.id, task: x })), THU); pe.invalidate();
+    const l = line(pe.weekBoard(THU), 'rev'); await show('#today'); const q = [...V$().querySelectorAll('.wksec .qline')].map(x => x.textContent).find(x => /세트 복습/.test(x)) || '';
+    await show('#week'); const qw = (V$().querySelector('#ql-rev') || {}).textContent || '';
+    ok(l.dueNow === 0 && l.fut > 0 && q.indexOf(`세트 복습 · 일요일까지 ${l.fut}개`) === 0 && qw.indexOf(`세트 복습 · 일요일까지 ${l.fut}개`) === 0 && !/남은 0개/.test(q + qw), `36. 지금 할 세트 복습 0 · 일요일까지 ${l.fut}: "${q}"`); }
+  // 37. 모의 점수 칸은 적어도 화면을 다시 그리지 않는다(다음 칸을 누른 채 이어 적기, 범위 밖 수는 그 칸에서 0~100으로)
+  scene('2026-10-31T13:00:00', ST);
+  { await show('#mock/2026-10-31'); const inp = k => V$().querySelector(`[data-act="mock-score"][data-k="${k}"]`), p2 = inp('p2'), p1 = inp('p1');
+    p1.value = '62'; p1.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(10);
+    ok(inp('p2') === p2 && inp('p1') === p1 && pe.S().mockp['2026-10-31'].sc.p1 === 62, '37. 1교시 점수를 적어도 칸은 그대로(다시 그리지 않음), S.mockp[D].sc.p1 = 62');
+    p2.value = '150'; p2.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(10);
+    ok(pe.S().mockp['2026-10-31'].sc.p2 === 100 && inp('p2') === p2 && p2.value === '100', '37. 범위 밖 150은 100으로(그 칸에 바로)');
+    p2.value = ''; p2.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(10);
+    ok(!('p2' in pe.S().mockp['2026-10-31'].sc) && pe.S().mockp['2026-10-31'].sc.p1 === 62, '37. 칸을 비우면 그 점수만 지움'); await go('#today'); }
+
   // 시작(taskGo)·다음 줄(nextAfter): 줄마다 한 번에 그 자리로
   scene('2026-10-29T07:40:00', ST);
   { const V = pe.planToday(THU), n1 = pe.nextAfter('set.read:2026-10-29', V);
