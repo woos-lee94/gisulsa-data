@@ -161,6 +161,11 @@ function runWeek(W, sets, st) {
   pe = w.__pe;
   ok(gradePatched, '예시 계산용 MOCK_GRADE_SINCE를 2026-10-31로 맞춤');
   ok(cntPatched, '검사용 호출 수 세기(hwItems·dueCards·dueSetReviews)를 붙임');
+  // 예전(2.x) 기록으로 3.0.0을 처음 열면 "바뀐 점" 창 한 번(S.tk['seen:v3']를 적어 다시 뜨지 않음)
+  { const mw = d.querySelector('#modal-wrap');
+    ok(/오늘 몫 · 이번 주 · 복습 · 연습으로 정리했어요\. 예전 기능은 모두 그대로 있어요\./.test(mw.textContent) && /바뀐 점/.test(mw.textContent) && !pe.S_NEW() && pe.S().tk['seen:v3'] === '2026-10-31',
+      '예전 기록으로 처음 열면 바뀐 점 창("오늘 몫 · 이번 주 · 복습 · 연습으로 정리했어요. 예전 기능은 모두 그대로 있어요.")');
+    click('#modal-wrap [data-act="sheet-close"]'); await sleep(10); ok(!mw.innerHTML, '바뀐 점 창 닫기'); }
   ok(Object.keys(pe.SETS().sets).length === 10 && pe.SETS().mocks['2026-10-31'] && pe.SETS().mocks['2026-10-31'].p2.length === 2, '가짜 저장소: 세트 10개(10/19~10/30), 10/31 모의(1교시 + 논술 2문)');
   ok(Object.values(REFS).flat().every(id => pe.deck().some(c => c.id === id)), '복제 세트가 가리키는 카드가 모두 덱에 있음');
   ok(pe.setIds('2026-10-29').length === 10 && pe.setIds('2026-10-29')[0] === 'D20261029-1', '복제 세트의 새 용어는 날짜마다 다른 카드(D20261029-1…)');
@@ -1025,6 +1030,111 @@ function runWeek(W, sets, st) {
     click('.nextbar [data-act="hw-bulk"]'); await sleep(20);
     ok(!TM.running && !TM.ctx && !V$().querySelector('.tline'), '41. "다 썼어요 · 단답 1문" → 그 10분 타이머는 멈춤');
     await show('#timer'); click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10); pe.goTab('today'); await sleep(40);
+  }
+
+  // 42. 특별한 날 화면(시계 고정): 시행계획 공고·원서접수 날짜 확인 줄(동그라미), 원서접수 핀(7일 전 주황 · 3일 안 빨강 · 접수했어요),
+  //     공휴일 머리, 월요일 안내와 지난주 기록, 단계 시작 안내, 시험 전 3일, 시험 날 카드와 이번 주 체크, 48시간 복기 핀, 달력 앞으로 점, 시험 일정 월요일 경고
+  {
+    const T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), h1 = () => T_(V$().querySelector('.ltitle h1')), mw = () => d.querySelector('#modal-wrap');
+    const X = clone(HOL); X.sets['2027-01-04'] = cloneSet('2027-01-04', 11, refsFor(2)); X.sets['2027-01-27'] = cloneSet('2027-01-27', 14, refsFor(2));
+    // 시행계획 공고 확인(2026-11-20~12-31, 시작일과 무관): 이번 주 줄은 시험 일정으로, 동그라미는 확인했어요(친 주에는 ✓로 아래에)
+    scene('2026-11-20T08:00:00', BLANK); await show('#week');
+    const qn = () => V$().querySelector('#ql-notice');
+    ok(qn() && qn().classList.contains('two') && /큐넷 2027 시행계획 공고 확인/.test(T_(qn())) && /시험 일정에서 확인/.test(T_(qn())) && !qn().querySelector('.tkc.on') && prim().length === 1 && !/공고/.test(T_(prim()[0])), '42. 11/20 이번 주: "큐넷 2027 시행계획 공고 확인" 줄(동그라미), 파란 버튼은 그 줄이 아님');
+    await show('#today'); ok(/큐넷 2027 시행계획 공고 확인/.test(T_(V$().querySelector('.wksec'))), '42. 11/20 오늘의 이번 주 칸에도 공고 확인 줄');
+    await show('#week'); click('#ql-notice .tkc'); await sleep(10);
+    const L1 = [...V$().querySelectorAll('.sec .qline')];
+    ok(pe.S().tk['notice:2027'] === '2026-11-20' && qn().classList.contains('done') && qn().querySelector('.tkc.on') && L1[L1.length - 1] === qn(), '42. 동그라미 → 확인했어요(S.tk notice:2027), 줄은 ✓로 맨 아래');
+    await show('#today'); ok(!/시행계획 공고/.test(T_(V$().querySelector('.wksec'))), '42. 확인한 공고 줄은 오늘의 이번 주 칸에서 빠짐');
+    await show('#week'); click('#ql-notice .tkc'); await sleep(10); ok(!pe.S().tk['notice:2027'] && !qn().classList.contains('done'), '42. 다시 누르면 되돌림');
+    click('#ql-notice .qbody'); await sleep(60);
+    const ck = () => V$().querySelector('.schk');
+    ok(w.location.hash === '#schedule' && ck() && /큐넷 2027 시행계획 공고 확인/.test(T_(ck())) && ck().querySelector('[data-act="tk"][data-id="notice:2027"]'), '42. 줄을 누르면 시험 일정(맨 위에 공고 확인과 "확인했어요")');
+    click('.schk [data-act="tk"][data-id="notice:2027"]'); await sleep(10);
+    ok(pe.S().tk['notice:2027'] === '2026-11-20' && /✓ 확인했어요/.test(T_(ck())), '42. 시험 일정에서 확인했어요');
+    at('2026-11-19T08:00:00'); delete pe.S().tk['notice:2027']; await show('#week'); ok(!qn(), '42. 11/19에는 공고 확인 줄 없음');
+    { const st = clone(BLANK); st.settings.start = '2026-11-02'; scene('2026-11-20T08:00:00', st); await show('#week'); ok(qn() && /큐넷 2027 시행계획 공고 확인/.test(T_(qn())), '42. 시작일 11/02도 11/20에 공고 확인 줄'); }
+    // 원서접수: 12/8~12/21 이번 주 줄 "원서접수 날짜 확인 · 12/29 무렵" → 12/22부터 오늘 맨 위 핀(D-7 주황), 12/26부터 3일 안(빨강, 배지와 같은 날)
+    scene('2026-12-21T08:00:00', BLANK, HOL); await show('#week');
+    const qa = () => V$().querySelector('#ql-applychk');
+    ok(qa() && /원서접수 날짜 확인 · 12\/29 무렵/.test(T_(qa())) && qa().querySelector('[data-act="tk"][data-id="applychk:141"]'), '42. 12/21 이번 주: "원서접수 날짜 확인 · 12/29 무렵"(동그라미)');
+    await show('#today'); ok(!V$().querySelector('.pin'), '42. 12/21 오늘: 핀 없음(7일 전부터)');
+    at('2026-12-22T07:40:00'); await show('#today');
+    const pin = () => V$().querySelector('.pin'), pdd = () => V$().querySelector('.pin .pdd');
+    ok(pin() && T_(pin().querySelector('b')) === '큐넷 원서접수 · 제141회' && /12\/29\(화\)~1\/1\(금\) 예상 · 첫날 오전 10시/.test(T_(pin())) && T_(pdd()) === 'D-7' && !pdd().classList.contains('due'), '42. 12/22 오늘 맨 위 핀: 큐넷 원서접수 · 제141회 / 12/29(화)~1/1(금) 예상 · 첫날 오전 10시 / D-7(주황)');
+    ok([...pin().querySelectorAll('.btn')].map(T_).join() === '접수했어요,날짜 확인·고치기' && [...pin().querySelectorAll('.btn')].every(b => b.classList.contains('sec')) && prim().length === 1 && !prim()[0].closest('.pin'), '42. 핀 버튼은 보조 두 개(접수했어요 · 날짜 확인·고치기), 파란 버튼은 목록 쪽 하나');
+    await show('#week'); ok(!qa(), '42. 핀이 뜨면 날짜 확인 줄은 없음');
+    at('2026-12-25T10:00:00'); await show('#today'); const p25 = T_(pdd()), d25 = pdd().classList.contains('due'), n25 = pe.navBadgeN('2026-12-25');
+    at('2026-12-26T09:00:00'); await show('#today');
+    ok(p25 === 'D-4' && !d25 && n25 === 0 && T_(pdd()) === 'D-3' && pdd().classList.contains('due') && pe.navBadgeN('2026-12-26') === 1, '42. 12/25 D-4 주황(배지 없음) → 12/26 D-3 빨강(배지 1)');
+    click('.pin [data-act="tk"]'); await sleep(10);
+    ok(pe.S().tk['apply:141'] === '2026-12-26' && pin().classList.contains('done') && /✓ 접수했어요/.test(T_(pin())) && !pin().querySelector('.btn') && pe.navBadgeN('2026-12-26') === 0, '42. 접수했어요 → 핀은 한 줄 "✓ 접수했어요", 배지 없음');
+    // 공휴일: 머리 "12월 25일 금요일 · 성탄절", 공부 시간 일요일·공휴일(240), 따라잡기 블록
+    scene('2026-12-25T10:00:00', BLANK, HOL); await show('#today');
+    ok(h1() === '12월 25일 금요일 · 성탄절' && pe.budgetOf('2026-12-25') === 240 && /오늘 시간 4시간/.test(T_(V$().querySelector('.capb'))) && [...V$().querySelectorAll('.blk .bn')].some(b => /따라잡기/.test(T_(b))), `42. 12/25: 머리 "${h1()}", 오늘 시간 4시간(240), 따라잡기`);
+    await show('#week'); ok([...V$().querySelectorAll('.drow')].some(r => /금 12\/25/.test(T_(r)) && /성탄절/.test(T_(r))), '42. 이번 주 날마다에도 성탄절');
+    // 월요일 안내(화요일까지, ×로 지움)와 지난주 기록 창
+    scene('2026-11-02T07:00:00', ST); await show('#today');
+    const mon = () => V$().querySelector('.notice.mon');
+    ok(mon() && T_(mon().querySelector('b')) === `2주차 시작 · ${pe.weekObj(2).t}` && /넘어온 것: 지난주 세트 3개\(권장\) · 지난주 모의고사/.test(T_(mon())) && mon().querySelector('.btn.ghost[data-act="wk-last"]') && !/%/.test(T_(mon())), `42. 월요일 안내: "${mon() && T_(mon().querySelector('b'))}" / 넘어온 것(이름만) / 지난주 기록(점수는 띠로 띄우지 않음)`);
+    click('[data-act="wk-last"]'); await sleep(10);
+    const lw = pe.S().wk['2026-10-26'];
+    ok(lw && lw.at && new RegExp(`지난주\\(1주차\\) ${lw.p}%`).test(T_(mw())) && /세트 핵심 \d+\/25/.test(T_(mw())) && /넘어온 것/.test(T_(mw())) && /놓아준 것/.test(T_(mw())) && /놓아준 것은 빚이 아니에요/.test(T_(mw())), `42. 지난주 기록 창: 지난주(1주차) ${lw && lw.p}%, 부분, 넘어온 것, 놓아준 것`);
+    click('#modal-wrap [data-act="sheet-close"]'); await sleep(10);
+    at('2026-11-03T07:00:00'); await show('#today'); const tue = !!mon();
+    click('.notice.mon .nx'); await sleep(10);
+    ok(tue && pe.S().tk['wkline:2026-11-02'] === '2026-11-03' && !mon(), '42. 화요일까지 보이고 ×로 지움(S.tk wkline:주)');
+    scene('2026-11-04T07:00:00', ST); await show('#today'); ok(!mon() && !pe.monNotice('2026-11-04'), '42. 수요일에는 월요일 안내 없음');
+    // 단계 시작 월요일(2027-01-04, 11주차): 월요일 안내 칸에 단계 안내를 함께(×는 둘 다), 수요일에는 단계 안내만
+    scene('2027-01-04T07:00:00', BLANK, X); await show('#today');
+    ok(mon() && T_(mon().querySelector('b')) === `11주차 시작 · ${pe.weekObj(11).t}` && T_(mon()).includes(w.PE_PHASE_NOTE[2]) && V$().querySelectorAll('.notice').length === 1, '42. 2027-01-04: 월요일 안내 + 2단계 시작 안내(한 칸)');
+    click('.notice.mon .nx'); await sleep(10);
+    ok(pe.S().tk['wkline:2027-01-04'] && pe.S().tk['phase:2'] && !V$().querySelector('.notice'), '42. ×로 둘 다 지움');
+    scene('2027-01-06T07:00:00', BLANK, X); await show('#today');
+    ok(!mon() && V$().querySelector('.notice') && T_(V$().querySelector('.notice')).includes(w.PE_PHASE_NOTE[2]), '42. 수요일: 단계 안내만');
+    { const st = clone(BLANK); st.settings.start = '2026-11-02'; scene('2027-02-22T07:00:00', st, X); await show('#today');
+      ok(pe.weekIndex('2027-02-22') === 16 && [...V$().querySelectorAll('.notice')].some(n => T_(n).includes(w.PE_PHASE_NOTE[3])), '42. 시작 11/02: 2027-02-22(16주차)에 3단계 시작 안내'); }
+    // 시험 전 3일(2027-01-27): 읽기·퀴즈만(숙제 줄 없음), 머리 줄 "수면 7시간"
+    scene('2027-01-27T07:00:00', BLANK, X); await show('#today');
+    ok([...V$().querySelectorAll('.dsx')].some(x => T_(x) === '시험 전 3일 · 새로 배우지 않아요 · 수면 7시간') && V$().querySelector('[data-task="set.read:2027-01-27"]') && !V$().querySelector('[data-task^="hw."]') && !V$().querySelector('[data-task^="essay:"]'), '42. 2027-01-27 시험 전 3일: 머리 줄과 읽기·퀴즈만(숙제 줄 없음)');
+    await show('#week'); ok([...V$().querySelectorAll('.drow')].some(r => /수 1\/27/.test(T_(r)) && /시험 전 3일/.test(T_(r))), '42. 이번 주 날마다: 시험 전 3일');
+    // 시험 날(2027-01-30): 머리 "오늘 제141회 시험(실전 응시)", 시험 카드(체크리스트 + 응시했어요), 점수 없이 이번 주 체크
+    scene('2027-01-30T08:00:00', BLANK, X); await show('#today');
+    const ex = () => V$().querySelector('.dcard.exam');
+    ok(h1() === '오늘 제141회 시험(실전 응시)' && ex() && /문제 고르기 3분 → 시간 엄수 → 공란 금지/.test(T_(ex())) && /시험 당일 — 교시마다 시간표대로/.test(T_(ex())) && prim().length === 1 && T_(prim()[0]) === '응시했어요' && prim()[0].closest('.dcard.exam'), `42. 시험 날 오늘: 머리 "${h1()}", 시험 카드, 파란 버튼 "응시했어요" 하나`);
+    ok(!V$().querySelector('.daysum') && !V$().querySelector('.blk') && !V$().querySelector('[data-act="plan-reset"]') && /시험 주 · 점수 대신 체크/.test(T_(V$().querySelector('.wksec'))) && !/다 하면/.test(T_(V$())), '42. 시험 날: 오늘 시간·블록·다시 짜기·점수 없음(이번 주는 체크)');
+    await show('#week');
+    ok(/시험 주 · 점수 대신 체크/.test(T_(V$().querySelector('.score'))) && /응시 ○ · 48시간 복기 ○ · 준비물 ○/.test(T_(V$().querySelector('.score'))) && !/다 하면/.test(T_(V$())) && prim().length === 1 && T_(prim()[0]) === '응시했어요', '42. 시험 날 이번 주: 점수 대신 체크(응시 ○ · 48시간 복기 ○ · 준비물 ○), 파란 버튼 "응시했어요"');
+    await show('#today'); click('.dcard.exam .btn'); await sleep(10);
+    ok(pe.S().tk['ex:2027-01-30:a'] === '2027-01-30' && /✓ 응시했어요/.test(T_(ex())) && !prim().length && ((pe.S().cal['2027-01-30'] || {}).x || {})['tk:ex:2027-01-30:a'][1] === '제141회 시험 응시', '42. 응시했어요 → ✓, 달력에 "제141회 시험 응시"');
+    await show('#week'); ok(/응시 ✓/.test(T_(V$().querySelector('.score'))) && [...V$().querySelectorAll('.drow')].some(r => /토 1\/30/.test(T_(r)) && /제141회 시험\(실전 응시\) · 응시 ✓/.test(T_(r))), '42. 이번 주: 응시 ✓(날마다에도)');
+    // 시험 다음 날(2027-01-31): 48시간 복기 핀(빨강 D-1), 다음 날 "오늘까지", 그다음 날 없음
+    scene('2027-01-31T09:00:00', BLANK); await show('#today');
+    ok(pin() && T_(pin().querySelector('b')) === '제141회 복기: 문제 모두 적기 → 4문제 다시 써서 채점(48시간 안)' && T_(pdd()) === 'D-1' && pdd().classList.contains('due') && T_(pin().querySelector('.btn.sec')) === '다 했어요', '42. 2027-01-31: 48시간 복기 핀(D-1 빨강, 다 했어요)');
+    at('2027-02-01T09:00:00'); await show('#today'); const r1 = T_(pdd()); at('2027-02-02T09:00:00'); await show('#today');
+    ok(r1 === '오늘까지' && !pin(), '42. 2/1 오늘까지, 2/2 핀 없음');
+    // 학습 달력: 앞으로 할 일(이번 주 남은 날만) 빈 동그라미 — 토 주간 모의고사(주황), 일 주간 마감(보라), 세트 복습 기한(회색)
+    scene('2026-10-29T07:40:00', ST);
+    { const F = pe.calFwd('2026-10-29'), ks = Object.keys(F).sort();
+      ok(ks.every(x => x > '2026-10-29' && x <= '2026-11-01') && F['2026-10-31'] && F['2026-10-31'].mock === 1 && F['2026-11-01'] && F['2026-11-01'].close === 1 && F['2026-10-30'] && F['2026-10-30'].rev >= 1, `42. 앞으로 할 일(목 10/29): ${ks.map(k => k.slice(5) + ':' + Object.keys(F[k]).join('+')).join(' ')}`);
+      await show('#cal'); if (V$().querySelector('[data-act="cal-today"]')) { click('[data-act="cal-today"]'); await sleep(10); }
+      const fw = () => [...V$().querySelectorAll('.cd .dots i.fwd')].map(i => i.closest('.cd').dataset.d);
+      const oct = fw(); click('[data-act="cal-mon"][data-v="1"]'); await sleep(10); const nov = fw();
+      ok(oct.every(x => x === '2026-10-30' || x === '2026-10-31') && V$().querySelector('.cd[data-d="2026-11-01"] .fwd.k-todo') && nov.every(x => x === '2026-11-01'), `42. 달력: 앞으로 점은 이번 주 남은 날에만(10월 ${[...new Set(oct)]} · 11월 ${[...new Set(nov)]})`);
+      click('[data-act="cal-today"]'); await sleep(10);
+      ok(V$().querySelector('.cd[data-d="2026-10-31"] .fwd.k-mock') && !V$().querySelector('.cd[data-d="2026-10-29"] .fwd') && /앞으로\(이번 주\)/.test(T_(V$().querySelector('.callg'))), '42. 토요일 주황(주간 모의고사), 오늘 칸에는 없음, 색 설명 "앞으로(이번 주)"');
+      click('[data-act="cal-day"][data-d="2026-10-31"]'); await sleep(10);
+      ok(/앞으로\(이번 주\): 주간 모의고사/.test(T_(mw())), '42. 그날 창: 앞으로(이번 주): 주간 모의고사');
+      click('[data-act="cal-close"]'); await sleep(10);
+      pe.S().tk['report:2026-10-26'] = '2026-10-29'; ok(!(pe.calFwd('2026-10-29')['2026-11-01'] || {}).close, '42. 리포트를 내면 일요일 보라 점 없음'); }
+    // 시험 일정: 시작일이 월요일이 아니면 한 줄 경고
+    scene('2026-10-29T07:40:00', ST); await show('#schedule');
+    const warn = () => V$().querySelector('.note.warn');
+    ok(!warn(), '42. 시작일 10/19(월): 경고 없음');
+    { const i = V$().querySelector('#schStart'); i.value = '2026-10-21'; i.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(10); }
+    ok(warn() && T_(warn()) === '주가 월요일에 시작해야 이번 주 계산이 맞아요', '42. 10/21(수)로 바꾸면 "주가 월요일에 시작해야 이번 주 계산이 맞아요"');
+    click('[data-act="sch-cancel"]'); await sleep(10); ok(!warn(), '42. 취소하면 경고 없음');
+    await go('#today');
   }
 
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));

@@ -87,7 +87,7 @@ button.row:active,a.row:active{background:var(--rule2)}
 .ds{display:block;color:var(--ink2);font-size:.86rem;line-height:1.45;margin-top:2px}
 .val{flex:0 0 auto;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink);font-size:1rem}
 .val.zero{color:var(--ink3);font-weight:600}
-.chev{flex:0 0 auto;width:9px;height:14px;opacity:.45}
+.chev{flex:0 0 auto;width:9px;height:14px;opacity:.45;margin:6px 0 0}
 .chev::before{content:"";display:block;width:8px;height:8px;border-right:2.2px solid var(--ink2);border-top:2.2px solid var(--ink2);transform:rotate(45deg);margin-top:3px}
 .badge{display:inline-grid;place-items:center;min-width:24px;height:24px;padding:0 7px;border-radius:12px;background:var(--red);color:#fff;font-size:.8rem;font-weight:800;font-variant-numeric:tabular-nums}
 .badge.blue{background:var(--blue)} .badge.gray{background:var(--rule);color:var(--ink2)}
@@ -289,7 +289,8 @@ body.kb .mctl{display:none}
 .chst span{font-size:.76rem;font-weight:700;color:var(--ink2)}
 .chin{margin:8px 0 0;color:var(--ink2);font-size:.9rem;font-variant-numeric:tabular-nums}
 .chin b{color:var(--ink);margin-right:4px}
-.chev{margin:6px 0 0;color:var(--red);font-weight:700;font-size:.92rem}
+.cev{margin:6px 0 0;color:var(--red);font-weight:700;font-size:.92rem}   /* 그날의 공휴일·시험 일정(예전 이름 .chev는 화살표 아이콘과 같은 이름이라 폭 9px 규칙을 함께 받았다) */
+.cev.fw{color:var(--ink2);font-weight:600}
 .ch5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:12px 0 2px}
 .ch5 div{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0 6px;border-radius:12px;background:var(--paper)}
 .ch5 i{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;color:#fff;font-style:normal;font-weight:800;font-size:1rem;opacity:.22}
@@ -324,7 +325,12 @@ body.kb .mctl{display:none}
 .cd.today .n{background:var(--blue);color:#fff;box-shadow:none;font-weight:800}
 .cd.today.ev .n::after{background:#fff}
 .cd.sel{background:var(--blue-soft)}
-.cd.fut .n,.cd.fut .dots{opacity:.55}
+.cd.fut .n,.cd.fut .dots i:not(.fwd){opacity:.55}
+/* 앞으로 할 일(이번 주만): 빈 동그라미, 테두리 색이 종류(주황 주간 모의고사 · 보라 주간 마감 · 회색 세트 복습) */
+.cd .dots i.fwd{background:transparent;box-shadow:inset 0 0 0 2px var(--ink3)}
+.cd .dots i.fwd.k-mock{box-shadow:inset 0 0 0 2px var(--amber)}
+.cd .dots i.fwd.k-todo{box-shadow:inset 0 0 0 2px var(--violet)}
+.cdot.fwd{background:transparent;box-shadow:inset 0 0 0 2px var(--ink3)}
 .cd .dots{display:flex;flex-wrap:wrap;justify-content:center;gap:2px;max-width:44px;min-height:8px}
 .cd .dots i{display:block;width:8px;height:8px;border-radius:50%}
 .callg{display:flex;flex-wrap:wrap;gap:8px 14px;margin:12px 2px 0;font-size:.88rem;color:var(--ink2);font-weight:600}
@@ -487,6 +493,8 @@ table.at td:first-child{white-space:nowrap}
    색은 뜻만: 파랑 행동·지금, 초록 끝, 주황 모의·핀·빠듯함, 빨강은 받아 오기 실패와 3일 안 날짜만(밀린 일·지난날에는 쓰지 않음) ── */
 .ltitle.today{align-items:center}
 .ltitle.today h1{font-size:1.45rem;line-height:1.25;letter-spacing:-.02em}
+.ltitle.today h1 .hol{display:block;font-size:1.06rem;font-weight:700;line-height:1.35}   /* 공휴일 이름은 날짜 아래 한 줄("12월 25일 금요일 · 성탄절"로 읽힌다) */
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .daysum{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 4px 4px;font-size:.92rem;font-weight:600;color:var(--ink2)}
 .daysum b{font-size:1.06rem;font-weight:700;color:var(--ink)}
 .capb{flex:none;display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:0 4px 0 10px;color:var(--blue);font-size:.86rem;font-weight:700;white-space:nowrap}
@@ -548,6 +556,35 @@ details.pf>.note{margin:8px 16px 0;padding-bottom:12px}
 .pin .pb>span{font-size:.86rem;color:var(--ink2);line-height:1.4}
 .pin .btns{margin-top:8px;flex-wrap:wrap}.pin .btns .btn.sm{flex:0 1 auto}
 .pin .pdn{align-self:center;font-size:.86rem;font-weight:700;color:var(--ok)}
+.pin .pt1{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.pin .pt1 b{min-width:0}
+/* 남은 날 표: 주황, 날짜가 3일 안이면 빨강(이번 주 탭 배지와 같은 규칙) */
+.pdd{flex:none;margin-top:1px;padding:0 7px;border-radius:6px;background:color-mix(in srgb,var(--amber) 18%,var(--sheet));color:var(--amber);font-size:.76rem;font-weight:800;line-height:1.7;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pdd.due{background:var(--red);color:#fff}
+.pin.done{align-items:center;padding:9px 14px;background:var(--sheet);border-left-color:var(--ok)}
+.pin.done .pfi{color:var(--ok)}
+.pin.done .pb{flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:2px 8px}
+.pin.done b{font-size:.92rem;font-weight:600;color:var(--ink2)}
+.pin.done .pb>span{font-weight:700;color:var(--ok)}
+/* 월요일 안내: 머리 줄, 넘어온 것, 지난주 기록(옅은 링크) */
+.notice.mon b{display:block;font-weight:700;line-height:1.45}
+.notice.mon small{display:block;margin-top:2px;font-size:.86rem;color:var(--ink2);line-height:1.45}
+.notice.mon .btn.ghost{width:auto;min-height:36px;margin:4px 0 -4px -8px;padding:4px 8px;gap:6px;font-size:.86rem}
+.notice.mon .btn .chev{margin:0}
+/* 시험 날 카드 */
+.dcard.exam{border-left:4px solid var(--amber)}
+.dcard.exam .plan{margin-top:12px;background:var(--paper)}
+.dcard.exam .exd{display:block;width:100%;margin-top:14px;padding:10px 0;text-align:center;font-size:1.06rem;font-weight:800;color:var(--ok)}
+.dcard.exam .note{margin:4px 0 0;text-align:center}
+/* 이번 주 줄 가운데 줄은 시험 일정으로, 동그라미는 확인했어요(원서접수 날짜·시행계획 공고) */
+.qline.two{flex-direction:row;align-items:flex-start;gap:4px;padding:0}
+.qline.two .qbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;padding:11px 0 11px 16px;text-align:left;color:var(--ink)}
+.qline.two .qbody:active{background:var(--rule2)}
+.qline.two .tkc{margin:9px 14px 0 4px}
+.schk{margin-top:12px}.schk .row .btn.sm{flex:none}.schk .pdn{flex:none;font-size:.86rem;font-weight:700;color:var(--ok)}
+.note.warn{color:var(--amber);font-weight:600}
+.v3l{margin:0 0 12px;font-size:1rem;font-weight:600;line-height:1.55}
+.sc4.lwp{margin:2px 0 0;font-size:.9rem}
 .pinfo{margin-top:10px;padding:12px 14px;border-radius:var(--r-md);background:var(--sheet)}
 .pinfo b{display:block;font-weight:700;line-height:1.4}
 .pinfo span{display:block;margin-top:2px;font-size:.86rem;color:var(--ink2);line-height:1.45}
@@ -619,9 +656,13 @@ button.drow:active{background:var(--rule2)}
 :root[data-theme="dark"] :is(.plan,.score,.dcard,.pinfo,.notice,.wkd){border:1px solid var(--rule2)}
 :root[data-theme="dark"] :is(.pn.now,.pn.done){color:#08142E}
 :root[data-theme="dark"] :is(.pn.done,.tkc.on,.wg.done)::after{border-color:#08142E}
+:root[data-theme="dark"] .pdd.due{color:#08142E}
+:root[data-theme="dark"] .dcard.exam{border-left:4px solid var(--amber)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) :is(.plan,.score,.dcard,.pinfo,.notice,.wkd){border:1px solid var(--rule2)}
   :root:not([data-theme="light"]) :is(.pn.now,.pn.done){color:#08142E}
-  :root:not([data-theme="light"]) :is(.pn.done,.tkc.on,.wg.done)::after{border-color:#08142E}}
+  :root:not([data-theme="light"]) :is(.pn.done,.tkc.on,.wg.done)::after{border-color:#08142E}
+  :root:not([data-theme="light"]) .pdd.due{color:#08142E}
+  :root:not([data-theme="light"]) .dcard.exam{border-left:4px solid var(--amber)}}
 .prow.moved{min-height:0}.prow.moved .pm{color:var(--ink2)}
 details[open]>summary .fs small{display:none}
 .wkh{width:100%;margin:0 0 8px;padding:2px 4px;align-items:center;text-align:left;color:var(--ink)}

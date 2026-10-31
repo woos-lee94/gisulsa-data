@@ -58,6 +58,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   ok(SETS.kichul && SETS.kichul.rev === 3 && SETS.kichul.rounds[0].r === 141, '새 회차(제141회) 받음');
   ok(pe.deck().length === 327, '세트 새 카드 4장이 덱에 들어옴: ' + pe.deck().length);
   ok(pe.deck().find(c => c.id === 'K04').x.includes('141-1-01'), '저장소 연결표(kx)가 K04에 반영');
+  ok(pe.S_NEW() && !d.querySelector('#modal-wrap').innerHTML && pe.S().tk['seen:v3'], '새로 설치한 휴대폰(저장된 기록 없음): "바뀐 점" 창 없이 표시만');
   ok(pe.kq()['141-1-01'], '제141회 문항 조회');
 
   // 오늘(오늘 몫): 머리(달력 아이콘·D-day) → 상태 줄 → 블록마다 번호 줄(파란 버튼 하나) 또는 할 몫 없음 카드 → 이번 주. 체크리스트는 없음.
@@ -67,7 +68,9 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   const todayShape = () => { const pr = view().querySelectorAll('.plan .prow'), nr = view().querySelector('.norows'), np = view().querySelectorAll('.btn:not(.sec):not(.ghost)').length; return { pr: pr.length, nr: !!nr, np }; };
   ok(view().querySelector('.ltitle .ltl > .calbtn:first-child'), '오늘 머리: 달력 아이콘이 맨 앞');
   ok(/D-\d+/.test(view().querySelector('.dday').textContent), 'D-day 표시 ' + view().querySelector('.dday').textContent.trim());
-  ok(view().querySelector('.daysum') && /오늘 몫|남은/.test(view().querySelector('.daysum').textContent) && view().querySelector('.daysum [data-act="cap"]'), '상태 줄: 오늘 몫 n개 · 오늘 시간');
+  const exD = pe.dayKind(ymd) === 'exam';   /* 시험 날(본시험·실전 모의)은 상태 줄·블록 대신 시험 카드(tests/plan.test.js 42가 시계를 고정해 본다) */
+  if (exD) ok(view().querySelector('.dcard.exam') && !view().querySelector('.daysum') && !view().querySelector('[data-act="cap"]'), `${ymd} 시험 날: 상태 줄 대신 시험 카드`);
+  else ok(view().querySelector('.daysum') && /오늘 몫|남은/.test(view().querySelector('.daysum').textContent) && view().querySelector('.daysum [data-act="cap"]'), '상태 줄: 오늘 몫 n개 · 오늘 시간');
   { const sh = todayShape(); ok((sh.pr > 0 || sh.nr) && sh.np <= 1 && sh.np === 1, `오늘 몫 줄(${sh.pr}) 또는 할 몫 없음 카드, 파란 버튼은 하나(${sh.np})`); }
   if (ymd <= pe.PLAN().target.d && pe.weekIndex(ymd) >= 0) ok(view().querySelectorAll('.wkstrip .wkd').length === 7 && /이번 주/.test(txt()), '이번 주: 월~일 띠 7칸');
   else ok(!view().querySelector('.wkstrip'), `${ymd}: 시험 뒤(또는 준비 시작 전)라 이번 주 띠 없음`);
@@ -782,6 +785,15 @@ const go = async h => { w.location.hash = h; await sleep(30); };
       ok(/공휴일 · 대체공휴일\(개천절\)/.test(mt()), '날짜 창: 공휴일 이름');
       click('[data-act="cal-close"]'); await sleep(10);
     }
+    // 앞으로 할 일 점(이번 주만): 오늘 다음 날 ~ 이번 주 일요일 칸에만 빈 동그라미(주황 주간 모의고사 · 보라 주간 마감 · 회색 세트 복습). 지난날·다음 주에는 없음
+    { const ymd = z => z.getFullYear() + '-' + String(z.getMonth() + 1).padStart(2, '0') + '-' + String(z.getDate()).padStart(2, '0'), dd = (x, n) => { const z = new w.Date(x + 'T12:00:00'); z.setDate(z.getDate() + n); return ymd(z); };
+      const dw = new w.Date(tdy + 'T12:00:00').getDay(), sun = dd(tdy, (7 - dw) % 7), inPlan = pe.weekIndex(tdy) >= 0 && tdy <= pe.PLAN().target.d, F = pe.calFwd(), ks = Object.keys(F).sort();
+      ok(ks.every(x => x > tdy && x <= sun) && ks.every(x => Object.keys(F[x]).every(k => ['mock', 'close', 'rev'].includes(k))) && (!inPlan || dw === 0 || !!S().tk['report:' + dd(sun, -6)] || (F[sun] && F[sun].close === 1)), `앞으로 할 일은 이번 주 남은 날에만(${ks.join(', ') || '없음'}), 리포트 전이면 일요일에 주간 마감`);
+      await go('#cal'); if (view().querySelector('[data-act="cal-today"]')) { click('[data-act="cal-today"]'); await sleep(10); }
+      const fw = () => [...view().querySelectorAll('.cd .dots i.fwd')].map(i => i.closest('.cd').dataset.d), lg = () => /앞으로\(이번 주\)/.test(view().querySelector('.callg').textContent);
+      let got = fw(); const lgOk = lg() === got.length > 0;
+      if (sun.slice(0, 7) !== tdy.slice(0, 7)) { click('[data-act="cal-mon"][data-v="1"]'); await sleep(10); got = got.concat(fw()); click('[data-act="cal-today"]'); await sleep(10); }
+      ok(lgOk && got.every(x => x > tdy && x <= sun) && [...new Set(got)].sort().join() === ks.join() && !view().querySelector('.cd.today .fwd'), `달력 칸의 앞으로 점 = 이번 주 남은 날(${[...new Set(got)].join(', ') || '없음'}), 오늘·지난날·다음 주에는 없음`); }
     await go('#more'); ok(view().querySelector('[data-h="cal"]'), '더보기 → 학습 달력');
     delete S().daily[old]; S().log.pop(); delete S().cal[old]; delete S().mockp.x;
     await go('#today');
@@ -1074,7 +1086,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(!S().today || S().today.sig !== 'x', '복원 뒤 오늘 화면은 백업의 고정 목록이 아니라 새로 짠 오늘 몫');
     const old = JSON.parse(JSON.stringify(bk)); delete old.state.tk; delete old.state.today; delete old.state.wk; delete old.state.settings.budget;
     await go('#backup'); d.querySelector('#restoreText').value = JSON.stringify(old); click('[data-act="restore"]'); const oT = S().today, oW = JSON.stringify(S().wk), oK = JSON.stringify(S().tk); await sleep(40);
-    ok(oK === '{}' && oT === null && oW === '{}' && JSON.stringify(S().settings.budget) === '{"wd":180,"sat":300,"sun":240}' && Object.keys(S().cards).length === Object.keys(bk.state.cards).length && JSON.stringify(S().sp) === JSON.stringify(bk.state.sp), '예전 백업(새 열쇠 없음)을 복원하면 tk·today·wk·공부 시간은 기본값, 나머지 기록은 그대로');
+    ok(oK === JSON.stringify({ 'seen:v3': bk.state.tk['seen:v3'] }) && bk.state.tk['seen:v3'] && oT === null && oW === '{}' && JSON.stringify(S().settings.budget) === '{"wd":180,"sat":300,"sun":240}' && Object.keys(S().cards).length === Object.keys(bk.state.cards).length && JSON.stringify(S().sp) === JSON.stringify(bk.state.sp), '예전 백업(새 열쇠 없음)을 복원하면 tk·today·wk·공부 시간은 기본값(tk에는 이 휴대폰의 "바뀐 점" 표시만), 나머지 기록은 그대로');
     const K = JSON.parse(keep); Object.keys(K).forEach(k => { S()[k] = K[k]; }); pe.render(); await go('#today');
   }
 
@@ -1434,8 +1446,9 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(S().tk[gid] === T0 && w.location.hash === '#today', '손으로 친 기록은 백업 → 복원에도 남음');
     await go('#week'); tkGoal(); await sleep(20);
     ok(!S().tk[gid], '다시 누르면 되돌림');
-    // 오늘 시간: 30분 · 1시간 · 1시간 30분 · 평소대로. 고르면 그날만 다시 짠다
-    await go('#today'); const ds0 = view().querySelector('.daysum').textContent;
+    // 오늘 시간: 30분 · 1시간 · 1시간 30분 · 평소대로. 고르면 그날만 다시 짠다(시험 날은 오늘 시간이 없다: 시험 카드)
+    await go('#today'); if (pe.dayKind(T0) === 'exam') ok(!view().querySelector('[data-act="cap"]') && view().querySelector('.dcard.exam'), `${T0} 시험 날: 오늘 시간 없음(시험 카드)`); else {
+    const ds0 = view().querySelector('.daysum').textContent;
     click('[data-act="cap"]'); await sleep(10);
     ok(mw().querySelectorAll('[data-act="cap-set"]').length === 4 && /30분 · 최소 몫/.test(mw().textContent) && /평소대로 · /.test(mw().textContent) && /최소 몫\(용어 읽기 · 세트 퀴즈 · 단답 1문 · 자기 전 5분\)은 늘 남아요/.test(mw().textContent), '오늘 시간 창: 30분 · 최소 몫 / 1시간 / 1시간 30분 / 평소대로');
     click('#modal-wrap [data-act="cap-set"][data-m="60"]'); await sleep(30);
@@ -1443,7 +1456,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(S().today && S().today.d === T0 && S().today.user === 60 && !mw().innerHTML && (ds1 !== ds0 || late) && /오늘 시간 (1시간|\d+분)/.test(ds1), `오늘 시간 1시간: S.today.user = 60, 상태 줄이 바뀜(${ds1.trim()})`);
     click('[data-act="cap"]'); await sleep(10); click('#modal-wrap [data-act="cap-set"][data-m="0"]'); await sleep(30);
     ok(S().today && S().today.user === null, '평소대로: S.today.user = null');
-    { const sh = todayShape(); ok((sh.pr > 0 || sh.nr) && sh.np === 1, '다시 짜도 파란 버튼은 하나'); }
+    { const sh = todayShape(); ok((sh.pr > 0 || sh.nr) && sh.np === 1, '다시 짜도 파란 버튼은 하나'); } }
     // 통계·주간 리포트: "이번 주 필수 n%"(이번 주 화면과 같은 수), 이번 주 월요일부터. 토·일요일에 복사해야 이번 주 리포트로 친다
     let copied = ''; const cp0 = w.PE_IO.copy; w.PE_IO.copy = x => { copied = x; return Promise.resolve(); };
     await go('#stats');

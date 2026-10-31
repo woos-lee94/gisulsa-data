@@ -197,6 +197,7 @@ function open(opt = {}) {
   const B = open();
   await sleep(300);
   ok(B.d.documentElement.getAttribute('data-theme') === 'dark', '다시 열면 첫 화면부터 저장한 테마');
+  ok(!B.d.querySelector('#modal-wrap').innerHTML && B.pe.S().tk['seen:v3'], '처음(새로 설치)부터 3.0.0인 휴대폰은 다시 열어도 "바뀐 점" 창 없음');
   ok(B.pe.S().cards['K04'] && B.pe.S().cards['D20261019-1'] && Object.keys(B.pe.S().wrong).length >= 1, '다시 열어도 진도·오답 그대로');
   ok(B.pe.S().settings.newPerDay === 17, '백그라운드 직전 설정도 남음');
   ok(B.pe.SETS().sets['2026-10-19'] && B.pe.deck().length === 327, '받은 세트가 남아 덱 327장');
@@ -205,7 +206,17 @@ function open(opt = {}) {
   await B.go('#more');
   const appVer = require('../app.json').expo.version;
   ok(B.txt().includes('기술사 6개월 v' + appVer), '더보기 버전 = app.json 버전 ' + appVer);
+  ok(appVer === '3.0.0' && require('../package.json').version === appVer && require('../package-lock.json').version === appVer && require('../package-lock.json').packages[''].version === appVer, `버전 ${appVer}: app.json = package.json = package-lock(앱 줄)`);
   ok(B.errors.length === 0, '다시 연 화면 콘솔 오류 없음 ' + B.errors.slice(0, 3).join(' | '));
+
+  // 예전(2.x) 기록이 든 휴대폰에서 3.0.0을 처음 열면 "바뀐 점" 창 한 번(기록은 그대로), 표시는 네이티브 저장소에 남아 다시 열면 없음
+  { const keep = disk.pe_state_v1, v2 = JSON.parse(keep); delete v2.tk; delete v2.today; delete v2.wk; disk.pe_state_v1 = JSON.stringify(v2);
+    const U = open(); await sleep(300);
+    ok(/오늘 몫 · 이번 주 · 복습 · 연습으로 정리했어요\. 예전 기능은 모두 그대로 있어요\./.test(U.d.querySelector('#modal-wrap').textContent) && U.pe.S().tk['seen:v3'] && U.pe.S().cards['K04'] && U.pe.S().cards['K04'].seen === 3, '예전 기록으로 처음 연 3.0.0: 바뀐 점 창(진도는 그대로)');
+    U.click('#modal-wrap [data-act="sheet-close"]'); await sleep(20); U.w.PE_IO._hide(); await sleep(20);
+    const U2 = open(); await sleep(300);
+    ok(!U2.d.querySelector('#modal-wrap').innerHTML && JSON.parse(disk.pe_state_v1).tk['seen:v3'] && U.errors.length === 0 && U2.errors.length === 0, '다시 열면 바뀐 점 창 없음(표시는 네이티브 저장소에)');
+    disk.pe_state_v1 = keep; }
 
   // 3) 회원: 아이디 없는 앱 묶음(검사용)에는 회원 칸이 없고, 관리자 휴대폰에만 승인 관리가 보인다
   ok(!/승인 관리/.test(B.txt()) && !/아이디/.test(B.txt()), '회원 정보가 없으면 더보기에 아이디·승인 관리 없음');
