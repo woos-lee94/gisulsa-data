@@ -356,10 +356,10 @@ const isTab=h=>{const p=nh(h).split('/')[0];return TABS.includes(p)||!!TAB_ALIAS
 const tabKey=h=>{const p=nh(h).split('/')[0];return TAB_ALIAS[p]||p;};
 const hashR=h=>{const p=nh(h).split('/');return{page:p[0],a:p[1]||null,b:p[2]||null};};
 function retOk(h,page){const p=nh(h).split('/')[0];return!!h&&p!==page&&!(p==='sess'&&!SES)&&!(p==='memo'&&!MEMO);}
-/* 위 화면: 세션·외우기는 연 곳, 기출 회차·단원은 그 목록, 그 밖은 들어온 곳 → 부모. SES·MEMO가 없어도 오류 없이 오늘 */
+/* 위 화면: 세션·외우기는 연 곳, 기출 회차·단원은 그 목록, 그 밖은 들어온 곳 → 부모. SES·MEMO가 없어도 오류 없이 오늘.
+   세션·외우기의 연 곳이 자기 자신(#sess·#memo)이면 오늘: 닫기·밀기가 같은 화면을 다시 그리기만 하지 않게 */
 function upOf(r){r=r||R;
-  if(r.page==='sess')return nh(SES&&SES.from)||'today';
-  if(r.page==='memo')return nh(MEMO&&MEMO.from)||'today';
+  if(r.page==='sess'||r.page==='memo'){const f=nh(r.page==='sess'?SES&&SES.from:MEMO&&MEMO.from);return f&&f.split('/')[0]!==r.page?f:'today';}
   if(r.page==='kichul'&&r.b)return r.a==='u'?'kichul/u':'kichul';
   const ret=nh(RET[r.page]);return retOk(ret,r.page)?ret:(PARENT[r.page]||'today');}
 /* h에서 위로 올라가다 page를 만나면(앞 화면으로 되돌아가는 링크) 그 화면의 RET를 그대로 둔다: 뒤로가 두 화면 사이를 맴돌지 않게 */
@@ -374,7 +374,10 @@ function parseHash(){const h=curH(),p=h.split('/');const r={tab:'today',page:nul
   if(isTab(p[0]))r.tab=tabKey(p[0]);else if(PAGES[p[0]]){r.page=p[0];r.tab=tabOf(h);}return r;}
 /* 집중 모드: 세션·가리며 외우기, 타이머가 도는 그 모의고사(아래 탭을 숨기고 위쪽은 "닫기") */
 const isFocus=()=>R.page==='sess'||R.page==='memo'||(R.page==='mock'&&TM.running&&!!TM.ctx&&TM.ctx.D===R.a);
-function rep(h){h=nh(h)||'today';if(curH()===h){R=parseHash();return render();}location.replace('#'+h);}
+/* 빈 흐름: SES 없는 #sess, MEMO 없는 #memo. 그리지 않고 위로 보낸다 */
+const flowGone=r=>(r.page==='sess'&&!SES)||(r.page==='memo'&&!MEMO);
+/* 같은 주소면 다시 그리기만 한다(세션 → 세션, 외우기 안의 외우기). 그 주소가 빈 흐름이면 위로(바꿔 쓰지 않아 route()를 거치지 않는 길에도 빈 화면을 막는다) */
+function rep(h){h=nh(h)||'today';if(curH()===h){R=parseHash();return flowGone(R)?hop(upOf(R)):render();}location.replace('#'+h);}
 function hop(h){h=nh(h)||'today';return isTab(h)?goTab(tabKey(h)):rep(h);}
 /* 앞으로: 탭 주소는 goTab, 그 밖은 들어온 곳을 RET에 적고 바꿔 쓴다(o.from: 들어온 곳을 따로 줄 때) */
 function nav(h,o){o=o||{};closeModal();h=nh(h)||'today';if(isTab(h))return goTab(tabKey(h));
@@ -392,7 +395,7 @@ function goTab(tab){closeModal();tab=tabKey(tab);if(!TABS.includes(tab))tab='tod
 function flowKeep(o){if(!(o&&o.keepFlow)&&!(FLOW&&curH()===FLOW.at))FLOW=null;}
 function route(){closeModal();
   try{R=parseHash();
-    if((R.page==='sess'&&!SES)||(R.page==='memo'&&!MEMO))return hop(upOf(R));
+    if(flowGone(R))return hop(upOf(R));
     if(!R.page&&!isTab(curH()))return goTab('today');
     if(R.page==='set'&&R.b){if(SET_TABS.includes(R.b))SV[R.a]=R.b;return rep('set/'+R.a);}
   }catch(e){console.error(e);R=parseHash();}
@@ -947,12 +950,13 @@ document.addEventListener('touchcancel',tpLost);
 /* 이어 하기 키: 세트는 memo:set:날짜, 그 밖(암기 탭 memo:study, 복습 탭 memo:rev·memo:wrong·memo:stars)은 그날 카드 목록째로.
    세션에서 넘어온 것(memo:sess)과 카드 한 장(memo:one)은 늘 새로 */
 /* from: 연 곳(주소 그대로, 세션·끝 화면에서 열면 sess). 이어서 열면 연 곳을 새로 적는다(T4). 외울 카드가 없으면 알리기만 하고 하던 외우기는 그대로.
-   가리며 외우기 안에서 연 외우기(카드 창의 "가리며 외우기")는 바깥 외우기를 outer에 두고, 끝내거나 닫으면 그 카드로 돌아간다(T5) */
-function startMemo(o,fresh){const inMemo=R.page==='memo'&&MEMO&&!MEMO.fin,from=nh(o.from)||curH();
+   가리며 외우기 안에서 연 외우기(카드 창의 "가리며 외우기")는 바깥 외우기를 outer에 두고, 끝내거나 닫으면 그 카드로 돌아간다(T5).
+   끝난 외우기의 끝 화면에서 열면 그 외우기의 연 곳과 바깥 외우기를 물려받는다(#memo 자신을 연 곳으로 적지 않게) */
+function startMemo(o,fresh){const onM=R.page==='memo'&&!!MEMO,inMemo=onM&&!MEMO.fin,from=nh(o.from)||(onM?nh(MEMO.from):curH());
   if(!fresh&&MEMO&&MEMO.key===o.key&&!MEMO.fin){memoStop();if(!inMemo)MEMO.from=from;flowKeep(o);return nav('memo');}
   const r=fresh?null:resumeGet(o.key);if(r&&r.ids)o.items=r.ids.map(id=>({id}));
   if(!o.items||!o.items.length)return toast('외울 카드가 없어요');
-  const outer=inMemo?MEMO:(o.outer||null);memoStop();flowKeep(o);
+  const outer=inMemo?MEMO:(o.outer||(onM&&MEMO.outer)||null);memoStop();flowKeep(o);
   MEMO=Object.assign({i:0,run:false,phase:'show',left:null,cnt:0,done:false,t0:0,started:Date.now()},o,{from:outer?nh(outer.from):from,outer});
   if(r&&r.i<MEMO.items.length){MEMO.i=r.i;toast(`${r.i+1}번째 카드부터 이어서 해요`);}
   memoSeen();nav('memo');}

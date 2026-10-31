@@ -1046,7 +1046,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     const tap = async (sel, root) => { click(sel, root); await sleep(60); };
     const back = () => tap('.topbar [data-act="back"]'), tab = t => tap(`#nav button[data-tab="${t}"]`);
     const edge = async (x0, x1, dy, el) => { el = el || view(); const a = new w.Event('touchstart', { bubbles: true }); a.touches = [{ clientX: x0, clientY: 300 }]; el.dispatchEvent(a); const b = new w.Event('touchend', { bubbles: true }); b.changedTouches = [{ clientX: x1, clientY: 300 + (dy || 0) }]; el.dispatchEvent(b); await sleep(60); };
-    const emptyFlow = () => /진행 중인 (학습|외우기)가 없어요/.test(txt()), focus = () => d.body.classList.contains('focus');
+    const emptyFlow = () => /진행 중인 (학습이|외우기가) 없어요/.test(txt()), focus = () => d.body.classList.contains('focus');
     const primaries = () => view().querySelectorAll('.btn:not(.sec):not(.ghost)').length;
     const toSet = async () => { await tab('today'); await tap(`#view [data-act="go"][data-h="set/${D0}"]`); };
     const cardsTab = async () => { click('[data-act="set-tab"][data-t="cards"]'); await sleep(20); if (view().querySelector('[data-act="resume-clear"]')) await tap('[data-act="resume-clear"]'); };
@@ -1222,6 +1222,40 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(inner && H() === '#memo' && pe.MEMO() === mOut && mOut.i === iOut, 'T5: 안쪽 외우기에서 가장자리 밀기 → 바깥 외우기 그 카드');
     await back();
     ok(H() === '#review' && pe.MEMO() === mOut && L() === hl, 'C: 닫기 → 복습(외우기는 그대로)');
+
+    // 끝난 외우기의 끝 화면에서(제목 낱말 꾹 → 카드 창) 연 가리며 외우기는 그 외우기의 연 곳·바깥 외우기를 물려받는다(#memo 자신을 연 곳으로 적지 않음):
+    // 닫기·가장자리 밀기·완료 → 돌아가기가 같은 #memo에 갇히거나 "진행 중인 외우기가 없어요"로 가지 않는다
+    {
+      const endWord = () => view().querySelector('.sheet h3').textContent.split(':')[0];
+      const modalCard = id => { const b = d.createElement('button'); b.dataset.act = 'card-modal'; b.dataset.id = id; view().appendChild(b); b.dispatchEvent(new w.MouseEvent('click', { bubbles: true })); b.remove(); };
+      const againFromEnd = async id => { modalCard(id); await sleep(10); await tap('[data-act="memo-one"]', mw()); const m = pe.MEMO(); click('[data-act="memo-finish"]'); await sleep(20);
+        const opened = pe.glOpen(endWord()); await sleep(10); await tap('[data-act="memo-one"]', mw()); return { m, opened }; };
+      await tap('[data-act="memo-wrong"]'); hl = L();
+      ok(H() === '#memo' && pe.MEMO() === mOut && mOut.i === iOut, '(준비) 복습 → 오답 카드 가리며 외우기 이어서');
+      let r = await againFromEnd(wids[2]); const m3 = pe.MEMO();
+      ok(r.opened && H() === '#memo' && m3 !== r.m && r.m.outer === mOut && m3.outer === mOut && m3.from === 'review' && tabOn() === 'review', '안쪽 외우기의 끝 화면 → 카드 창 → 가리며 외우기: 바깥 외우기와 연 곳(복습)을 물려받음');
+      click('[data-act="memo-finish"]'); await sleep(20); await tap('[data-act="memo-close"]');
+      ok(H() === '#memo' && pe.MEMO() === mOut && mOut.i === iOut && !emptyFlow(), '그 외우기 완료 → 돌아가기 → 바깥 외우기 그 카드');
+      await back(); ok(H() === '#review' && pe.MEMO() === mOut && L() === hl, '닫기 → 복습');
+      await toSet(); hl = L(); const cOne = pe.deck().find(x => x.id === 'T01');
+      r = await againFromEnd(cOne.id); const m4 = pe.MEMO();
+      ok(r.opened && H() === '#memo' && m4 !== r.m && m4.from === 'set/' + D0 && !m4.outer && upTxt() === '닫기' && tabOn() === 'today', '끝난 외우기의 끝 화면 → 카드 창 → 가리며 외우기: 연 곳은 세트(#memo 자신이 아님)');
+      await back(); ok(H() === '#set/' + D0 && pe.MEMO() === m4 && !focus() && L() === hl, '그 외우기에서 닫기 → 세트(외우기는 그대로)');
+      await againFromEnd(cOne.id); await edge(6, 150);
+      ok(H() === '#set/' + D0 && !focus() && L() === hl, '그 외우기에서 가장자리 밀기 → 세트');
+      await againFromEnd(cOne.id); click('[data-act="memo-finish"]'); await sleep(20); await tap('[data-act="memo-close"]');
+      ok(H() === '#set/' + D0 && !pe.MEMO() && !emptyFlow() && !focus() && L() === hl, '그 외우기도 완료 → 돌아가기 → 세트("진행 중인 외우기가 없어요" 없음)');
+      // 연 곳이 자기 자신(#sess)으로 적힌 세션도 닫기·돌아가기는 제자리에 머물지 않고 오늘로
+      pe.startSession({ kind: 'free', title: '연 곳 점검', items: [{ type: 'card', id: cOne.id }], from: 'sess' }); await sleep(60); const sX = pe.SES();
+      ok(H() === '#sess' && sX.from === 'sess', '(준비) 연 곳이 #sess로 적힌 세션');
+      await back(); ok(H() === '#today' && pe.SES() === sX && tabOn() === 'today' && L() === hl, '연 곳이 자기 자신이면 닫기 → 오늘(세션은 그대로)');
+      sX.i = sX.items.length; pe.go('sess'); await sleep(60);
+      ok(H() === '#sess' && /완료/.test(view().querySelector('.sheet h3').textContent), '(준비) 그 세션의 끝 화면');
+      await tap('[data-act="sess-close"]'); ok(H() === '#today' && !pe.SES() && !emptyFlow() && L() === hl, '끝 화면의 돌아가기 → 오늘');
+      // 주소가 그대로라 route()를 거치지 않는 길(같은 주소로 다시 가기)에서도 빈 #sess는 그리지 않고 위로
+      w.location.hash = '#sess'; pe.go('sess'); const noEmpty = !emptyFlow(); await sleep(80);
+      ok(noEmpty && H() === '#today' && !emptyFlow() && tabOn() === 'today', '같은 주소의 빈 #sess도 그리지 않고 오늘로');
+    }
 
     // 위쪽 이름: 들어온 곳(오늘 → 달력은 "오늘", 더보기 → 달력은 "더보기")
     await tab('today'); await tap('.calbtn'); ok(H() === '#cal' && upTxt() === '오늘' && tabOn() === 'today', '오늘 → 학습 달력(위쪽 "오늘")');
