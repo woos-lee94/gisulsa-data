@@ -29,8 +29,8 @@ const IO={
   onHide(fn){hideFns.push(fn);window.addEventListener('pagehide',fn);},
   copy(text){return N?call('copy',{text}):webCopy(text);},
   saveFile(name,text,type){type=type||'application/json';return N?call('save',{name,text,type}):webSave(name,text,type);},
-  /* 확인 창: 앱에서는 네이티브 Alert(취소·확인), 웹에서는 confirm() */
-  ask(msg,yes){if(N){call('confirm',{msg}).then(ok=>{if(ok)yes();},()=>{if(confirm(msg))yes();});return;}if(confirm(msg))yes();},
+  /* 확인 창: 앱에서는 네이티브 Alert(취소·확인), 웹에서는 confirm(). 취소하면 no(있을 때) */
+  ask(msg,yes,no){const r=ok=>{if(ok)yes();else if(no)no();};if(N){call('confirm',{msg}).then(r,()=>r(confirm(msg)));return;}r(confirm(msg));},
   keepAwake(on){on=!!on;if(on===awake)return;awake=on;
     if(N){post({t:'awake',on});return;}
     if(on){if(navigator.wakeLock&&navigator.wakeLock.request)navigator.wakeLock.request('screen').then(l=>{if(awake)lock=l;else l.release().catch(()=>{});}).catch(()=>{});}
