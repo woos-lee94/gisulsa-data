@@ -643,6 +643,24 @@ function runWeek(W, sets, st) {
     p2.value = ''; p2.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(10);
     ok(!('p2' in pe.S().mockp['2026-10-31'].sc) && pe.S().mockp['2026-10-31'].sc.p1 === 62, '37. 칸을 비우면 그 점수만 지움'); await go('#today'); }
 
+  // 38. 이번 주 탭 배지: 날짜가 정해진 일(원서접수 기간·48시간 복기)이 3일 안이고 안 했을 때만 빨간 수(밀린 일·세트 복습은 세지 않음).
+  //     오늘 몫의 원서접수·복기 핀과 같은 날짜 규칙(12/1~2/5 날마다). 기본 시작일 10/19: 제141회(1/30) 실전 모의 → 원서접수 12/29~1/1
+  { const RD = () => [pe.PLAN().mock, pe.PLAN().target].filter(Boolean), nb = () => d.querySelector('#nav button[data-tab="week"] .nb');
+    const want = t => pe.taskList(t).filter(x => !x.done && (x.k === 'recap' || x.k === 'apply' && t >= add(add(RD().find(r => r.r === x.r).d, -32), -3))).length;
+    scene('2026-12-01T09:00:00', BLANK, HOL); const bad = []; let nOn = 0;
+    for (let t = '2026-12-01'; t <= '2027-02-05'; t = add(t, 1)) { at(t + 'T09:00:00'); const n = pe.navBadgeN(t); if (n !== want(t)) bad.push(t + ':' + n); if (n) nOn++; }
+    ok(!bad.length && nOn === 9, `38. 배지 수 = 오늘 몫의 원서접수·복기 핀 가운데 3일 안이고 안 한 것(12/1~2/5 날마다): 배지가 뜨는 날 ${nOn}일(접수 3일 전 12/26~마지막 날 1/1 7일 + 복기 1/31·2/1 2일) ${bad.slice(0, 3).join(' ')}`);
+    at('2026-12-22T09:00:00'); await show('#more');
+    ok(pe.taskList('2026-12-22').some(x => x.id === 'apply:141') && !nb(), '38. 12/22: 원서접수 핀은 있지만(12/29까지 7일) 배지 없음');
+    at('2026-12-26T09:00:00'); pe.S().sp['2026-10-19'] = { read: {}, quiz: {}, tasks: {}, essay: {}, rev: {}, first: '2026-12-25', hw: {} }; pe.invalidate(); pe.render();
+    ok(nb() && nb().textContent === '1' && nb().classList.contains('due') && pe.dueSetReviews().length > 0 && !d.querySelector('#nav button[data-tab="review"] .nb'), '38. 12/26(접수 3일 전): 이번 주 탭에 빨간 1, 다시 볼 세트가 있어도 복습 탭에는 배지 없음');
+    pe.S().tk['apply:141'] = '2026-12-26'; pe.render(); ok(!nb(), '38. 접수했어요(S.tk apply:141) → 배지 없음');
+    delete pe.S().tk['apply:141']; at('2027-01-01T09:00:00'); pe.render(); const a1 = !!nb() && nb().textContent === '1'; at('2027-01-02T09:00:00'); pe.render();
+    ok(a1 && !nb(), '38. 접수 마지막 날(1/1)까지 1, 다음 날은 없음');
+    at('2027-01-31T09:00:00'); pe.render(); const r1 = !!nb() && nb().textContent === '1'; at('2027-02-02T09:00:00'); pe.render();
+    ok(r1 && !nb() && pe.navBadgeN('2027-02-01') === 1, '38. 시험(1/30) 다음 날부터 48시간 복기 1(1/31·2/1), 2/2는 없음');
+    await go('#today'); }
+
   // 시작(taskGo)·다음 줄(nextAfter): 줄마다 한 번에 그 자리로
   scene('2026-10-29T07:40:00', ST);
   { const V = pe.planToday(THU), n1 = pe.nextAfter('set.read:2026-10-29', V);
@@ -759,10 +777,11 @@ function runWeek(W, sets, st) {
     // FLOW를 놓은 뒤(다른 화면에서 시작) 4지선다: 오늘 줄 없이 "다음: 4지선다 10문 더"
     pe.goTab('today'); await sleep(40); pe.taskGo('set.read:2026-10-29'); await sleep(60); const fl0 = pe.FLOW();
     await go('#test'); click('[data-act="start-mcq"]'); await sleep(60);
-    ok(fl0 && fl0.id === 'set.read:2026-10-29' && !pe.FLOW() && pe.SES().kind === 'mcq', '오늘 줄로 세트를 연 뒤 테스트 탭에서 4지선다를 시작하면 오늘 줄 흐름(FLOW)을 놓음');
-    await doAll(); ok(T_(endP()) === '다음: 4지선다 10문 더' && !link() && !/오늘 순서/.test(T_(V$())) && T_(V$().querySelector('.endb .btn.sec')) === '테스트로', '4지선다 끝: "다음: 4지선다 10문 더"(오늘 줄 없음), 회색 "테스트로"');
+    ok(fl0 && fl0.id === 'set.read:2026-10-29' && !pe.FLOW() && pe.SES().kind === 'mcq', '오늘 줄로 세트를 연 뒤 연습 탭(예전 주소 #test)에서 4지선다를 시작하면 오늘 줄 흐름(FLOW)을 놓음');
+    await doAll(); ok(T_(endP()) === '다음: 4지선다 10문 더' && !link() && !/오늘 순서/.test(T_(V$())) && T_(V$().querySelector('.endb .btn.sec')) === '연습으로', '4지선다 끝: "다음: 4지선다 10문 더"(오늘 줄 없음), 회색 "연습으로"');
     const m1 = pe.SES(), hm = L(); click('[data-act="end-go"][data-w="p"]'); await sleep(60);
-    ok(pe.SES() !== m1 && pe.SES().kind === 'mcq' && pe.SES().from === 'test' && H() === '#sess' && L() === hm, '"4지선다 10문 더" → 같은 #sess에서, 돌아갈 곳은 테스트 그대로');
+    ok(pe.SES() !== m1 && pe.SES().kind === 'mcq' && pe.SES().from === 'test' && H() === '#sess' && L() === hm, '"4지선다 10문 더" → 같은 #sess에서, 돌아갈 곳은 연 곳(연습) 그대로');
+    await tap('.topbar [data-act="back"]'); ok(H() === '#practice' && L() === hm && pe.SES() && d.querySelector('#nav button.on').dataset.tab === 'practice', '닫기 → 연습 탭 첫 화면(#practice, 방문 기록 그대로)');
     pe.goTab('today'); await sleep(40);
 
     // 하는 곳이 없는 다음 줄(주간 리포트): 오늘로 가서 그 줄을 펼침(앞의 남은 줄보다 먼저)

@@ -446,8 +446,16 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   }
   await go('#about');
   ok(/기출 26회분/.test(txt()) || /기출 \d+회분/.test(txt()), '출처 화면 회차 수: ' + (txt().match(/기출 \d+회분 \d+문항/) || [''])[0]);
-  await go('#study'); click('[data-act="start-study"]'); await sleep(40);
-  ok(view().querySelector('.fc'), '오늘 학습 세션');
+  // 탭 이름: PE_WEEKS(= pipeline/curriculum.json)는 그대로 두고 보여 줄 때 지금 이름으로(weekObj, 로드맵의 요일별 루틴)
+  { const P = pe.PLAN(), w17 = P.map.findIndex(m => m && (m.t === 17 || (m.ts || []).includes(17))), cf = path.join(__dirname, '..', '..', 'pipeline', 'curriculum.json');
+    const cur = fs.existsSync(cf) ? JSON.parse(fs.readFileSync(cf, 'utf8')).weeks.find(x => x.w === 17) : null, raw = w.PE_WEEKS.find(x => x.w === 17), g17 = w17 >= 0 ? pe.weekObj(w17).goals : [];
+    ok(g17.some(g => /^연습 탭 전체 카드 1회전/.test(g)) && !g17.some(g => /암기 탭/.test(g)) && raw.goals[0] === '암기 탭 전체 카드 1회전(하루 40장)' && (!cur || JSON.stringify(cur.goals) === JSON.stringify(raw.goals)), `${w17}주차(틀 17) 목표는 "연습 탭 전체 카드 1회전"으로 보이고, PE_WEEKS는 curriculum.json과 같이 "암기 탭" 그대로`);
+    ok(pe.tabWords('토요일 모의고사(앱 테스트 탭) · 기출 훑기(테스트 → 기출 단원별) · 테스트 → 기출 회차에서 · 암기 탭 · 플랜 탭 · 다시 볼 세트') === '토요일 모의고사(연습 탭) · 기출 훑기(연습 → 기출 문제은행(단원별)) · 연습 → 기출 문제은행(회차별)에서 · 연습 탭 · 이번 주 탭 · 세트 복습', 'tabWords: 예전 탭 이름 → 연습 탭 · 이번 주 탭 · 연습 → 기출 문제은행 · 세트 복습');
+    await go('#plan'); ok(!/암기 탭|테스트 탭|테스트 →|플랜 탭|다시 볼 세트/.test(txt()) && /연습 → 기출 문제은행에서 실제 시험지/.test(txt()) && /모의고사 채점 \(모의고사 화면/.test(w.PE_PROMPTS.find(x => x.id === 'p9').n), '로드맵(주차 목표·요일별 루틴·Claude 활용 순서)과 프롬프트 이름에 예전 탭 이름이 없음'); }
+  // 연습 → "새 카드 n장"은 범위 안 새 카드만(카드 복습은 따로 "카드 복습 n장 · 전체 단원")
+  await go('#study'); const nwRow = view().querySelector('[data-act="start-study"]'), nwN = Number(((nwRow && nwRow.textContent.match(/새 카드 (\d+)장/)) || [])[1] || 0);
+  click('[data-act="start-study"]'); await sleep(40);
+  ok(view().querySelector('.fc') && pe.SES().kind === 'study' && pe.SES().title === '새 카드' && pe.SES().items.length === nwN && pe.SES().items.every(it => !(S().cards[it.id] && S().cards[it.id].seen > 0)), `연습 "새 카드 ${nwN}장" → 새 카드만 ${nwN}장 세션`);
 
   // 용어 빈칸 쓰기(하·중·상, 직접 입력)
   {
@@ -570,9 +578,9 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     click('[data-act="memo-play"]'); await sleep(10);
     await go('#study');
     ok(!M().run, '다른 화면으로 가면 멈춤');
-    ok(/가리며 외우기 \(\d+장/.test(txt()), '암기 탭에 가리며 외우기');
+    ok(/가리며 외우기 \d+장 · 별표·오답 먼저/.test(txt()) && d.querySelector('#nav button.on').dataset.tab === 'practice', '예전 주소 #study → 연습 탭: 가리며 외우기 20장 · 별표·오답 먼저');
     click('[data-act="memo-study"]'); await sleep(30);
-    ok(M().items.length >= 1 && M().items.length <= 20 && !M().setD, '암기 탭 → 범위 카드로 가리며 외우기');
+    ok(M().items.length >= 1 && M().items.length <= 20 && !M().setD && M().label === '연습 카드', '연습 탭 → 범위 카드로 가리며 외우기(이름 "연습 카드")');
     // 이어 하기: 세트 가리며 외우기는 저장된 자리부터(메모리의 암기 탭 외우기와 따로)
     await go('#set/2026-10-19');
     const rs = S().resume['memo:set:2026-10-19'];
@@ -1087,14 +1095,47 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     const toSet = async () => { await tab('today'); pe.go('set/' + D0); await sleep(60); };   // 오늘 몫 줄의 "시작"과 같은 길(오늘에서 세트로)
     const cardsTab = async () => { click('[data-act="set-tab"][data-t="cards"]'); await sleep(20); if (view().querySelector('[data-act="resume-clear"]')) await tap('[data-act="resume-clear"]'); };
 
-    // 탭은 바꿔 쓰기만 해서 쌓이지 않고(T7), 탭 첫 화면에서 가장자리를 밀어도 아무 데도 가지 않는다(I)
+    // 아래 탭 다섯(오늘 · 이번 주 · 복습 · 연습 · 더보기). 탭은 바꿔 쓰기만 해서 쌓이지 않고(T7), 탭 첫 화면에서 가장자리를 밀어도 아무 데도 가지 않는다(I)
+    ok([...d.querySelectorAll('#nav button')].map(b => b.dataset.tab + ':' + b.textContent.trim()).join() === 'today:오늘,week:이번 주,review:복습,practice:연습,more:더보기', '아래 탭 다섯: 오늘 · 이번 주 · 복습 · 연습 · 더보기');
+    const h1 = () => (view().querySelector('.ltitle h1') || {}).textContent || '';
     await go('#today'); let hl = L();
-    await tab('review'); await tab('test'); await tab('more');
-    ok(H() === '#more' && L() === hl && tabOn() === 'more', 'T7: 탭을 세 번 바꿔도 방문 기록이 그대로(탭이 쌓이지 않음)');
+    await tab('week');
+    ok(H() === '#week' && L() === hl && tabOn() === 'week' && !view().querySelector('.topbar') && h1() === '이번 주', '오늘 → 탭 이번 주: 탭 첫 화면(위쪽 막대 없음), 방문 기록 그대로');
+    await tab('practice');
+    ok(H() === '#practice' && L() === hl && tabOn() === 'practice' && !view().querySelector('.topbar') && h1() === '연습' && primaries() === 0, '이번 주 → 탭 연습: 방문 기록 그대로, 연습은 파란 버튼 없는 모음');
     await edge(8, 150);
-    ok(H() === '#more' && L() === hl && !emptyFlow(), 'I: 탭 첫 화면에서 왼쪽 가장자리 밀기는 그대로');
+    ok(H() === '#practice' && L() === hl && !emptyFlow(), 'I: 오늘 → 이번 주 → 연습 뒤 탭 첫 화면에서 왼쪽 가장자리 밀기는 그대로(탭이 쌓이지 않음)');
+    await tab('review'); await tab('more');
+    ok(H() === '#more' && L() === hl && tabOn() === 'more', 'T7: 탭을 네 번 바꿔도 방문 기록이 그대로(탭이 쌓이지 않음)');
+    await edge(8, 150);
+    ok(H() === '#more' && L() === hl && !emptyFlow(), 'I: 더보기에서도 가장자리 밀기는 그대로');
     await tap('#nav button[data-tab="more"]');
     ok(H() === '#more' && L() === hl, '지금 탭을 다시 눌러도 그대로(맨 위로)');
+    // 예전 주소 #study(암기)·#test(테스트)는 연습 탭으로(주소는 그대로, 탭 강조는 연습). 검사들이 누르는 버튼이 모두 연습 탭에 있다
+    for (const h of ['#study', '#test']) {
+      await go(h);
+      ok(H() === h && tabOn() === 'practice' && h1() === '연습' && ['start-due', 'start-study', 'start-free', 'memo-study', 'start-mcq', 'start-recall', 'start-cloze', 'start-fill', 'start-outline', 'dd-rand', 'gen-mock', 'study-unit'].every(a => view().querySelector(`[data-act="${a}"]`)) && view().querySelector('[data-act="go"][data-h="kichul"]'), `예전 주소 ${h} → 연습 탭(카드·문제·실전·단원별 진도 버튼 모두)`);
+    }
+    hl = L(); await tab('practice'); ok(H() === '#practice' && L() === hl && tabOn() === 'practice', '예전 주소에서 탭 연습 → #practice(방문 기록 그대로)');
+    // 복습: 오답이 없어도 "오답 노트" 칸(빈 안내). 복습 탭에는 배지가 없다(밀린 수를 빨간 수로 세지 않음)
+    { const wr = S().wrong; S().wrong = {}; await tab('review');
+      ok(/오답 노트/.test(txt()) && /오답이 없어요 · 퀴즈·테스트에서 틀리거나 '모름'을 고르면 여기 모여요\./.test(txt()) && !d.querySelector('#nav button[data-tab="review"] .nb'), '복습: 오답이 없어도 "오답 노트" 칸, 복습 탭에 배지 없음');
+      S().wrong = wr; pe.render(); }
+    // 이번 주 탭 배지: 날짜가 3일 안인 일(원서접수 기간·48시간 복기)이 남았을 때만 빨간 수. 다음 회차를 내일 원서접수가 시작하는 날로 옮겨(시작일도 함께) 본다
+    { const T0 = ymd, st0 = S().settings.start, rd0 = JSON.stringify(S().settings.roundDates || {}), tk0 = JSON.stringify(S().tk || {}), td0 = JSON.stringify(S().today || null);
+      const addD = (x, n) => { const z = new w.Date(x + 'T12:00:00'); z.setDate(z.getDate() + n); return z.getFullYear() + '-' + String(z.getMonth() + 1).padStart(2, '0') + '-' + String(z.getDate()).padStart(2, '0'); };
+      const nb = () => d.querySelector('#nav button[data-tab="week"] .nb'), rvb = () => d.querySelector('#nav button[data-tab="review"] .nb');
+      const moveTo = ex => { S().settings.roundDates = Object.assign(JSON.parse(rd0), { [nx.r]: ex }); S().settings.start = addD(addD(T0, 33), -190); pe.recalcPlan(); pe.render(); };
+      await tab('more'); const n0 = pe.navBadgeN();
+      ok(!rvb() && (n0 ? nb() && nb().textContent === String(n0) : !nb()), `배지(지금 ${n0}개): 이번 주 탭에만, 날짜가 3일 안인 일만`);
+      const nx = pe.roundList().find(x => x.d > T0);
+      moveTo(addD(T0, 40)); const nFar = pe.navBadgeN(), farOk = pe.PLAN().target.r === nx.r && !pe.taskList(T0).some(x => x.id === 'apply:' + nx.r);
+      moveTo(addD(T0, 33)); const n1 = pe.navBadgeN();
+      ok(farOk && pe.PLAN().target.r === nx.r && n1 === nFar + 1 && pe.taskList(T0).some(x => x.id === 'apply:' + nx.r) && nb() && nb().textContent === String(n1) && nb().classList.contains('due') && !rvb(), `원서접수가 8일 뒤면 배지에 없고(${nFar}), 내일 시작하면 이번 주 탭에 빨간 ${n1}(오늘 몫의 원서접수 핀과 같은 날)`);
+      S().tk['apply:' + nx.r] = T0; pe.render();
+      ok(pe.navBadgeN() === nFar && (nFar ? nb().textContent === String(nFar) : !nb()), '"접수했어요"(S.tk) → 배지에서 빠짐');
+      S().settings.start = st0; S().settings.roundDates = JSON.parse(rd0); S().tk = JSON.parse(tk0); S().today = JSON.parse(td0); pe.recalcPlan(); pe.render();
+      ok(pe.navBadgeN() === n0 && pe.PLAN().start === st0, '(되돌림) 시작일·회차 날짜'); }
 
     // D: 오늘 → 세트 → ④ 논술 → 답안 작성 요령 → 모범 답안 → 뒤로 → 뒤로(아래 탭은 내내 오늘)
     await toSet(); hl = L();
@@ -1132,29 +1173,29 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(upTxt() === '더보기' && tabOn() === 'more', 'K: 탭을 바꾸면 들어온 곳 기록을 비움(타이머의 위 화면은 더보기)');
     await back(); ok(H() === '#more', 'K: 뒤로 → 더보기');
 
-    // E·T6·T10: 테스트 → 기출 → 단원별(회차별과 오가도 기록 그대로) → 한 단원 → 이 단원 카드 외우기 → 끝 → 돌아가기 → 뒤로 → 뒤로
-    await tab('test'); hl = L(); const rg0 = S().range;
+    // E·T6·T10: 연습 → 기출 → 단원별(회차별과 오가도 기록 그대로) → 한 단원 → 이 단원 카드 외우기 → 끝 → 돌아가기 → 뒤로 → 뒤로
+    await tab('practice'); hl = L(); const rg0 = S().range;
     await tap('[data-act="go"][data-h="kichul"]');
-    ok(H() === '#kichul' && upTxt() === '테스트' && tabOn() === 'test', 'E: 테스트 → 기출 문제은행(위쪽 "테스트")');
+    ok(H() === '#kichul' && upTxt() === '연습' && tabOn() === 'practice', 'E: 연습 → 기출 문제은행(위쪽 "연습")');
     await tap('.seg [data-h="kichul/u"]'); await tap('.seg [data-h="kichul"]'); await tap('.seg [data-h="kichul/u"]');
-    ok(H() === '#kichul/u' && L() === hl && upTxt() === '테스트', 'T10: 회차별 ↔ 단원별을 바꿔도 방문 기록이 그대로(뒤로는 테스트)');
+    ok(H() === '#kichul/u' && L() === hl && upTxt() === '연습', 'T10: 회차별 ↔ 단원별을 바꿔도 방문 기록이 그대로(뒤로는 연습)');
     const uh = view().querySelector('[data-h^="kichul/u/"]').dataset.h, cu = pe.deck().find(c => Number(c.u) === Number(uh.split('/')[2]));
     S().cards[cu.id] = Object.assign({ box: 1, ok: 0, ng: 0, star: false }, S().cards[cu.id] || {}, { seen: 1, due: '2000-01-01', last: '2000-01-01' });
     await tap(`[data-h="${uh}"]`);
-    ok(H() === '#' + uh && upTxt() === '단원별' && tabOn() === 'test', 'E: 단원 화면(위쪽 "단원별")');
+    ok(H() === '#' + uh && upTxt() === '단원별' && tabOn() === 'practice', 'E: 단원 화면(위쪽 "단원별")');
     await tap('[data-act="study-unit"]');
-    ok(H() === '#sess' && pe.SES().from === uh && focus() && upTxt() === '닫기' && tabOn() === 'test', 'T6: 단원 화면에서 연 세션은 그 주소 그대로(#kichul/u/N), 집중 모드');
+    ok(H() === '#sess' && pe.SES().from === uh && focus() && upTxt() === '닫기' && tabOn() === 'practice' && / 카드 외우기$/.test(pe.SES().title), 'T6: 단원 화면에서 연 세션(이름 "○○ 카드 외우기")은 그 주소 그대로(#kichul/u/N), 집중 모드');
     pe.SES().i = pe.SES().items.length; pe.render(); await sleep(10);
     await tap('[data-act="sess-close"]');
     ok(H() === '#' + uh && !pe.SES() && S().range === rg0 && !focus(), 'E: 끝 → 돌아가기 → 그 단원 화면(범위 그대로)');
     await back(); ok(H() === '#kichul/u', 'E: 뒤로 → 단원별');
-    await back(); ok(H() === '#test' && L() === hl && tabOn() === 'test', 'E: 뒤로 → 테스트(방문 기록 그대로)');
+    await back(); ok(H() === '#practice' && L() === hl && tabOn() === 'practice', 'E: 뒤로 → 연습(방문 기록 그대로)');
     // T6: 기출 회차 문항 창 → 카드 가리며 외우기 → 완료 → 돌아가기 → 그 회차 화면
     await go('#kichul/r/140'); hl = L();
-    ok(upTxt() === '기출' && tabOn() === 'test', '기출 회차 화면(위쪽 "기출")');
+    ok(upTxt() === '기출' && tabOn() === 'practice', '기출 회차 화면(위쪽 "기출", 아래 탭 연습)');
     click('.paper-q[data-id="140-1-05"]'); await sleep(20);
     await tap('[data-act="memo-one"]', mw());
-    ok(H() === '#memo' && pe.MEMO().from === 'kichul/r/140' && !mw().innerHTML && tabOn() === 'test', 'T6: 기출 회차 문항 창 → 가리며 외우기(연 곳 #kichul/r/140)');
+    ok(H() === '#memo' && pe.MEMO().from === 'kichul/r/140' && !mw().innerHTML && tabOn() === 'practice', 'T6: 기출 회차 문항 창 → 가리며 외우기(연 곳 #kichul/r/140)');
     click('[data-act="memo-finish"]'); await sleep(20);
     await tap('[data-act="memo-close"]');
     ok(H() === '#kichul/r/140' && !pe.MEMO() && L() === hl, 'T6: 완료 → 돌아가기 → 그 회차 화면');
@@ -1234,14 +1275,15 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(H() === '#today' && L() === hl, 'M: 뒤로 → 오늘(방문 기록 그대로)');
 
     // J: 끝 화면 → 틀리거나 애매한 카드 가리며 외우기 → 닫기 → 같은 끝 화면(세션 그대로, 아래 탭은 연 탭)
-    await tab('study'); hl = L(); await tap('[data-act="start-free"]'); const sJ = pe.SES();
+    await tab('practice'); hl = L(); await tap('[data-act="start-free"]'); const sJ = pe.SES();
     click('[data-act="sess-flip"]'); await sleep(10); click('[data-act="sess-grade"][data-g="0"]'); await sleep(10);
     sJ.i = sJ.items.length; pe.render(); await sleep(10);
     await tap('[data-act="memo-sess"][data-only="miss"]');
-    ok(H() === '#memo' && pe.MEMO().from === 'sess' && tabOn() === 'study', 'J: 끝 화면 → 틀린 카드 가리며 외우기(아래 탭 암기)');
+    ok(H() === '#memo' && pe.MEMO().from === 'sess' && tabOn() === 'practice', 'J: 끝 화면 → 틀린 카드 가리며 외우기(아래 탭 연습)');
     await back();
-    ok(H() === '#sess' && pe.SES() === sJ && /완료/.test(view().querySelector('.sheet h3').textContent) && tabOn() === 'study' && L() === hl, 'J: 닫기 → 같은 끝 화면(세션 그대로)');
-    await tap('[data-act="sess-close"]'); ok(H() === '#study' && !pe.SES(), 'J: 돌아가기 → 암기 탭');
+    ok(H() === '#sess' && pe.SES() === sJ && /완료/.test(view().querySelector('.sheet h3').textContent) && tabOn() === 'practice' && L() === hl, 'J: 닫기 → 같은 끝 화면(세션 그대로)');
+    ok(view().querySelector('.endb .btn.sec') && view().querySelector('.endb .btn.sec').textContent.trim() === '연습으로', 'J: 끝 화면의 돌아가기 이름 "연습으로"');
+    await tap('[data-act="sess-close"]'); ok(H() === '#practice' && !pe.SES(), 'J: 돌아가기 → 연습 탭');
 
     // C·T5: 복습 → 오답 카드 가리며 외우기 → (낱말 꾹 → 카드 창) 가리며 외우기 → 완료 → 돌아가기 → 바깥 외우기 그 카드 → 닫기 → 복습
     const wids = pe.deck().slice(0, 3).map(c => c.id); wids.forEach(id => { S().wrong['C:' + id] = { type: 'card', since: '2026-10-01', n: 1, last: '2026-10-01', streak: 0 }; }); delete S().resume['memo:wrong'];
@@ -1341,7 +1383,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
       const sc = view().querySelector('.score'), cl = [...view().querySelectorAll('.qline')].filter(q => !/^ql-(applychk|notice|carry\.mock)$/.test(q.id)), wb = pe.weekBoard(T0), nL = wb.lines.filter(l => l.b || l.B || l.k === 'close').length, mx = wb.ph === 2 ? 8 : 7;
       ok(sc && /다 하면 \d+%|시험 주/.test(sc.textContent) && /남은 필수|이번 주 필수를 다 했어요/.test(sc.textContent), '이번 주: 점수 카드(남은 필수 / 남은 시간 → 다 하면 n%)');
       ok(cl.length >= 1 && cl.length === nL && cl.length <= mx && view().querySelectorAll('.qline').length <= mx + 2, `이번 주: 일요일까지 끝낼 것 ${cl.length}줄(${wb.ph}단계 약속 ${nL}줄, ${mx}줄 이하, 날짜 일·넘어온 것까지 ${mx + 2}줄 이하)`);
-      ok(view().querySelectorAll('.drow').length === 7 && view().querySelectorAll('.btn:not(.sec):not(.ghost)').length === 1 && /‹?\s*오늘/.test(d.querySelector('.topbar [data-act="back"]').textContent), '이번 주: 날마다 7줄, 파란 버튼 하나(다음), 위쪽은 "오늘"');
+      ok(view().querySelectorAll('.drow').length === 7 && view().querySelectorAll('.btn:not(.sec):not(.ghost)').length === 1 && !d.querySelector('.topbar') && d.querySelector('#nav button.on').dataset.tab === 'week', '이번 주: 날마다 7줄, 파란 버튼 하나(다음), 탭 첫 화면(위쪽 막대 없음, 아래 탭 이번 주)');
     } else ok(view().querySelector('.norows') && view().querySelectorAll('.btn:not(.sec):not(.ghost)').length === 1 && !view().querySelector('.score'), `${T0}: 시험 뒤라 이번 주 화면은 카드 하나(파란 버튼 하나)`);
     // 손으로 친 일(이번 주 목표): S.tk에 남고, 그것 하나뿐인 날도 연속 학습으로 센다(touchDay). 목표 줄이 없는 주(시험 뒤)는 같은 동작(data-act="tk")의 버튼으로
     const gid = 'goal:' + W + ':0', dl0 = S().daily[T0], ck0 = S().checks[T0]; delete S().tk[gid]; delete S().daily[T0]; delete S().checks[T0]; pe.render();
