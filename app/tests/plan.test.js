@@ -680,6 +680,119 @@ function runWeek(W, sets, st) {
     scene('2026-10-29T07:40:00', ST, X);
     ok(pe.figDup('2026-10-29', 3) && !pe.figDup('2026-10-27', 3) && pe.hwParts('2026-10-29').restMin === 18 && pe.hwParts('2026-10-27').restMin === 33, '같은 그림 과제(흐름도 그리기)는 그림·표 하나로, 표 정리는 따로(숙제 나머지 18분·33분)'); }
 
+  // 세트 화면·숙제·끝 화면(시계 고정): 아래 막대가 오늘 줄을 잇고, 끝 화면의 "다음"은 정한 순서(1 이어서 · 2 세트 복습 잇기 · 3 오늘 줄 · 4 그 일의 다음 · 5 오늘 순서로)
+  {
+    const T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), H = () => w.location.hash, L = () => w.history.length, tabOn = () => [...d.querySelectorAll('#nav button.on')].map(b => b.dataset.tab).join();
+    const bar = () => V$().querySelector('.nextbar .btn'), endP = () => V$().querySelector('.endb > .btn'), link = () => V$().querySelector('.endor .lnk'), tap = async (sel, root) => { click(sel, root); await sleep(60); };
+    const doAll = async right => { for (let k = 0; k < 200 && pe.SES() && pe.SES().items[pe.SES().i]; k++) { const it = pe.SES().items[pe.SES().i];
+      if (it.type === 'card') { click('[data-act="sess-flip"]'); click('[data-act="sess-grade"][data-g="2"]'); }
+      else if (it.type === 'gq') { const q = pe.gqList(it.d).items[it.n]; click(`[data-act="sess-pick"][data-k="${right ? q.a : (q.a + 1) % q.o.length}"]`); click('[data-act="sess-next"]'); }
+      else { click('[data-act="sess-pick"][data-k="0"]'); click('[data-act="sess-next"]'); } } await sleep(20); };
+    // A: 오늘 → "단답 1문제" 줄 → 세트 ③(그 카드를 펼침) → [답안지](#dandap/카드/날짜) → 뒤로 → "다 썼어요 · 단답 1문" → "✓ 끝 · 다음: 논술 목차 옮겨 적기 4번" → 뒤로 → 오늘
+    scene('2026-10-29T07:40:00', ST); await show('#today'); const hl = L();
+    click('#view [data-task="hw.dd:2026-10-29"]'); await sleep(60);
+    const fc = V$().querySelector('.hw.focus'), stB = fc ? [...fc.querySelectorAll('.steps3 li')].map(li => [...li.querySelectorAll('button')].map(b => b.dataset.act + ':' + (b.dataset.h || b.dataset.p || '')).join()) : [];
+    ok(H() === '#set/2026-10-29' && V$().querySelector('[data-act="set-tab"][data-t="tasks"].on') && fc && fc.querySelector('[data-k^="dd"]') && stB.length === 3 && /^go:dandap\/D20261029-\d+\/2026-10-29$/.test(stB[0]) && stB[1] === 'timer-go:one1' && /^copy-dd/.test(stB[2]) && tabOn() === 'today',
+      'A: 오늘 단답 줄 → 세트 ③, 단답 카드를 펼침(이렇게 해요 ① 답안지 → #dandap/카드/날짜 ② 타이머 10분 ③ 첨삭 요청 복사)');
+    ok(prim().length === 1 && bar() && T_(bar()) === '다 썼어요 · 단답 1문' && bar().dataset.act === 'hw-bulk', 'A: 이 화면의 파란 버튼은 아래 막대 "다 썼어요 · 단답 1문" 하나');
+    await tap('.hw.focus .steps3 [data-h^="dandap/"]');
+    ok(/^#dandap\/D20261029-\d+\/2026-10-29$/.test(H()) && prim().length === 1 && T_(prim()[0]) === '다 썼어요(숙제에 표시)' && tabOn() === 'today', 'A: 답안지(#dandap/카드/날짜): 파란 버튼 "다 썼어요(숙제에 표시)"');
+    await tap('.topbar [data-act="back"]');
+    ok(H() === '#set/2026-10-29' && T_(bar()) === '다 썼어요 · 단답 1문', 'A: 뒤로 → 세트 ③(막대 그대로)');
+    const ddk = pe.hwParts('2026-10-29').dd.ks[0]; await tap('.nextbar .btn');
+    ok(pe.S().sp['2026-10-29'].hw[ddk] === 1 && /^✓ 끝 · 다음: 논술 목차 옮겨 적기 4번 · 20분$/.test(T_(bar())) && pe.planToday(THU).rows.find(r => r.id === 'hw.dd:2026-10-29').done, 'A: "다 썼어요 · 단답 1문" → 단답 동그라미, 오늘 줄도 끝, 막대는 "✓ 끝 · 다음: 논술 목차 옮겨 적기 4번 · 20분"');
+    await tap('.nextbar .btn');
+    ok(H() === '#set/2026-10-29' && L() === hl && pe.FLOW().id === 'hw.eo:2026-10-29' && V$().querySelector('.hw.focus [data-k="eo"]') && T_(bar()) === '4번 다 옮겨 적었어요', 'A: 다음 → 같은 세트 화면에서 목차 카드를 펼침(바꿔 쓰기, 방문 기록 그대로), 막대 "4번 다 옮겨 적었어요"');
+    await tap('.topbar [data-act="back"]');
+    ok(H() === '#today' && L() === hl && tabOn() === 'today', 'A: 뒤로 → 오늘(사이에 낡은 세트 화면 없음)');
+    // 펼친 말하기 카드의 "4번씩 다 했어요 · 말하기"는 고정한 목표(학원 횟수)까지 올리기만
+    click('#view [data-task="hw.say:2026-10-29"]'); await sleep(60);
+    ok(T_(bar()) === '4번씩 다 했어요 · 말하기' && V$().querySelector('.hw.focus [data-k="s0"]') && /30초 안에/.test(T_(V$().querySelector('.hw.focus .steps3'))), '펼친 말하기 카드: 막대 "4번씩 다 했어요 · 말하기", 이렇게 해요 세 단계');
+    pe.S().sp['2026-10-29'].hw.s0 = 4; pe.S().sp['2026-10-29'].hw.s1 = 1; await tap('.nextbar .btn');
+    ok(pe.hwParts('2026-10-29').say.ks.every(k => pe.S().sp['2026-10-29'].hw[k] === 4) && /^✓ 끝 · 다음: /.test(T_(bar())), '말하기 4번씩: 모든 말하기 칸을 4까지(이미 한 것은 그대로), 그다음 ✓ 끝');
+    pe.goTab('today'); await sleep(40);
+    // 세트 화면 막대(오늘 줄 없이): 읽기 → 세트 퀴즈 → 숙제 필수
+    await show('#set/2026-10-29');
+    ok(T_(bar()) === '다음: 용어 읽기 0/10' && bar().dataset.act === 'set-bar', '세트 막대(오늘 줄 없이): 다음: 용어 읽기 0/10');
+    await tap('.nextbar .btn');
+    ok(V$().querySelector('.acc.open') && pe.S().sp['2026-10-29'].read[0] === 1 && T_(bar()) === '다음: 용어 읽기 1/10', '"다음: 용어 읽기" → 첫 안 읽은 용어를 펼침(읽음)');
+    for (let i = 1; i < 10; i++) pe.S().sp['2026-10-29'].read[i] = 1; pe.render();
+    ok(T_(bar()) === '다음: 세트 퀴즈 5문', '다 읽으면 다음: 세트 퀴즈 5문');
+    await tap('.nextbar .btn'); ok(V$().querySelector('[data-act="set-tab"][data-t="quiz"].on'), '→ ② 퀴즈');
+    const q0 = pe.SETS().sets['2026-10-29'].quiz; for (let i = 0; i < q0.length; i++) { click(`[data-act="set-quiz"][data-i="${i}"][data-k="${i ? q0[i].a : (q0[i].a + 1) % q0[i].o.length}"]`); await sleep(5); }
+    ok(/③ 숙제 2\/6/.test(T_(V$().querySelector('[data-act="set-tab"][data-t="tasks"]'))) && /틀린 이유/.test(pe.reqParts('2026-10-29').map(p => p.t).join()), 'D7: 세트 퀴즈를 다 풀고 하나 틀리면 ③ 숙제 필수가 6가지(틀린 이유)');
+    ok(T_(bar()) === '다음: 숙제 필수 · 틀린 이유' && /틀린 문제는 오답 노트와 숙제 '틀린 이유'로 갔어요/.test(T_(V$())), '퀴즈를 다 풀면 막대는 다음 빠진 숙제 필수(오늘 세트: 말하기 → 틀린 이유 → …)');
+    await tap('.nextbar .btn');
+    ok(V$().querySelector('.hw.focus [data-k^="q"]') && T_(bar()) === '다 썼어요 · 틀린 이유', '→ ③ 틀린 이유 카드를 펼침, 막대 "다 썼어요 · 틀린 이유"');
+    pe.goTab('today'); await sleep(40);
+
+    // B: 오늘 → 세트 복습 2개 "시작" → 끝 → "다음 세트 복습: 10/28(수) 1일 차 (2/2)"(같은 #sess) → 끝 → "오늘로"
+    scene('2026-10-29T07:40:00', ST); await show('#today'); const hb = L();
+    click('#view [data-task="rev:2026-10-27:1"]'); await sleep(60); const sB = pe.SES();
+    ok(H() === '#sess' && sB.kind === 'rev' && JSON.stringify(sB.chain) === '["2026-10-28"]' && sB.from === 'today', 'B: 세트 복습 2개 줄 → 10/27 세트 복습(10/28을 이어서)');
+    await doAll(true);
+    ok(T_(endP()) === '다음 세트 복습: 10/28(수) 1일 차 (2/2) · 8분' && prim().length === 1 && V$().querySelector('.endb .btn.sec[data-act="sess-close"]') && T_(V$().querySelector('.endb .btn.sec')) === '오늘로', 'B: 끝 → 파란 "다음 세트 복습: 10/28(수) 1일 차 (2/2) · 8분", 회색 "오늘로"');
+    click('[data-act="end-go"][data-w="p"]'); await sleep(60); const sB2 = pe.SES();
+    ok(sB2 !== sB && sB2.rv[0].d === '2026-10-28' && H() === '#sess' && L() === hb && sB2.from === 'today' && tabOn() === 'today', 'B: 다음 세트 복습은 같은 #sess에서(방문 기록 그대로, 연 곳은 오늘)');
+    await doAll(true);
+    ok(/^다음: .+ · \d+분$/.test(T_(endP())) && T_(V$().querySelector('.endb .btn.sec')) === '오늘로', 'B: 마지막 끝 → 다음 오늘 줄, 회색 "오늘로"');
+    await tap('[data-act="sess-close"]');
+    ok(H() === '#today' && L() === hb && !pe.SES() && tabOn() === 'today', 'B: 오늘로 → 오늘');
+
+    // 차례 1·2: 복습 날인 세트의 창에서 연 용어 퀴즈는 세트 복습 규칙(다 풀면 다음 세트 복습, 또는: 그 퀴즈의 다음)
+    scene('2026-10-29T07:40:00', ST); await show('#review'); const mw = () => d.querySelector('#modal-wrap');
+    ok(prim().length === 1 && /^세트 복습 시작 · 10\/27\(화\) 1일 차 · 8분$/.test(T_(prim()[0])) && /세트 복습 7 · 카드 복습 57/.test(T_(V$().querySelector('.lsub'))), '복습 탭: 상태 한 줄(세트 복습 7 · 카드 복습 57), 파란 "세트 복습 시작 · 10/27(화) 1일 차 · 8분" 하나');
+    click('[data-act="rev-open"][data-d="2026-10-26"]'); await sleep(20);
+    ok([...mw().querySelectorAll('.btn:not(.sec):not(.ghost)')].length === 1 && /세트 복습 시작 · 카드 10 \+ 퀴즈 5 · 약 8분/.test(T_(mw())) && mw().querySelector('details.rvm [data-act="gq-go"]'), '세트 창: 파란 "세트 복습 시작 · 카드 10 + 퀴즈 5 · 약 8분" 하나, 나머지는 "다른 방법으로" 안');
+    click('[data-act="gq-go"]', mw()); await sleep(60);
+    ok(pe.SES().kind === 'gq' && pe.SES().chain.length === 6 && pe.SES().chain[0] === '2026-10-19', '창에서 연 용어 퀴즈도 나머지 세트 복습을 잇는다(그 세트 뒤 차례부터)');
+    await doAll(true);
+    ok(/^다음 세트 복습: 10\/19\(월\) 7일 차 \(2\/7\) · 8분$/.test(T_(endP())) && T_(link()) === '또는: 2회 풀기 (15문)' && pe.S().sp['2026-10-26'].rev[3] === THU, '차례 2: 용어 퀴즈를 끝까지 풀면 세트 복습으로 치고 "다음 세트 복습", 아래 "또는: 2회 풀기 (15문)"');
+    // 차례 4: ②에서 연 용어 퀴즈는 그 퀴즈의 다음("다음: 2회 풀기 (15문)", 같은 #sess에서 2회)
+    pe.goTab('today'); await sleep(40); await show('#set/2026-10-29'); click('[data-act="set-tab"][data-t="quiz"]'); await sleep(10);
+    const ord = [...V$().querySelectorAll('section.sec, details.gqf')].map(x => x.tagName).join();
+    ok(ord === 'SECTION,DETAILS' && /세트 퀴즈/.test(T_(V$().querySelector('section.sec'))) && /더 연습: 용어 퀴즈 \d+문 · 0\/\d+/.test(T_(V$().querySelector('details.gqf > summary'))) && !V$().querySelector('details.gqf').open && !V$().querySelector('details.gqf .btn:not(.sec):not(.ghost)'), '②: 세트 퀴즈 먼저, 용어 퀴즈는 접은 "더 연습"(세트 퀴즈 전엔 닫힘, 안의 버튼은 모두 보조)');
+    click('details.gqf [data-act="gq-go"][data-r="next"]'); await sleep(60); await doAll(true); const hq = L(), g1 = pe.SES();
+    ok(T_(endP()) === '다음: 2회 풀기 (15문)' && !link() && T_(V$().querySelector('.endb .btn.sec')) === '세트로', '차례 4: ②에서 연 용어 퀴즈 끝 → "다음: 2회 풀기 (15문)", 회색 "세트로"');
+    click('[data-act="end-go"][data-w="p"]'); await sleep(60);
+    ok(pe.SES() !== g1 && pe.SES().items[0].n === 15 && pe.SES().gq.m === 'round' && H() === '#sess' && L() === hq, '"다음: 2회 풀기" → 같은 #sess에서 2회(16번부터)');
+    // FLOW를 놓은 뒤(다른 화면에서 시작) 4지선다: 오늘 줄 없이 "다음: 4지선다 10문 더"
+    pe.goTab('today'); await sleep(40); pe.taskGo('set.read:2026-10-29'); await sleep(60); const fl0 = pe.FLOW();
+    await go('#test'); click('[data-act="start-mcq"]'); await sleep(60);
+    ok(fl0 && fl0.id === 'set.read:2026-10-29' && !pe.FLOW() && pe.SES().kind === 'mcq', '오늘 줄로 세트를 연 뒤 테스트 탭에서 4지선다를 시작하면 오늘 줄 흐름(FLOW)을 놓음');
+    await doAll(); ok(T_(endP()) === '다음: 4지선다 10문 더' && !link() && !/오늘 순서/.test(T_(V$())) && T_(V$().querySelector('.endb .btn.sec')) === '테스트로', '4지선다 끝: "다음: 4지선다 10문 더"(오늘 줄 없음), 회색 "테스트로"');
+    const m1 = pe.SES(), hm = L(); click('[data-act="end-go"][data-w="p"]'); await sleep(60);
+    ok(pe.SES() !== m1 && pe.SES().kind === 'mcq' && pe.SES().from === 'test' && H() === '#sess' && L() === hm, '"4지선다 10문 더" → 같은 #sess에서, 돌아갈 곳은 테스트 그대로');
+    pe.goTab('today'); await sleep(40);
+
+    // 하는 곳이 없는 다음 줄(주간 리포트): 오늘로 가서 그 줄을 펼침(앞의 남은 줄보다 먼저)
+    scene('2026-10-31T08:00:00', ST); applyRows(pe.dayPlan(SAT).rows, SAT); const SD = clone(pe.S());
+    scene('2026-11-01T09:00:00', SD); pe.goTab('today'); await sleep(40); const VR = pe.planToday(SUN), rr = VR.rows, rp = rr.find(r => /^report:/.test(r.id)), lr = rr[rr.indexOf(rp) - 1];
+    applyRows(rr.filter(r => r !== rp && r !== lr && r !== rr[0]), SUN); pe.invalidate(); pe.taskGo(lr.id); await sleep(60); await doAll(true);
+    ok(lr.task.k === 'rev' && T_(endP()) === '다음: 주간 리포트 복사 → Claude · 10분', `오늘 줄(${lr.id})의 끝 → "다음: 주간 리포트 복사 → Claude · 10분"`);
+    click('[data-act="end-go"][data-w="p"]'); await sleep(60);
+    ok(H() === '#today' && V$().querySelector('.prow.now') && V$().querySelector('.prow.now').dataset.task === rp.id && !pe.planToday(SUN).rows[0].done, '하는 곳이 없는 줄 → 오늘에서 그 줄을 펼침(앞에 남은 10/29 세트 복습보다 먼저)');
+
+    // ① 가리며 외우기 끝: 세트 퀴즈가 남았으면 "다음: 세트 퀴즈 5문" → 세트 ②(방문 기록 그대로), 뒤로 → 오늘
+    scene('2026-10-29T07:40:00', ST); pe.goTab('today'); await sleep(40); await show('#set/2026-10-29'); const hM = L();
+    click('[data-act="memo-set"]'); await sleep(60); while (pe.MEMO().i + 1 < pe.MEMO().items.length) { click('[data-act="memo-next"]'); await sleep(2); }
+    click('[data-act="memo-finish"]'); await sleep(20);
+    ok(T_(endP()) === '다음: 세트 퀴즈 5문' && T_(V$().querySelector('.endb .btn.sec')) === '세트로' && !V$().querySelector('[data-h="cal"]'), '가리며 외우기 끝(세트): "다음: 세트 퀴즈 5문", 회색 "세트로"(학습 달력 버튼은 없음)');
+    click('[data-act="end-go"][data-w="p"]'); await sleep(60);
+    ok(H() === '#set/2026-10-29' && V$().querySelector('[data-act="set-tab"][data-t="quiz"].on') && L() === hM, '→ 세트 ② 퀴즈(방문 기록 그대로)');
+    await tap('.topbar [data-act="back"]'); ok(H() === '#today' && L() === hM, '뒤로 → 오늘');
+
+    // 같은 그림 과제: 그림·표 마지막 동그라미를 채우면 그 과제(sp.tasks[i])도 다 함, 하나 빼면 되돌림. 그 과제 카드는 숨기고 그림·표 카드에 한 줄
+    const X = clone(FIX); X.sets[THU] = cloneSet(THU, 1, REFS[THU], { essay: Object.assign(clone(BASE.essay), { fig: '액상화 평가 흐름도(예비평가 → 본 평가 → 대책)' }), tasks: BASE.tasks.concat(['액상화 평가 흐름도(예비평가 생략 조건 3개 → 본 평가)를 손으로 그리기']) });
+    scene('2026-10-29T07:40:00', ST, X); pe.goTab('today'); await sleep(40); await show('#set/' + THU); click('[data-act="set-tab"][data-t="tasks"]'); await sleep(10);
+    const ti = BASE.tasks.length, fgN = w.PE_HW[1].fg;
+    ok(pe.figDup(THU, ti) && !V$().querySelector(`[data-act="hw-task"][data-i="${ti}"]`) && /세트 숙제 항목과 같은 그림이에요/.test(T_(V$().querySelector('.hw [data-k="fg"]').closest('.hw'))), '같은 그림 과제 카드는 숨기고 그림·표 카드에 "세트 숙제 항목과 같은 그림이에요"');
+    click(`[data-act="hw"][data-k="fg"][data-v="${fgN}"]`); await sleep(10); const tOn = pe.S().sp[THU].tasks[ti] === true;
+    click(`[data-act="hw"][data-k="fg"][data-v="${fgN}"]`); await sleep(10);
+    ok(tOn && pe.S().sp[THU].tasks[ti] === false && pe.setStatus(THU).nt === pe.hwItems(THU).length, '그림·표 마지막 동그라미 → 그 과제도 다 함(sp.tasks), 하나 빼면 되돌림(숙제 수는 그대로)');
+    pe.goTab('today'); await sleep(40);
+  }
+
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);

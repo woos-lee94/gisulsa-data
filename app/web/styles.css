@@ -50,7 +50,7 @@ a{color:var(--blue)}
 /* ── 레이아웃 ── */
 #view{max-width:640px;margin:0 auto;padding:0 16px 24px}
 .ltitle{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:18px 0 4px}
-.ltitle h1{margin:0;font-size:2rem;line-height:1.15;font-weight:800;letter-spacing:-.025em}
+.ltitle h1{margin:0;font-size:1.5rem;line-height:1.2;font-weight:800;letter-spacing:-.02em}
 .lsub{margin:2px 0 0;color:var(--ink2);font-size:.94rem}
 .topbar{position:sticky;top:0;z-index:20;margin:calc(-1 * var(--sat)) -16px 0;padding:calc(8px + var(--sat)) 8px 8px 4px;display:grid;grid-template-columns:1fr minmax(0,auto) 1fr;align-items:center;gap:4px;
   background:color-mix(in srgb,var(--paper) 90%,transparent);backdrop-filter:saturate(1.3) blur(14px);-webkit-backdrop-filter:saturate(1.3) blur(14px);
@@ -627,3 +627,77 @@ details[open]>summary .fs small{display:none}
 .wkh:active{opacity:.6}
 .sec.wksec{margin-top:18px}
 .btns.rp{justify-content:center;margin-top:8px}.btns.rp>.btn{flex:none}
+
+/* ── 세트 화면: 공부 순서 탭(이름 + 지금 상태 두 줄), 도구 한 줄, 아래에 붙은 "다음" 막대(이 화면의 하나뿐인 파란 버튼) ── */
+.sseg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:12px 0 2px;overflow:visible}
+.sseg button{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;min-height:48px;padding:4px 2px;line-height:1.25;white-space:normal;text-align:center}
+.sseg button b{font-size:.88rem;font-weight:700;white-space:nowrap}
+.sseg button small{font-size:.76rem;font-weight:700;color:var(--ink3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sseg button.on small{color:var(--ink2)}.sseg button small.ok{color:var(--ok)}
+.sone{margin:10px 4px 0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stools{flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px}
+.stools .btn.sm{flex:0 1 auto}
+.stools .lnk{padding:8px 6px;font-size:.94rem}
+.stools2{margin-top:2px}.stools2 .btn{flex:0 1 auto;width:auto}
+.snote{margin:6px 4px 10px}
+.acc.read .no{color:var(--ok);font-weight:800}
+.schk{margin-top:12px}.chkl{margin:0;padding-left:20px;line-height:1.6;color:var(--ink2)}
+.sfoot{margin:16px 4px 0}.sfoot.ok{color:var(--ok);font-weight:700}
+.nextbar{position:sticky;bottom:calc(var(--tab-h) + var(--sab) + 8px);z-index:15;margin:16px 0 0}
+.nextbar .btn{box-shadow:0 6px 18px rgba(0,0,0,.18);line-height:1.35}
+body.focus .nextbar{bottom:calc(var(--sab) + 8px)}
+body.kb .nextbar{display:none}
+.gqf{margin-top:16px}.gqf .in-d>.note:first-child{margin:0 0 4px}
+/* ── 세트 숙제: 머리(필수·전체), 필수 카드, 더 하기(접음). 필수 동그라미는 실선, 더 하기는 점선, 사이에 가는 줄. 펼친 카드는 파란 테두리와 세 단계 ── */
+.hwhd{margin-top:14px;padding:14px 16px;border-radius:var(--r-lg);background:var(--sheet)}
+.hwh2{display:block;font-size:1.06rem;font-weight:700}
+.hwcnt{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 12px;margin:4px 0 0;font-size:.92rem;font-weight:600;color:var(--ink2)}
+.hwcnt b{color:var(--ink)}
+.hwwhy{margin:6px 0 0;font-size:.88rem;line-height:1.5;color:var(--ink2)}
+.hwhd .hwrules{margin-top:4px}
+.hwrules>summary{list-style:none;cursor:pointer;padding:6px 0 0;color:var(--blue);font-size:.86rem;font-weight:700}
+.hwrules>summary::-webkit-details-marker{display:none}.hwrules>summary::before{content:"▸ "}.hwrules[open]>summary::before{content:"▾ "}
+.hwrules ol{margin:6px 0 0;font-size:.9rem}.hwrules .note{margin:8px 0 0}
+.hwsh{margin-top:14px}
+.hw[class*=" k-"]{border-left-color:var(--rule)}
+.hwt .hwreq{font-weight:600}
+.hwok{flex:none;margin-top:2px;padding:1px 7px;border-radius:6px;background:var(--ok-soft);color:var(--ok);font-size:.74rem;font-weight:700;white-space:nowrap}
+.cc.req{border-color:var(--ink2)}
+.cc.ext{border-style:dashed;border-color:var(--rule)}
+.ccsep{display:inline-block;align-self:center;width:1px;height:20px;margin:0 3px;background:var(--rule)}
+.hw.focus{box-shadow:0 0 0 2px var(--blue)}
+.steps3{margin:10px 0 2px 36px;padding:10px 12px;border-radius:12px;background:var(--blue-soft)}
+.steps3>p{margin:0 0 2px;font-size:.84rem;font-weight:700;color:var(--blue-ink)}
+.steps3 ol{margin:0;padding:0;list-style:none;counter-reset:s3}
+.steps3 li{counter-increment:s3;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:5px 0;font-size:.92rem;line-height:1.45}
+.steps3 li::before{content:counter(s3);flex:none;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--blue);color:#fff;font-size:.74rem;font-weight:800}
+.steps3 li span{flex:1 1 150px;min-width:0}
+.steps3 .btn.sm{flex:0 1 auto;min-height:36px}
+.hwext{margin-top:14px}.hwxl{padding:0 10px 12px}.hwxl .hw{background:var(--paper)}
+.hwall{color:var(--ok);font-weight:700}
+.hwgo .lnk,.hwc .lnk{font-size:.9rem;padding:4px 2px}
+/* ── 끝 화면: 결과 한 줄, 파란 "다음" 하나(아래 "또는:" 한 줄), 회색 닫기, 외우기로 다지기 ── */
+.endr{margin:6px 0 0;font-weight:700;font-variant-numeric:tabular-nums}
+.endx{margin:6px 0 0}
+.endb{margin-top:14px}.endb .btns{margin-top:8px}
+.endor{margin:6px 0 0;text-align:center}.endor .lnk{padding:6px;font-size:.92rem}
+.endm{margin-top:14px;padding-top:10px;border-top:1px dashed var(--rule)}
+.endm>p{margin:0;font-size:.84rem;font-weight:700;color:var(--ink2)}
+.endm .btn{width:100%;justify-content:flex-start;min-height:40px;padding:6px 0;text-align:left}
+/* ── 세트 창(복습), 복습 탭, 보관함 ── */
+.rvm{margin-top:12px}.rvm .group{background:transparent;border:0;border-radius:0}.rvm>.note{margin:8px 16px 0;padding-bottom:12px}
+.rvback{display:inline-block;margin:0 0 6px;padding:4px 0;font-size:.94rem}
+.ds2{display:block;margin-top:2px;font-size:.8rem;font-weight:600;color:var(--ink2)}
+.sfail{color:var(--red);font-weight:600}
+.vfoot{margin-top:18px;text-align:center;color:var(--ink3)}
+:root[data-theme="dark"] .steps3 li::before{color:#08142E}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .steps3 li::before{color:#08142E}}
+/* 숙제 카드 본문은 번호 밑부터(줄마다 이름 → 동그라미 한 줄). 아래 한 줄: 버튼과 오른쪽 끝 "요령"(펼치면 그 줄 아래 전체 폭) */
+.hw{margin-top:8px;padding-top:10px}.hw .hwr{padding:6px 0 3px;margin-top:6px}.hw .hwr+.hwr{margin-top:0}
+.hw .hwc{gap:6px 12px}.hw .ctr{gap:4px}.hw .ccsep{margin:0 1px}
+.hw .hwp,.hw .hwin{padding-left:0}
+.hw .steps3{margin-left:0}
+.hwf{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:6px 0 0}
+.hwf .btn.sm{flex:0 1 auto}
+.hwf .how{margin:0 0 0 auto}.hwf .how[open]{flex-basis:100%;margin:0}
+.hwf .how summary{padding:6px 0}
