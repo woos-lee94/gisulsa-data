@@ -142,7 +142,7 @@ window.PE_ROUTINES = {
 //   2단계 평일: 목차 떠올리기 5문(필수) · 세트 논술 25분(필수) · 고쳐 쓰기 30분 / 일: 지난주 모의 틀린 1문제 다시 쓰기 · 기출 목차 10개
 //   3단계 평일: 약점 단원 카드 · 수치 빈칸 10문 · 목차 5문 · 모의 오답 다시 쓰기 25분 · 그림·표 1번(숙제) / 토·일: 1·2교시, 3·4교시 모의 · 일: 점수 적기
 //   4단계 평일: 카드 50장 · 기출 목차 5문 · 다시 쓰기 25분 · 압축 요약 2장 / 일: 반나절 휴식 · 압축 요약 16장 · 준비물·일정
-//   시험 전 3일: 읽기·퀴즈만 · 카드 30장 · 목차 5문 · 금요일 준비물 점검 / 시험 날: 체크리스트 / 다음 날: 48시간 복기
+//   시험 전 3일: 읽기·퀴즈만 · 카드 30장 · 목차 5문 · 금요일 준비물 점검(blk pin: 오늘 맨 위 핀) / 시험 날: 체크리스트 / 다음 날: 48시간 복기
 // auto: outline3/5 = 오늘 떠올린 논술 목차 3/5문(S.essayStat[id].last), cloze10 = 오늘 수치 빈칸 10문(S.log), graded50/30 = 오늘 매긴 카드 50/30장(S.daily),
 //       kichul = S.tk['kichul:'+주], budget = S.tk.budget, score = 이번 주 모의 점수(S.mockp[날짜].sc). auto가 없으면 "다 했어요"로 S.tk[id]
 window.PE_EXTRA = {
@@ -169,7 +169,7 @@ window.PE_EXTRA = {
           {k:'prep',t:'다음 주 준비물·일정 점검',min:10,need:'권장',blk:'close'}]},
   pre3:{wd:[{k:'x.rot',t:'카드 30장 돌리기',min:15,need:'필수',blk:'am',auto:'graded30',to:'start-rot'},
             {k:'x.outline',t:'논술 목차 떠올리기 5문',min:15,need:'필수',blk:'noon',auto:'outline5',to:'start-outline'},
-            {k:'kit',t:'준비물 점검: 검은 볼펜·자·시계·신분증·수험표·간식',min:10,need:'필수',blk:'eve',dow:5}]}};
+            {k:'kit',t:'준비물 점검: 검은 볼펜·자·시계·신분증·수험표·간식',min:10,need:'필수',blk:'pin',dow:5}]}};
 
 // 마일스톤(원서접수·시험·발표)은 앱이 준비 시작일과 목표 회차로 계산한다(app.js milestones)
 window.PE_MILESTONES = [];
