@@ -1470,7 +1470,7 @@ function vSet(){const d=R.a;const s=SETS.sets[d];
       ${show?`<ol style="margin:0 0 0 20px;padding:0;line-height:1.75">${(e.o||[]).map(o=>`<li>${esc(String(o).replace(/^\d+\.\s*/,''))}</li>`).join('')}</ol>${e.fig?`<p class="plus">그림·표: ${esc(e.fig)}</p>`:''}${e.p?`<p class="field">채점 포인트: ${esc(e.p)}</p>`:''}`:`<button class="btn sec" data-act="set-eo" data-d="${d}">목차 힌트 보기</button><p class="note">먼저 소제목 5~7개를 스스로 정한 뒤 열어 보세요.</p>`}</div>
       ${ph<=1?'<p class="note">1단계는 토요일 모의고사 논술 2문이 이번 주 몫이에요. 이 문제는 시간이 되면 쓰세요.</p>':ph===3?'<p class="note">3단계는 평일 모의 오답 다시 쓰기가 이번 주 몫이에요. 이 문제는 시간이 되면 쓰세요.</p>':''}
       <div class="btns"><button class="btn ghost" data-act="go" data-h="guide">답안 작성 요령</button></div>
-      ${ph>=4?'':`${tLive(ec)?timerInlineHTML(ec):''}<div class="btns" style="margin-top:4px">${tLive(ec)?'':timerInlineHTML(ec,{p:'one2',l:'타이머 25분',c:'btn sec'})}<button class="btn sec" data-act="copy-essay" data-d="${d}">첨삭 요청 복사</button></div>
+      ${ph>=4?'':`${tLive(ec)?timerInlineHTML(ec,{p:'one2',l:'타이머 25분'}):''}<div class="btns" style="margin-top:4px">${tLive(ec)?'':timerInlineHTML(ec,{p:'one2',l:'타이머 25분',c:'btn sec'})}<button class="btn sec" data-act="copy-essay" data-d="${d}">첨삭 요청 복사</button></div>
       <label class="check group" style="margin-top:12px;border-radius:14px"><input type="checkbox" data-act="set-essay-done" data-d="${d}" ${ed?'checked':''}><span>손글씨로 다 썼어요(사진을 찍어 Claude 프로젝트에 올리기)</span></label>`}`;}}
   else body=vHw(d);
   const tabs=[['cards','① 용어',st.read>=st.nc?'✓':`${st.read}/${st.nc}`],['quiz','② 퀴즈',!st.nq?'':st.qa>=st.nq?'✓':`${st.qa}/${st.nq}`],['tasks','③ 숙제',!rp.length?'':ra>=rp.length?'✓':`${ra}/${rp.length}`],['essay','④ 논술',!s.essay?'':ed?'✓':ph===2?'○':ph<=1||ph===3?'권장':'']];
@@ -1500,8 +1500,9 @@ function setNext(d){const t=todayStr(),c=setCore(d);if(!c)return null;const F=FL
     const x=taskList(t).find(r=>r.id===F.id),nx=x&&(x.quota?(x.quota.list[0]||{}).d:x.k==='carry.sets'?x.ds[x.ds.length-1]:null);
     return{t:nx&&nx!==d&&SETS.sets[nx]?`다음: ${dlab(nx)} 세트 ${x.quota?PART_LAB[HWF[kk]]||'':'읽기·퀴즈'}`.trim():`다음: ${x?rowTxt(x).t:idLabel(F.id)}`,go:()=>taskGo(F.id,{replace:true})};}
   const n=flowNext(F.id);return n?{t:`✓ 끝 · ${n.t} · ${mfmt(n.row.left)}`,go:()=>flowGo(n.row)}:{t:'✓ 끝 · 오늘 몫 끝 · 오늘로',go:()=>goTab('today')};}
-function inSetNext(d){const t=todayStr(),c=setCore(d);if(c.r)return readStep(d,c);if(c.q)return quizStep(d,c);
-  const f=UI.hwf&&UI.hwf.d===d?UI.hwf:null;if(f&&f.k){const x=hwStep(d,f.k,'floor');if(x)return x;}
+function inSetNext(d){const t=todayStr(),c=setCore(d),f=UI.hwf&&UI.hwf.d===d?UI.hwf:null;
+  if(f&&f.k){const x=hwStep(d,f.k,'floor');if(x)return x;}   /* 이번 주 "다음 하나"·막대로 펼친 숙제 칸이 먼저(그 칸의 "다 했어요"), 그 칸을 다 했으면 이 세트 순서로 */
+  if(c.r)return readStep(d,c);if(c.q)return quizStep(d,c);
   const s=SETS.sets[d],ph=phaseObj(s.week!=null?s.week:weekIndex(d)).id,P=hwParts(d),miss=k=>!!P[k]&&P[k].n>0&&P[k].k<P[k].n;
   const k=(d===t?['say','qz','write','dd','eo','sl','fg']:[ph<=2&&'write',ph<=4&&'dd',ph<=2&&'eo',ph===3&&'fg'].filter(Boolean)).find(miss);   /* 지난 세트는 이번 주로 넘어가는 칸만 */
   if(k)return{t:`다음: 숙제 필수 · ${PART_LAB[k]}`,go:()=>{UI.hwf={d,k};SV[d]='tasks';SV.scrollTo='.hw.focus';render();scrollDo();}};
@@ -1877,11 +1878,12 @@ document.addEventListener('touchcancel',tpLost);
    끝난 외우기의 끝 화면에서 열면 그 외우기의 연 곳과 바깥 외우기를 물려받는다(#memo 자신을 연 곳으로 적지 않게) */
 function startMemo(o,fresh){const onM=R.page==='memo'&&!!MEMO,inMemo=onM&&!MEMO.fin,from=nh(o.from)||(onM?nh(MEMO.from):curH());
   if(!fresh&&MEMO&&MEMO.key===o.key&&!MEMO.fin){memoStop();if(!inMemo)MEMO.from=from;flowKeep(o);return nav('memo');}
-  const r=fresh?null:resumeGet(o.key);if(r&&r.ids)o.items=r.ids.map(id=>({id}));
+  let r=fresh?null:resumeGet(o.key),ri=r?r.i:0;
+  if(r&&r.ids){const ok=r.ids.filter(id=>card(id));if(ok.length){ri=r.ids.slice(0,r.i).filter(id=>card(id)).length;o.items=ok.map(id=>({id}));}else r=null;}   /* 이어 하는 목록에서 지운 카드는 빼고 자리를 다시 센다(다 지웠으면 새로) */
   if(!o.items||!o.items.length)return toast('외울 카드가 없어요');
   const outer=inMemo?MEMO:(o.outer||(onM&&MEMO.outer)||null);memoStop();flowKeep(o);
   MEMO=Object.assign({i:0,run:false,phase:'show',left:null,cnt:0,done:false,t0:0,started:Date.now()},o,{from:outer?nh(outer.from):from,outer});
-  if(r&&r.i<MEMO.items.length){MEMO.i=r.i;toast(`${r.i+1}번째 카드부터 이어서 해요`);}
+  if(r&&ri<MEMO.items.length){MEMO.i=ri;if(ri)toast(`${ri+1}번째 카드부터 이어서 해요`);}
   memoSeen();nav('memo');}
 function memoItem(){return MEMO&&MEMO.items[MEMO.i];}
 function memoDur(){const c=memoCfg();return(MEMO.phase==='show'?c.show:c.hide)*1000;}
@@ -1925,7 +1927,8 @@ function memoDoneHTML(){const n=MEMO.items.length,min=Math.max(1,Math.round((MEM
   <div class="endb">${endBtns(false)}</div><div class="endm"><button class="btn ghost sm" data-act="memo-again">처음부터 다시</button></div></div>`;}
 function vMemo(){if(!MEMO)return topbar('가리며 외우기')+`<div class="empty" style="margin-top:20px"><b>진행 중인 외우기가 없어요</b><div class="btns"><button class="btn" data-act="go" data-h="today">오늘로</button></div></div>`;
   if(MEMO.fin)return memoDoneHTML();
-  const it=memoItem(),c=card(it.id),cf=memoCfg(),n=MEMO.items.length,last=MEMO.i+1>=n,fin=last&&MEMO.done&&!MEMO.edit;if(!c)return topbar(MEMO.title||'가리며 외우기')+skipBtn();
+  const it=memoItem(),c=card(it.id),cf=memoCfg(),n=MEMO.items.length,last=MEMO.i+1>=n,fin=last&&MEMO.done&&!MEMO.edit;
+  if(!c)return topbar(MEMO.title||'가리며 외우기')+`<div class="empty"><b>이 카드를 찾을 수 없어요</b><div class="btns">${last?'<button class="btn" data-act="memo-finish">완료</button>':'<button class="btn" data-act="memo-next">건너뛰기</button>'}</div></div>`;   /* 외우기의 다음·완료(세션의 건너뛰기가 아님) */
   const pk=new Set(memoPicks(c.id)),tp=cf.mode==='tape'?memoTapes(c):[],ed=cf.mode==='tape'&&MEMO.edit;
   const seg=(k,arr,lab)=>`<div class="seg">${arr.map(v=>`<button class="${cf[k]===v?'on':''}" data-act="memo-cfg" data-k="${k}" data-v="${v}">${lab(v)}</button>`).join('')}</div>`;
   const how=cf.mode==='pick'?'고른 줄':cf.mode==='rand'?`무작위 ${cf.n}줄`:cf.mode==='tape'?'테이프':'전체';
@@ -1999,8 +2002,18 @@ const mockName=d=>d==='app'?'앱 모의고사':korDate(d)+' 모의고사';
 function mockPre(m,pk){const n=((m&&m[pk])||[]).length;return pk==='p1'?{k:'p1',mins:100}:n<6?{k:'custom',mins:25*n,parts:n}:{k:'essay',mins:100};}
 const mockTitle=(m,pk)=>pk!=='p1'&&m[pk].length<6?`${MOCK_LAB[pk]} ${m[pk].length}문`:MOCK_LAB[pk];
 const mockSub=(m,pk)=>{const n=m[pk].length;return pk==='p1'?(n>10?`${n}문 중 10문 · 100분`:`${n}문 · 100분`):n<6?'문제당 25분':`${n}문 중 4문 · 100분`;};
-/* 지금 단계: 안 쓴 첫 교시 → (채점을 묻는 모의면) 'g' 채점 → null 끝 */
-function mockStep(D){const m=mockObj(D),ps=mockParts(m),pr=S.mockp[D]||{},g=D>=MOCK_GRADE_SINCE,c=ps.find(k=>!pr[k]);return{m,ps,pr,g,cur:c||(g&&ps.length&&!pr.g?'g':null)};}
+/* 지금 단계(cur): 이 모의의 교시 타이머(돌거나 멈췄거나 막 끝남)가 있으면 그 교시 → 고른 교시(want, 없으면 mockWant)가 안 썼으면 그 교시 → 안 쓴 첫 교시
+   → (채점을 묻는 모의면) 'g' 채점 → null 끝. want '-'는 지금 할 교시 없음(오늘 줄은 끝, 다음 줄은 다른 곳: 안 쓴 교시는 접은 칸, 아래 막대는 "✓ 끝 · 다음").
+   그래서 토요일 "2교시 시작" 줄로 오면 2교시부터, 1교시를 되돌려도 도는 2교시 타이머는 그대로 지금 교시 */
+function mockStep(D,want){const m=mockObj(D),ps=mockParts(m),pr=S.mockp[D]||{},g=D>=MOCK_GRADE_SINCE,op=ps.filter(k=>!pr[k]),c=TM.ctx,w=want===undefined?mockWant(D):want;
+  let cur=c&&c.kind==='mock'&&c.D===D&&tLive(c)&&op.includes(c.pk)?c.pk:null;
+  if(!cur&&w!=='-')cur=op.includes(w)?w:op[0]||(g&&ps.length&&!pr.g?'g':null);
+  return{m,ps,pr,g,cur};}
+/* 고른 교시: 단계 줄에서 누른 교시(SV['mkw:'+D], 누를 때의 오늘 줄 흐름이 그대로일 때만) → 오늘 줄이 연 교시(FLOW 'mock:D:p2' → p2).
+   그 줄을 다 했으면 오늘 순서의 다음 줄이 이 모의의 교시·채점일 때만 그것('g'), 다른 곳이면 '-'. 오늘 줄에서 오지 않았으면 null(안 쓴 첫 교시) */
+function mockWant(D){const F=FLOW&&FLOW.at==='mock/'+D?FLOW:null,w=SV['mkw:'+D];if(w&&w.f===(F?F.id:''))return w.k;if(!F)return null;
+  const pk=(F.id.match(/^mock:[^:]+:(p\d)$/)||[])[1];if(pk&&!(S.mockp[D]||{})[pk])return pk;if(!/^mock(\.g)?:/.test(F.id)||!flowDone(F.id))return null;
+  const n=flowNext(F.id),x=n&&n.row.task||{};return x.d===D&&x.k==='mock'?x.pk:x.d===D&&x.k==='mock.g'?'g':'-';}
 /* 아래 막대: 지금 교시를 시작(타이머) → 그 교시 타이머가 돌거나 끝났으면 다 썼어요 → 채점 받았어요 → 오늘 줄에서 왔으면 다음 오늘 줄, 아니면 돌아가기 */
 function mockNext(D){const{m,ps,cur}=mockStep(D),e=esc(D);if(!ps.length)return null;
   if(cur&&cur!=='g')return tLive({kind:'mock',D,pk:cur})?{t:`${MKP[cur]} 다 썼어요`,a:`data-act="mock-part" data-d="${e}" data-k="${cur}"`}:{t:`${MKP[cur]} 시작 · 타이머 ${mockPre(m,cur).mins}분`,a:`data-act="mock-start" data-d="${e}" data-k="${cur}"`};
@@ -2008,25 +2021,31 @@ function mockNext(D){const{m,ps,cur}=mockStep(D),e=esc(D);if(!ps.length)return n
   const F=FLOW&&FLOW.at==='mock/'+D?FLOW:null,n=F&&flowNext(F.id),a=`data-act="mock-next" data-d="${e}"`;
   return n?{t:`✓ 끝 · ${n.t} · ${mfmt(n.row.left)}`,a,go:()=>flowGo(n.row)}:F?{t:'✓ 끝 · 오늘 몫 끝 · 오늘로',a,go:()=>goTab('today')}:{t:'모의고사 끝 · 돌아가기',a,go:()=>goUp()};}
 function mockStart(D,pk){const m=mockObj(D);if(!m||!((m[pk]||[]).length))return render();const P=mockPre(m,pk);
-  return setPresetAsk(P.k,()=>{tStart();render();},{ctx:{kind:'mock',D,pk,label:MOCK_LAB[pk],short:MKP[pk]},no:render,mins:P.k==='custom'?P.mins:undefined,parts:P.parts,name:MOCK_LAB[pk],n:P.mins});}
+  return setPresetAsk(P.k,()=>{tStart();render();tlShow();},{ctx:{kind:'mock',D,pk,label:MOCK_LAB[pk],short:MKP[pk]},no:render,mins:P.k==='custom'?P.mins:undefined,parts:P.parts,name:MOCK_LAB[pk],n:P.mins});}
 function vMock(){const d=R.a,{m,ps,pr,g,cur}=mockStep(d),e=esc(d);
   if(!m)return topbar('모의고사')+`<div class="empty" style="margin-top:20px"><b>모의고사가 없어요</b><div class="btns"><button class="btn" data-act="gen-mock">앱이 만들기</button></div></div>`;
   const head=topbar(mockName(d))+`<h1 class="ptitle">${esc(m.title||'모의고사')}</h1>`;
   if(!ps.length)return head+`<div class="empty" style="margin-top:12px"><b>이번엔 문제가 없어요</b>${esc(m.notice||'')}</div>`;
   const all=ps.every(k=>pr[k]),reveal=SV['mk:'+d],lab={p1:'1교시',p2:'2교시',p3:'3교시',p4:'4교시'};
   const qs=k=>`<div class="group">${m[k].map((q,i)=>`<div class="paper-q"><span class="n">${i+1}</span><span class="q">${esc(typeof q==='string'?q:q.t)}${q&&q.x?`<span class="u">기출 ${esc([].concat(q.x).map(kLabelShort).join(', '))}</span>`:''}</span></div>`).join('')}</div>`;
-  const steps=ps.map(k=>[MKP[k],!!pr[k],k===cur]).concat(g?[['채점',!!pr.g,cur==='g']]:[]);
-  const stepper=steps.length<2?'':`<ol class="stepper">${steps.map(([l,dn,c],i)=>`<li class="${dn?'done':c?'cur':''}"><i>${dn?'✓':i+1}</i><span>${l}</span></li>`).join('')}</ol>`;   /* 단계가 하나면(채점을 묻지 않는 1교시만) 단계 줄은 없이 */
-  const live=cur&&cur!=='g'&&tLive({kind:'mock',D:d,pk:cur});
+  const live=cur&&cur!=='g'&&tLive({kind:'mock',D:d,pk:cur}),tm=!!TM.ctx&&TM.ctx.kind==='mock'&&TM.ctx.D===d&&tLive(TM.ctx);
+  /* 단계 줄: 안 쓴 다른 교시를 누르면 그 교시가 지금 교시(이 모의 타이머가 있는 동안은 그 교시 그대로) */
+  const steps=ps.map(k=>[MKP[k],!!pr[k],k===cur,k]).concat(g?[['채점',!!pr.g,cur==='g','g']]:[]);
+  const stepper=steps.length<2?'':`<ol class="stepper">${steps.map(([l,dn,c,k],i)=>{const pk=!dn&&!c&&!tm&&k!=='g',in_=`<i>${dn?'✓':i+1}</i><span>${l}</span>`;
+    return`<li class="${dn?'done':c?'cur':pk?'pick':''}">${pk?`<button data-act="mock-pick" data-d="${e}" data-k="${k}" aria-label="${l}부터 하기">${in_}</button>`:in_}</li>`;}).join('')}</ol>`;   /* 단계가 하나면(채점을 묻지 않는 1교시만) 단계 줄은 없이 */
   const tip=cur==='p1'&&!live?'<p class="note mtip">09:00에 시작하면 실제 시험과 같아요 · 문제 고르기 3분 → 시간 엄수 → 공란 금지</p>':'';
   const guide=(m.guide||[]).length?`<ul class="mguide">${m.guide.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'';
-  const part=(k,i)=>{const brk=i&&!pr[k]?'<p class="brk">쉬는 시간 · 답안 사진 찍기</p>':'';
+  /* 오늘의 "채점하기" 줄로 왔는데 안 쓴 교시가 있으면: 그 교시를 펼치고 한 줄 안내(채점 칸은 접은 채) */
+  const gF=!!(FLOW&&FLOW.at==='mock/'+d&&/^mock\.g:/.test(FLOW.id)),gNote=gF&&cur&&cur!=='g'?'<p class="note mgn">채점은 다 쓴 뒤에 해요. 먼저 이 교시를 써요.</p>':'';
+  /* 안 쓴 교시마다 시작 · 타이머와 타이머 없이 다 썼어요(지금 교시는 아래 막대가 파란 버튼, 접은 교시는 보조 버튼) */
+  const part=(k,i)=>{const brk=i&&!pr[k]?'<p class="brk">쉬는 시간 · 답안 사진 찍기</p>':'',nt=`<button class="lnk" data-act="mock-part" data-d="${e}" data-k="${k}">타이머 없이 다 썼어요</button>`;
     if(pr[k])return`<div class="mdone"><span class="mdk">✓</span><span class="mdt">${esc(mockTitle(m,k))} · 다 썼어요</span><button class="lnk" data-act="mock-undo" data-d="${e}" data-k="${k}">되돌리기</button></div>`;
-    if(k===cur)return brk+`<section class="mcur"><div class="sec-h"><h2>지금: ${esc(mockTitle(m,k))}</h2><span class="meta">${esc(mockSub(m,k))}</span></div>${live?timerInlineHTML({kind:'mock',D:d,pk:k}):''}${qs(k)}
-      ${live?'':`<p class="mnot"><button class="lnk" data-act="mock-part" data-d="${e}" data-k="${k}">타이머 없이 다 썼어요</button></p>`}</section>`;
-    return brk+`<details class="d mpart"${foldAt('mp:'+d+':'+k)}><summary><span class="fs">${esc(mockTitle(m,k))}<small>${esc(mockSub(m,k))}</small></span></summary><div class="in-d">${qs(k)}</div></details>`;};
-  /* 채점(교시를 다 쓰면 펼침, 오늘의 "채점하기"·"모의 점수 적기" 줄로 오면 펼침): 답안 사진 → 채점 요청 복사 → 점수(선택) → 채점 받았어요 */
-  const gOpen=all||!!(FLOW&&FLOW.at==='mock/'+d&&/^(mock\.g|x\.trend):/.test(FLOW.id));
+    if(k===cur)return brk+`<section class="mcur"><div class="sec-h"><h2>지금: ${esc(mockTitle(m,k))}</h2><span class="meta">${esc(mockSub(m,k))}</span></div>${gNote}${live?timerInlineHTML({kind:'mock',D:d,pk:k}):''}${qs(k)}
+      ${live?'':`<p class="mnot">${nt}</p>`}</section>`;
+    return brk+`<details class="d mpart"${foldAt('mp:'+d+':'+k)}><summary><span class="fs">${esc(mockTitle(m,k))}<small>${esc(mockSub(m,k))}</small></span></summary><div class="in-d">
+      <div class="btns mpgo"><button class="btn sm sec" data-act="mock-start" data-d="${e}" data-k="${k}">${MKP[k]} 시작 · 타이머 ${mockPre(m,k).mins}분</button></div>${qs(k)}<p class="mnot">${nt}</p></div></details>`;};
+  /* 채점(교시를 다 쓰면 펼침, 오늘의 "모의 점수 적기" 줄로 오면 펼침): 답안 사진 → 채점 요청 복사 → 점수(선택) → 채점 받았어요 */
+  const gOpen=all||!!(FLOW&&FLOW.at==='mock/'+d&&/^x\.trend:/.test(FLOW.id));
   const grade=`<details class="d mgrade"${foldPref('mg:'+d,gOpen)}><summary><span class="fs">${g?'채점':'채점 (선택)'}<small>${pr.g?'채점 받았어요 ✓ · '+md(pr.g):all?'답안 사진 → 채점 요청 → 채점 받았어요':'교시를 다 쓴 뒤에 해요'}</small></span></summary><div class="in-d">
     <ol class="msteps"><li><span>답안 사진 찍기</span></li><li><span>사진과 함께 채점 요청 붙여 넣기</span><button class="btn sm sec" data-act="copy-mock" data-d="${e}">채점 요청 복사</button></li>
       <li><span>점수 적기(선택)</span><div class="mscore">${ps.map(k=>`<label>${k[1]}교시 <input class="in" type="number" inputmode="numeric" min="0" max="100" data-act="mock-score" data-d="${e}" data-k="${k}" value="${pr.sc&&pr.sc[k]!=null?pr.sc[k]:''}" aria-label="${k[1]}교시 점수">점</label>`).join('')}</div></li></ol>
@@ -2399,26 +2418,40 @@ function tGoHome(){const c=TM.ctx;if(TM.ended&&c&&c.kind==='mock'&&TM.ended.ctx=
    틱마다 paintTimer가 글자만 바꾼다(다시 그리지 않음) */
 const tLive=c=>!!c&&!!TM.ctx&&TM.ctx.kind===c.kind&&TM.ctx.D===c.D&&(TM.ctx.pk||'')===(c.pk||'')&&(TM.running||TM.remain>0&&TM.remain<TM.total||!!TM.ended&&TM.ended.ctx===TM.ctx);
 const tOver=()=>!!TM.ended&&TM.remain<=0;
+/* 문제마다 나눈 타이머는 "4/10문 · 10:00 남음"(남은 시간은 한 덩이로 줄이 꺾이지 않게), 한 문제 타이머는 "논술 1문 25분". HTML(틱마다 paintTimer가 바꿈) */
 function tlPart(){if(tOver())return'시간이 끝났어요';const part=partIdx(),per=TM.total/TM.parts,left=Math.max(0,Math.round(per*part-(TM.total-TM.remain)));
-  return(TM.parts>1?`${part}번째 문제 · 이 문제 남은 ${mmss(left)}`:`${tName()} ${Math.round(TM.total/60)}분`)+(TM.running?'':' · 멈춤');}
+  return(TM.parts>1?`${part}/${TM.parts}문 · <span class="nw">${mmss(left)} 남음</span>`:esc(`${tName()} ${Math.round(TM.total/60)}분`))+(TM.running?'':' · 멈춤');}
 const tlBtn=()=>tOver()?['timer-more','5분 더']:['timer-toggle',TM.running?'일시정지':'계속'];
-function timerInlineHTML(ctx,st){if(!tLive(ctx))return st?`<button class="${st.c||'btn sm sec'}" data-act="tl-start" data-p="${st.p}" data-kind="${ctx.kind}" data-d="${esc(ctx.D)}">${esc(st.l)}</button>`:'';
-  const[a,l]=tlBtn();return`<div class="tline${TM.remain<=180&&TM.remain>0?' urgent':''}${tOver()?' end':''}" data-timer="${TM.preset}"><b class="tlt">${mmss(TM.remain)}</b><span class="tlp">${esc(tlPart())}</span><button class="btn sm sec" data-act="${a}">${l}</button></div>`;}
+/* st 시작 버튼(세트 ④ 논술 25분 · 숙제 단답 10분). 시간이 끝나면 "5분 더" 옆에 같은 타이머를 새로 시작하는 보조 버튼(.tlr): 그릴 때, 또는 그 화면에서 0이 되면 paintTimer가 붙인다
+   (화면 안 타이머가 st를 data-sp·data-sl로 기억). 첫 버튼은 늘 tlBtn(틱마다 paintTimer가 글과 동작을 바꾼다) */
+const tlStartBtn=(ctx,st,c)=>`<button class="${c||st.c||'btn sm sec'}" data-act="tl-start" data-p="${st.p}" data-kind="${ctx.kind}" data-d="${esc(ctx.D)}">${esc(st.l)}</button>`;
+function timerInlineHTML(ctx,st){if(!tLive(ctx))return st?tlStartBtn(ctx,st):'';
+  const[a,l]=tlBtn();return`<div class="tline${TM.remain<=180&&TM.remain>0?' urgent':''}${tOver()?' end':''}" data-timer="${TM.preset}"${st?` data-sp="${st.p}" data-sl="${esc(st.l)}"`:''}><b class="tlt">${mmss(TM.remain)}</b><span class="tlp">${tlPart()}</span><button class="btn sm sec" data-act="${a}">${l}</button>${st&&tOver()?tlStartBtn(ctx,st,'btn sm sec tlr'):''}</div>`;}
 const mmss=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
 function paintTimer(){const el=$('#timerBox');
   if(el){const per=TM.total/TM.parts,part=partIdx(),partLeft=Math.max(0,Math.round(per*part-(TM.total-TM.remain)));
     el.className='timer'+(TM.remain<=180&&TM.remain>0?' urgent':'');el.innerHTML=`<div class="big">${mmss(TM.remain)}</div><div class="part">${TM.parts>1?`문제 <b>${part}/${TM.parts}</b>, 이 문제 남은 시간 <b>${mmss(partLeft)}</b>`:`${esc(tName())} ${Math.round(TM.total/60)}분`}</div>`;
     const b=$('#tStart');if(b)b.textContent=TM.running?'일시정지':(TM.remain<TM.total&&TM.remain>0?'계속':'시작');}
   document.querySelectorAll('#view [data-timer]').forEach(x=>{if(x.dataset.timer!==TM.preset)return;const[a,l]=tlBtn(),t=x.querySelector('.tlt'),p=x.querySelector('.tlp'),b=x.querySelector('button');
-    x.classList.toggle('urgent',TM.remain<=180&&TM.remain>0);x.classList.toggle('end',tOver());if(t)t.textContent=mmss(TM.remain);if(p)p.textContent=tlPart();if(b){b.dataset.act=a;b.textContent=l;}});}
-/* 지금 화면에 이 타이머가 보이면(화면 안 타이머가 화면 안에 있으면) 알약을 숨긴다. 배치를 모르면(검사) 보이는 것으로 */
-function tInline(){const el=document.querySelector('#view [data-timer="'+TM.preset+'"]');if(!el)return false;const r=el.getBoundingClientRect();return!r.height||r.bottom>56&&r.top<window.innerHeight-72;}
+    x.classList.toggle('urgent',TM.remain<=180&&TM.remain>0);x.classList.toggle('end',tOver());if(t)t.textContent=mmss(TM.remain);if(p)p.innerHTML=tlPart();if(b){b.dataset.act=a;b.textContent=l;}
+    if(tOver()&&x.dataset.sp&&TM.ctx&&!x.querySelector('.tlr'))x.insertAdjacentHTML('beforeend',tlStartBtn(TM.ctx,{p:x.dataset.sp,l:x.dataset.sl},'btn sm sec tlr'));});}
+/* 지금 화면에 이 타이머가 보이면 알약을 숨긴다: 화면 안 타이머의 숫자(.tlt)가 위쪽 막대 아래(없으면 위쪽 안전 영역 아래)부터
+   아래 막대(.nextbar)·아래 탭·아래 안전 영역 위까지 사이에 다 들어올 때만(막대 높이는 그때그때 잰다: 글자 크기·안전 영역·집중 모드). 배치를 모르면(검사) 보이는 것으로 */
+function tInline(){const el=document.querySelector('#view [data-timer="'+TM.preset+'"]');if(!el)return false;const r=(el.querySelector('.tlt')||el).getBoundingClientRect();if(!r.height)return true;
+  const box=s=>{const x=document.querySelector(s),b=x&&x.getBoundingClientRect();return b&&b.height?b:null;},tb=box('#view .topbar'),nb=box('#view .nextbar'),tabs=box('#nav'),px=(x,k)=>x&&parseFloat(getComputedStyle(x)[k])||0;
+  const top=tb?tb.bottom:px(document.body,'paddingTop'),bot=Math.min(nb?nb.top:1e9,tabs?tabs.top:1e9,window.innerHeight-px($('#nav'),'paddingBottom'));
+  return r.top>=top-1&&r.bottom<=bot+1;}
+/* 화면 안 타이머를 막 시작하면 그 줄을 화면 가운데로(아래 막대·탭에 가리지 않게) */
+function tlShow(){const el=document.querySelector('#view [data-timer="'+TM.preset+'"]');if(el&&el.scrollIntoView)el.scrollIntoView({block:'center'});paintPill();}
 /* 위쪽 알약: 도는(멈춘) 타이머는 남은 시간(누르면 그 자리로), 끝난 타이머는 "⏱ 시간 끝 · 1교시"(그 자리를 보면 없어짐, 모의 교시는 적을 때까지) */
-let pillH='';
+/* 알약이 있는 동안 body.haspill과 알약 크기(--pw 폭+틈, --ph 높이): 위쪽 막대 제목은 알약 왼쪽에서 끝나고, 탭 첫 화면은 머리가 알약 아래에서 시작한다(styles.css) */
+let pillH='',pillS='';
 function paintPill(){const w=$('#tpill-wrap');if(!w)return;const on=TM.running||(TM.remain<TM.total&&TM.remain>0),E=TM.ended;let t='';
   if(on){if(R.page!=='timer'&&!tInline())t=`⏱ ${mmss(TM.remain)}${TM.running?'':' 멈춤'}`;}
   else if(E&&!tHome(E.ctx)&&(!E.seen||!!E.ctx&&E.ctx.kind==='mock'))t='⏱ 시간 끝'+(E.ctx?' · '+E.ctx.short:'');
-  const h=t?`<button class="tpill${on?'':' end'}" data-act="tpill">${esc(t)}</button>`:'';if(h===pillH)return;pillH=h;w.innerHTML=h;}
+  const h=t?`<button class="tpill${on?'':' end'}" data-act="tpill">${esc(t)}</button>`:'';if(h!==pillH){pillH=h;w.innerHTML=h;}
+  const b=w.firstElementChild,sz=b?(b.offsetWidth+10)+'px '+b.offsetHeight+'px':'';document.body.classList.toggle('haspill',!!b);
+  if(sz!==pillS){pillS=sz;const[a,c]=sz.split(' ');document.body.style.setProperty('--pw',a||'0px');document.body.style.setProperty('--ph',c||'0px');}}
 function vTimer(){return topbar('타이머')+`<h1 class="ptitle">교시 타이머</h1><p class="lsub">시작 3분은 문제 고르기, 마지막 3분은 번호·공란 확인에 쓰세요.</p>
   <div class="seg" style="margin-top:14px">${Object.keys(PRESETS).map(k=>`<button class="${TM.preset===k?'on':''}" data-act="timer-preset" data-p="${k}">${PRESETS[k].n}${PRESETS[k].total?' '+PRESETS[k].total+'분':''}</button>`).join('')}</div>
   ${TM.preset==='custom'?`<div class="btns"><input class="in" id="tmCustom" type="number" inputmode="numeric" value="${TM.custom}" style="max-width:120px"><button class="btn sm sec" data-act="timer-custom">분으로 맞추기</button></div>`:''}
@@ -2634,7 +2667,8 @@ document.addEventListener('click',e=>{
   /* 모의고사 단계: 교시 시작(타이머, 이 화면에 머묾) · 교시 다 썼어요(시간 끝 창도 같은 길, 그 교시 타이머는 멈춤) · 되돌리기 · 다 한 뒤 다음 */
   case'mock-start':return mockStart(D.d,D.k);
   case'mock-part':{const pr=S.mockp[D.d]||(S.mockp[D.d]={});closeModal();if(!pr[D.k]){pr[D.k]=true;touchDay();calMark('mock:'+D.d+':'+D.k,'mock',`${mockName(D.d)} ${MKP[D.k]||''} 다 씀`);}tDone('mock',D.d,D.k);save();return render();}
-  case'mock-undo':{const pr=S.mockp[D.d];if(pr&&pr[D.k]){delete pr[D.k];calUnmark('mock:'+D.d+':'+D.k);save();}return render();}
+  case'mock-undo':{const pr=S.mockp[D.d];if(pr&&pr[D.k]){delete pr[D.k];calUnmark('mock:'+D.d+':'+D.k);save();}return render();}   /* 도는 다른 교시 타이머는 그대로(mockStep이 그 교시를 지금 교시로) */
+  case'mock-pick':{const F=FLOW&&FLOW.at==='mock/'+D.d?FLOW:null;SV['mkw:'+D.d]={k:D.k,f:F?F.id:''};return render();}   /* 단계 줄에서 고른 교시를 지금 교시로(그 교시 시작은 아래 막대) */
   case'mock-next':{const n=mockNext(D.d);return n&&n.go?n.go():render();}
   /* 예전 모의고사 화면의 다 썼어요 칸(지금 화면에는 없음) */
   case'mock-done':{const pr=S.mockp[D.d]||(S.mockp[D.d]={});pr[D.k]=b.checked;touchDay();const mk='mock:'+D.d+':'+D.k;if(b.checked)calMark(mk,'mock',`${D.d==='app'?'앱 모의고사':korDate(D.d)+' 모의고사'} ${({p1:'1교시',p2:'2교시',p3:'3교시',p4:'4교시'})[D.k]||''} 다 씀`);else calUnmark(mk);save();return;}
@@ -2650,7 +2684,7 @@ document.addEventListener('click',e=>{
   case'timer-toggle':{TM.running?tPause():tStart();if(R.page==='mock')render();return;}   /* 모의고사 화면은 집중 모드(도는 동안)를 다시 맞춘다 */
   case'timer-reset':return tReset();
   /* 화면 안 타이머: 그 자리에서 시작(세트 ④ 논술 25분 · 숙제 단답 10분), 시간 끝 뒤 5분 더, 위쪽 알약 → 그 자리 */
-  case'tl-start':{const k=D.p;if(!PRESETS[k])return;return setPresetAsk(k,()=>{tStart();render();},{ctx:{kind:D.kind,D:D.d,label:PRESETS[k].n,short:PRESETS[k].n},no:render});}
+  case'tl-start':{const k=D.p;if(!PRESETS[k])return;return setPresetAsk(k,()=>{tStart();render();tlShow();},{ctx:{kind:D.kind,D:D.d,label:PRESETS[k].n,short:PRESETS[k].n},no:render});}
   case'timer-more':{closeModal();if(TM.running)return render();TM.remain=Math.max(0,TM.remain)+300;if(TM.remain>TM.total)TM.total=TM.remain;tStart();return render();}
   case'tpill':closeModal();return tGoHome();
   /* 도구 */
@@ -2708,7 +2742,7 @@ window.__pe={S:()=>S,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS:()=>SE
   wkStart,estMock,figDup,hwMin,setStatus,planOrder,planActive,nextAfter,curBlock,phaseStart,taskGo,startRot,recalcPlan,setIds,dueSetReviews,weekIndex,weekObj,phaseObj,MIN_PER,HW_STEPS,PLAN_BLK,UI:()=>UI,
   weeklyReport:fresh2(weeklyReport),streak:fresh2(streak),planItems,resumeSrc,mfmt,lastWeekSheet:fresh2(lastWeekSheet),wkLines:fresh2(wkLines),
   /* 세트 막대·끝 화면(검사용) */
-  setNext:fresh2(setNext),endNexts:fresh2(endNexts),revChain,revList,cardsOutN:t=>{PLN++;return cardsOut(t||todayStr()).length;},FLOW:()=>FLOW,startGq,startSetReview,gqTermIds,
+  setNext:fresh2(setNext),endNexts:fresh2(endNexts),mockStep:fresh2(mockStep),SV:()=>SV,revChain,revList,cardsOutN:t=>{PLN++;return cardsOut(t||todayStr()).length;},FLOW:()=>FLOW,startGq,startSetReview,gqTermIds,
   /* 특별한 날·달력(검사용) */
   calFwd:fresh2(calFwd),monNotice:fresh2(monNotice),S_NEW:()=>S_NEW};
 })();

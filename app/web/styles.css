@@ -390,7 +390,11 @@ table.t td.n{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
 .timer .part{margin-top:10px;color:var(--ink2);font-weight:600}
 .timer .part b{color:var(--blue);font-variant-numeric:tabular-nums}
 .timer.urgent .big{color:var(--red)}
-.tpill{position:fixed;right:12px;top:calc(var(--sat) + 8px);z-index:40;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:var(--ink);color:var(--paper);font-weight:700;font-size:.88rem;font-variant-numeric:tabular-nums;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+.tpill{position:fixed;right:12px;top:calc(var(--sat) + 8px);z-index:40;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:var(--ink);color:var(--paper);font-weight:700;font-size:.88rem;font-variant-numeric:tabular-nums;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+/* 알약이 있는 동안(body.haspill, app.js paintPill이 --pw 알약 폭+틈 · --ph 높이를 잰다): 위쪽 막대 제목은 알약 왼쪽에서 끝나고(오른쪽 칸이 알약 폭 이상),
+   탭 첫 화면(위쪽 막대 없음)은 머리가 알약 아래에서 시작한다(오늘의 D-day·제목을 덮지 않게). 알약은 z-index 40 그대로(위쪽 띠보다 위) */
+body.haspill .topbar{grid-template-columns:1fr minmax(0,auto) minmax(var(--pw,0px),1fr)}
+body.haspill #view>.ltitle:first-child{padding-top:calc(var(--ph,0px) + 14px)}
 
 /* ── 프롬프트 ── */
 pre.prompt{white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:.86rem;line-height:1.55;background:var(--paper);border-radius:10px;padding:10px 12px;margin:0 0 10px;max-height:13em;overflow:auto;color:var(--ink2)}
@@ -755,6 +759,10 @@ body.kb .nextbar{display:none}
 .stepper li.done{color:var(--ink2)}.stepper li.done i{border-color:var(--ok);background:var(--ok);color:#fff}
 :root[data-theme="dark"] .stepper li.done i{color:#08142E}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .stepper li.done i{color:#08142E}}
+.stepper li>button{display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;min-height:44px;text-align:center}   /* 안 쓴 다른 교시: 누르면 그 교시가 지금 교시 */
+.stepper li.pick{color:var(--ink2)}.stepper li.pick i{border-color:var(--ink3);color:var(--ink2)}
+.mpgo{margin:0 0 10px}.mpgo>.btn{flex:0 1 auto}
+.mgn{margin:0 4px 10px;color:var(--ink2);font-weight:600}
 .mtip{margin:10px 4px 0}
 .mguide{margin:8px 4px 0;padding-left:18px;color:var(--ink2);font-size:.86rem;line-height:1.5}
 .mcur{margin-top:18px}
@@ -780,13 +788,14 @@ body.kb .nextbar{display:none}
 .mlinks{display:flex;justify-content:center;align-items:center;gap:6px;margin:14px 0 0;color:var(--ink3);font-size:.9rem}
 .mlinks .lnk{padding:8px 4px;font-weight:600}
 .tline{display:flex;flex-wrap:wrap;align-items:center;gap:2px 12px;padding:10px 12px 10px 14px;border-radius:var(--r-md);background:var(--blue-soft)}
-.tline .tlt{font-size:2rem;font-weight:800;line-height:1.1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--ink)}
+.tline .tlt{flex:0 0 auto;white-space:nowrap;font-size:2rem;font-weight:800;line-height:1.1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--ink)}
 .tline .tlp{flex:1 1 110px;min-width:0;font-size:.86rem;font-weight:600;line-height:1.35;color:var(--ink2)}
 .tline .btn.sm{flex:0 0 auto;min-height:40px}
+.tline .tlr{margin-left:auto}   /* 끝난 화면 안 타이머: "5분 더" 옆(좁으면 아래 줄 오른쪽)에 같은 타이머 새로 시작 */
 .tline.urgent .tlt{color:var(--amber)}
 .tline.end{background:var(--amber-soft)}.tline.end .tlt{color:var(--amber)}
 .steps3 .tline,.hwf .tline{flex:1 1 100%;margin:2px 0}
-.steps3 .tline{background:var(--sheet);margin:4px 0 2px;flex-wrap:nowrap}.steps3 .tline .tlt{font-size:1.6rem}.steps3 .tline .tlp{flex:1 1 0;min-width:56px}
+.steps3 .tline{background:var(--sheet);margin:4px 0 2px;flex-wrap:nowrap}.steps3 .tline.end{flex-wrap:wrap}.steps3 .tline .tlt{font-size:1.6rem}.steps3 .tline .tlp{flex:1 1 0;min-width:56px}
 .qcard~.tline,.sec>.tline{margin-top:12px}
 .tpill.end{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber)}
 .tend{margin:4px 0 0;text-align:center;font-size:1.06rem;font-weight:800;color:var(--amber)}

@@ -965,7 +965,7 @@ function runWeek(W, sets, st) {
     ok(H() === MH && TM.preset === 'p1' && TM.running && TM.ctx && TM.ctx.kind === 'mock' && TM.ctx.D === MD && TM.ctx.pk === 'p1' && d.body.classList.contains('focus') && T_(d.querySelector('.topbar .back')) === '닫기', '40. 1교시 시작 → 이 화면에 머묾, 1교시 100분 타이머, 집중 모드(위쪽 "닫기")');
     ok(V$().querySelector('.mcur .tline[data-timer="p1"]') && !pill() && T_(bar()) === '1교시 다 썼어요' && bar().dataset.act === 'mock-part' && prim().length === 1, '40. 화면 안 타이머(알약 없음), 아래 막대 "1교시 다 썼어요"');
     await tick('2026-10-31T08:30:00'); const tl = V$().querySelector('.tline');
-    ok(TM.remain === 4200 && T_(tl.querySelector('.tlt')) === '70:00' && T_(tl.querySelector('.tlp')) === '4번째 문제 · 이 문제 남은 10:00' && T_(tl.querySelector('button')) === '일시정지', '40. 30분 뒤: 화면 안 타이머 70:00 · 4번째 문제(다시 그리지 않고 글자만)');
+    ok(TM.remain === 4200 && T_(tl.querySelector('.tlt')) === '70:00' && T_(tl.querySelector('.tlp')) === '4/10문 · 10:00 남음' && T_(tl.querySelector('.tlp .nw')) === '10:00 남음' && T_(tl.querySelector('button')) === '일시정지', '40. 30분 뒤: 화면 안 타이머 70:00 · "4/10문 · 10:00 남음"(남은 시간은 한 덩이 .nw, 다시 그리지 않고 글자만)');
     await tick('2026-10-31T09:40:00'); const sh = mw();
     ok(TM.remain === 0 && !TM.running && TM.ended && TM.ended.ctx.pk === 'p1' && /시간 끝 · 1교시 단답/.test(sh.textContent) && sh.querySelectorAll('.btn:not(.sec):not(.ghost)').length === 1 && T_(sh.querySelector('.btn:not(.sec)')) === '다 썼어요' && sh.querySelector('[data-act="timer-more"]') && sh.querySelector('[data-act="sheet-close"]') && !d.body.classList.contains('focus'),
       '40. 이 화면에서 0이 되면 시간 끝 창(파란 "다 썼어요" · 5분 더 · 닫기), 집중 모드는 끝');
@@ -985,7 +985,7 @@ function runWeek(W, sets, st) {
     await sleep(300);
     ok(TM.preset === 'custom' && TM.total === 3000 && TM.parts === 2 && TM.running && TM.ctx.pk === 'p2' && V$().querySelector('.mcur .tline[data-timer="custom"]') && T_(bar()) === '2교시 다 썼어요' && /지금: 2교시 논술 2문/.test(V$().textContent), '40. 2교시 시작 → 문제당 25분 × 2문 = 50분 타이머(문제마다 알림), 아래 막대 "2교시 다 썼어요"');
     await tick('2026-10-31T10:15:00');
-    ok(/2번째 문제 시간/.test(toastT()) && T_(V$().querySelector('.tline .tlp')) === '2번째 문제 · 이 문제 남은 20:00', '40. 25분이 지나면 "2번째 문제 시간"(30분 뒤 2번째 문제 20:00 남음)');
+    ok(/2번째 문제 시간/.test(toastT()) && T_(V$().querySelector('.tline .tlp')) === '2/2문 · 20:00 남음', '40. 25분이 지나면 "2번째 문제 시간"(30분 뒤 "2/2문 · 20:00 남음")');
     await tap('.nextbar [data-act="mock-part"]');
     const gf2 = V$().querySelector('details.mgrade'), rf2 = V$().querySelector('details.mrev');
     ok(pr().p2 === true && !TM.running && !TM.ctx && steps() === '✓1교시 ✓2교시 ●채점' && gf2.open && !rf2.open && rf2.querySelector('[data-act="mock-reveal"]') && gf2.querySelector('[data-act="copy-mock"]') && T_(bar()) === '채점 받았어요' && bar().dataset.act === 'mock-graded' && prim().length === 1 && H() === MH, '40. 2교시 다 썼어요 → 채점 단계(채점 칸 펼침, 열어보기는 접힌 채 그 안에 열기 버튼), 아래 막대 "채점 받았어요"');
@@ -1363,6 +1363,85 @@ function runWeek(W, sets, st) {
       pe.UI().later = {}; pe.S().mockp['2026-10-31'] = { p1: true, p2: true }; pe.invalidate(); const V2 = pe.planToday(SAT);
       ok(V.active.id === 'late:2026-10-28' && n.row.id === 'late:2026-10-28' && V2.active.id === 'mock.g:2026-10-31', `43-23. 교시가 남으면 채점은 건너뜀(펼칠 줄 ${V.active.id}), 다 쓰면 채점(${V2.active.id})`); }
     if (pe.SES()) act('sess-close'); await go('#today');
+  }
+
+  // 44. 점검 고침(세트·숙제·모의·타이머, 시계 고정): 모의는 고른 교시(오늘 줄·단계 줄)·도는 교시 타이머가 지금 교시, 교시마다 시작·타이머 없이 다 썼어요,
+  //     채점 줄로 오면 안내, 이번 주에서 펼친 숙제 칸이 세트 막대보다 먼저, 끝난 화면 안 타이머는 같은 타이머를 새로 시작
+  {
+    const T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), H = () => w.location.hash, L = () => w.history.length, tap = async s => { click(s); await sleep(60); };
+    const TM = pe.TM(), MD = '2026-10-31', MH = '#mock/' + MD, pr = () => pe.S().mockp[MD] || {}, bar = () => V$().querySelector('.nextbar .btn'), pill = () => d.querySelector('#tpill-wrap .tpill');
+    const steps = () => [...V$().querySelectorAll('.stepper li')].map(li => (li.classList.contains('done') ? '✓' : li.classList.contains('cur') ? '●' : '○') + T_(li.querySelector('span'))).join(' ');
+    const shown = () => prim().filter(b => !b.closest('details:not([open])'));
+    const fold = k => [...V$().querySelectorAll('details.mpart')].find(f => f.querySelector(`[data-act="mock-start"][data-k="${k}"]`));
+    // 44-1. 토 13:00 "오늘 시간" 1시간: 오늘 몫의 모의는 2교시 하나(1교시는 일요일로) → 그 줄 "2교시 시작" → 모의 화면은 2교시가 지금 교시, 아래 막대 "2교시 시작 · 타이머 50분"
+    scene('2026-10-31T13:00:00', ST); pe.goTab('today'); await sleep(40); await show('#today');
+    click('[data-act="cap"]'); await sleep(10); click('#modal-wrap [data-act="cap-set"][data-m="60"]'); await sleep(30); await show('#today');
+    const nr = V$().querySelector('.prow.now'), hl = L();
+    ok(nr && nr.dataset.task === 'mock:2026-10-31:p2' && T_(nr.querySelector('.pgo .btn:not(.ghost)')) === '2교시 시작' && pe.planToday(SAT).moved.some(x => x.id === 'mock:2026-10-31:p1'), `44-1. 토 13:00 1시간: 펼친 줄은 "2교시 시작"(1교시는 ${(pe.planToday(SAT).moved.find(x => x.id === 'mock:2026-10-31:p1') || {}).dest})`);
+    await tap('.prow.now .pgo .btn:not(.ghost)');
+    const f1 = fold('p1');
+    ok(H() === MH && steps() === '○1교시 ●2교시 ○채점' && /지금: 2교시 논술 2문/.test(T_(V$().querySelector('.mcur h2'))) && T_(bar()) === '2교시 시작 · 타이머 50분' && bar().dataset.act === 'mock-start' && bar().dataset.k === 'p2' && shown().length === 1,
+      `44-1. 2교시 줄 → 모의 화면: 지금 2교시, 아래 막대 "${T_(bar())}"(파란 버튼 하나)`);
+    ok(f1 && !f1.open && T_(f1.querySelector('[data-act="mock-start"]')) === '1교시 시작 · 타이머 100분' && f1.querySelector('[data-act="mock-start"]').classList.contains('sec') && f1.querySelector('[data-act="mock-part"][data-k="p1"]') && V$().querySelector('.stepper [data-act="mock-pick"][data-k="p1"]'),
+      '44-1. 안 쓴 1교시는 접은 칸에 보조 버튼 "1교시 시작 · 타이머 100분"과 "타이머 없이 다 썼어요"(단계 줄의 1교시는 누를 수 있음)');
+    await tap('.nextbar [data-act="mock-start"]');
+    ok(TM.running && TM.ctx.pk === 'p2' && TM.total === 3000 && V$().querySelector('.mcur .tline[data-timer="custom"]') && T_(bar()) === '2교시 다 썼어요' && d.body.classList.contains('focus') && !pill() && !V$().querySelector('.stepper [data-act="mock-pick"]'),
+      '44-1. 2교시 시작 → 50분 화면 안 타이머, 아래 막대 "2교시 다 썼어요"(집중 모드, 타이머가 도는 동안 단계 줄은 누르지 않음)');
+    // 44-2. 2교시 타이머가 도는 동안 1교시를 적었다가 되돌려도 2교시가 지금 교시(화면 안 타이머 그대로, 1교시 시작은 보조 버튼)
+    click('details.mpart [data-act="mock-part"][data-k="p1"]'); await sleep(20);
+    ok(pr().p1 === true && TM.running && TM.ctx.pk === 'p2' && steps() === '✓1교시 ●2교시 ○채점' && V$().querySelector('.mcur .tline[data-timer="custom"]'), '44-2. 2교시가 도는 중 접은 칸의 "타이머 없이 다 썼어요" → 1교시만 적고 2교시 타이머 그대로');
+    click('.mdone [data-act="mock-undo"][data-k="p1"]'); await sleep(20);
+    ok(!pr().p1 && TM.running && TM.ctx.pk === 'p2' && steps() === '○1교시 ●2교시 ○채점' && V$().querySelector('.mcur .tline[data-timer="custom"]') && /지금: 2교시/.test(T_(V$().querySelector('.mcur h2'))) && T_(bar()) === '2교시 다 썼어요' && d.body.classList.contains('focus') && !pill() && shown().length === 1,
+      '44-2. 1교시 되돌리기 → 2교시가 지금 교시 그대로(화면 안 타이머 .tline, 아래 막대 "2교시 다 썼어요", 알약 없음)');
+    // 44-3. 1교시를 쓰지 않고 2교시 다 썼어요 → p2만 적음, 그 오늘 줄은 끝 → "✓ 끝 · 다음: 오늘 다음 줄", 1교시는 접은 칸 그대로
+    await tap('.nextbar [data-act="mock-part"]');
+    ok(pr().p2 === true && !pr().p1 && !TM.running && !TM.ctx && JSON.stringify(((pe.S().cal[SAT] || {}).x || {})['mock:' + MD + ':p2']) === '["mock","10월 31일 모의고사 2교시 다 씀"]' && steps() === '○1교시 ✓2교시 ○채점',
+      '44-3. 1교시 없이 2교시 다 썼어요 → S.mockp[D].p2만(달력 "2교시 다 씀")');
+    ok(/^✓ 끝 · 다음: 밀린 세트 10\/28\(수\)/.test(T_(bar())) && bar().dataset.act === 'mock-next' && !V$().querySelector('.mcur') && fold('p1') && fold('p1').querySelector('[data-act="mock-start"].sec') && shown().length === 1 && H() === MH && L() === hl,
+      `44-3. 그 오늘 줄을 끝냄 → 아래 막대 "${T_(bar())}", 1교시는 접은 칸(보조 시작 버튼), 방문 기록 그대로`);
+    await tap('.nextbar .btn');
+    ok(H() === '#set/2026-10-28' && pe.FLOW() && pe.FLOW().id === 'late:2026-10-28', '44-3. "다음" → 밀린 세트(오늘 순서 그대로)');
+    // 44-4. 오늘 줄 없이 연 모의(연습): 안 쓴 첫 교시가 지금 교시, 단계 줄의 다른 교시를 누르면 그 교시가 지금 교시(아래 막대도 따라감)
+    scene('2026-10-31T13:00:00', ST); pe.goTab('practice'); await sleep(40); await show(MH);
+    ok(steps() === '●1교시 ○2교시 ○채점' && T_(bar()) === '1교시 시작 · 타이머 100분' && fold('p2') && T_(fold('p2').querySelector('[data-act="mock-start"]')) === '2교시 시작 · 타이머 50분', '44-4. 연습에서 연 모의: 1교시가 지금 교시, 2교시는 접은 칸(보조 "2교시 시작 · 타이머 50분")');
+    await tap('.stepper [data-act="mock-pick"][data-k="p2"]');
+    ok(steps() === '○1교시 ●2교시 ○채점' && T_(bar()) === '2교시 시작 · 타이머 50분' && fold('p1') && shown().length === 1, '44-4. 단계 줄의 2교시를 누르면 2교시가 지금 교시(아래 막대 "2교시 시작 · 타이머 50분", 1교시는 접은 칸)');
+    await tap('.stepper [data-act="mock-pick"][data-k="p1"]');
+    ok(steps() === '●1교시 ○2교시 ○채점' && T_(bar()) === '1교시 시작 · 타이머 100분', '44-4. 단계 줄의 1교시를 누르면 다시 1교시');
+    // 접은 2교시의 보조 "2교시 시작" → 그 교시가 지금 교시(타이머가 이긴다)
+    fold('p2').open = true; await tap('details.mpart [data-act="mock-start"][data-k="p2"]');
+    ok(TM.running && TM.ctx.pk === 'p2' && steps() === '○1교시 ●2교시 ○채점' && V$().querySelector('.mcur .tline[data-timer="custom"]') && T_(bar()) === '2교시 다 썼어요', '44-4. 접은 2교시의 "2교시 시작 · 타이머 50분" → 2교시가 지금 교시(화면 안 타이머)');
+    await show('#timer'); click('[data-act="timer-reset"]'); click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10); delete pe.SV()['mkw:' + MD];
+    // 44-5. 오늘의 "채점하기" 줄로 왔는데 안 쓴 교시가 있으면: 안 쓴 첫 교시를 펼치고 "채점은 다 쓴 뒤에 해요", 채점 칸은 접은 채
+    scene('2026-10-31T13:00:00', ST); pe.goTab('today'); await sleep(40); pe.planToday(SAT); pe.taskGo('mock.g:' + MD); await sleep(60);
+    ok(H() === MH && steps() === '●1교시 ○2교시 ○채점' && /채점은 다 쓴 뒤에 해요/.test(T_(V$().querySelector('.mcur .mgn'))) && !V$().querySelector('details.mgrade').open && T_(bar()) === '1교시 시작 · 타이머 100분', '44-5. 채점 줄 → 1교시를 펼치고 "채점은 다 쓴 뒤에 해요"(채점 칸은 접음)');
+    pe.goTab('today'); await sleep(40);
+    // 44-6. 이번 주 "다음 하나"(목차·쓰기)로 연 숙제 칸: 세트의 핵심(퀴즈 4/5)이 남아도 아래 막대는 그 칸의 "다 했어요"
+    { const st = clone(ST); delete st.sp['2026-10-27'].quiz[4]; scene('2026-10-30T20:00:00', st); }
+    await show('#week'); click('[data-act="week-next"][data-k="eo"]'); await sleep(60);
+    { const fc = V$().querySelector('.hw.focus'), sd = H().split('/')[1], b0 = bar();
+      ok(sd === '2026-10-27' && fc && /목차/.test(T_(fc.querySelector('.hwt'))) && /옮겨 적었어요/.test(T_(b0)) && b0.dataset.act === 'hw-bulk' && b0.dataset.ks === 'eo', `44-6. 이번 주 목차 줄 → 10/27 숙제 목차 칸, 아래 막대 "${T_(b0)}"(세트 퀴즈 4/5보다 먼저)`);
+      const v = Number(b0.dataset.v); await tap('.nextbar [data-act="hw-bulk"]');
+      ok(((pe.S().sp['2026-10-27'] || {}).hw || {}).eo === v && /^다음: 세트 퀴즈 4\/5문/.test(T_(bar())), `44-6. 막대를 누르면 목차 ${v}번을 적고, 그 칸을 다 했으니 이 세트 순서로("${T_(bar())}")`); }
+    await show('#week'); click('[data-act="week-next"][data-k="w"]'); await sleep(60);
+    ok(/쓰기/.test(T_(bar())) && bar().dataset.act === 'hw-bulk' && V$().querySelector('.hw.focus'), `44-6. 이번 주 쓰기 줄 → 아래 막대 "${T_(bar())}"`);
+    pe.goTab('today'); await sleep(40);
+    // 44-7. 끝난 화면 안 타이머(④ 논술 25분): "5분 더" 옆에 같은 타이머를 새로 시작하는 보조 "타이머 25분"
+    scene('2026-10-29T21:00:00', ST); await show('#set/2026-10-29'); click('[data-act="set-tab"][data-t="essay"]'); await sleep(10);
+    await tap('[data-act="tl-start"][data-p="one2"]'); at('2026-10-29T21:26:00'); await sleep(320);
+    { const tl = V$().querySelector('.tline'), bs = tl ? [...tl.querySelectorAll('button')] : [];
+      ok(tl && tl.classList.contains('end') && T_(tl.querySelector('.tlp')) === '시간이 끝났어요' && bs.length === 2 && bs[0].dataset.act === 'timer-more' && bs[1].dataset.act === 'tl-start' && bs[1].dataset.p === 'one2' && T_(bs[1]) === '타이머 25분' && bs[1].classList.contains('sec'),
+        `44-7. ④ 논술 25분이 끝나면 "${tl && T_(tl)}"(5분 더 · 타이머 25분)`); }
+    await tap('.tline [data-act="tl-start"]');
+    ok(TM.running && TM.preset === 'one2' && TM.remain === 1500 && !TM.ended && T_(V$().querySelector('.tline .tlt')) === '25:00' && V$().querySelectorAll('.tline button').length === 1, '44-7. "타이머 25분" → 25분 타이머를 새로(끝난 표시 없음)');
+    // 펼친 숙제 단답 카드의 10분 타이머도 같게(끝나면 "5분 더 · 타이머 10분")
+    scene('2026-10-29T07:40:00', ST); await show('#today'); click('#view [data-task="hw.dd:2026-10-29"]'); await sleep(60);
+    click('.hw.focus [data-act="tl-start"][data-p="one1"]'); await sleep(20); at('2026-10-29T07:51:00'); await sleep(320);
+    { const tl = V$().querySelector('.hw.focus .steps3 .tline[data-timer="one1"]'), bs = tl ? [...tl.querySelectorAll('button')].map(b => b.dataset.act + ':' + (b.dataset.p || '') + ':' + T_(b)) : [];
+      ok(tl && tl.classList.contains('end') && bs.join() === 'timer-more::5분 더,tl-start:one1:타이머 10분' && TM.ctx.kind === 'dd', `44-7. 숙제 단답 10분이 끝나면 카드 안 타이머에 ${bs.join(' · ')}`); }
+    click('.hw.focus .steps3 .tline [data-act="tl-start"]'); await sleep(20);
+    ok(TM.running && TM.preset === 'one1' && TM.remain === 600 && TM.ctx.kind === 'dd' && !TM.ended, '44-7. "타이머 10분" → 10분 타이머를 새로');
+    await show('#timer'); click('[data-act="timer-reset"]'); click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10); pe.goTab('today'); await sleep(40);
   }
 
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));

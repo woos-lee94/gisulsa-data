@@ -1502,6 +1502,43 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     const K = JSON.parse(keep); ['tk', 'daily', 'mockp', 'today'].forEach(k => { S()[k] = K[k]; }); S().settings.budget = K.budget; pe.render(); await go('#today');
   }
 
+  // 점검 고침(진짜 날짜): 위쪽 알약이 있는 동안 body.haspill(위쪽 막대 제목·탭 첫 화면 머리가 알약을 피함), 화면 안 타이머 숫자가 위쪽 막대·아래 막대에 가리면 알약,
+  //   가리며 외우기의 지운 카드는 외우기의 건너뛰기·완료(세션 건너뛰기가 아님), 이어 하는 목록에서 지운 카드는 빼고 자리를 다시 셈
+  {
+    const tap = async s => { click(s); await sleep(60); }, TM = pe.TM(), pill = () => d.querySelector('#tpill-wrap .tpill'), M = () => pe.MEMO(), cssTxt = fs.readFileSync(path.join(SITE, 'styles.css'), 'utf8');
+    const T = (x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'))(new w.Date()), mp0 = JSON.stringify(S().mockp['2026-10-24'] || null);
+    ok(/body\.haspill \.topbar\{grid-template-columns:1fr minmax\(0,auto\) minmax\(var\(--pw,0px\),1fr\)\}/.test(cssTxt) && /body\.haspill #view>\.ltitle:first-child\{padding-top:calc\(var\(--ph,0px\) \+ 14px\)\}/.test(cssTxt) && /\.tpill\{position:fixed;[^}]*z-index:40;/.test(cssTxt),
+      '알약 자리(CSS): 위쪽 막대의 오른쪽 칸은 알약 폭 이상(제목은 알약 왼쪽에서 끝남), 탭 첫 화면 머리는 알약 아래에서, 알약 z-index 40');
+    delete S().mockp['2026-10-24']; await go('#mock/2026-10-24'); await tap('.nextbar [data-act="mock-start"][data-k="p1"]');
+    ok(TM.running && TM.ctx && TM.ctx.pk === 'p1' && !pill() && !d.body.classList.contains('haspill'), '화면 안 타이머가 보이면 알약 없음(body.haspill 없음)');
+    const stub = (el, t, b) => { el.getBoundingClientRect = () => ({ top: t, bottom: b, height: b - t, left: 16, right: 374, width: 358, x: 16, y: t }); };
+    const lay = y => { stub(view().querySelector('.topbar'), 0, 108); stub(view().querySelector('.nextbar'), 690, 742); stub(view().querySelector('.tline .tlt'), y, y + 40); w.dispatchEvent(new w.Event('scroll')); };
+    lay(700); ok(pill() && /^⏱ /.test(pill().textContent) && d.body.classList.contains('haspill') && /^\d+px$/.test(d.body.style.getPropertyValue('--pw')), '화면 안 타이머 숫자가 아래 막대에 가리면 알약(body.haspill, 알약 폭 --pw)');
+    lay(80); ok(pill(), '숫자가 위쪽 막대 밑에 걸치면 알약');
+    lay(400); ok(!pill() && !d.body.classList.contains('haspill'), '숫자가 위쪽 막대와 아래 막대 사이에 다 보이면 알약 없음');
+    await go('#today'); ok(pill() && d.body.classList.contains('haspill') && view().firstElementChild.classList.contains('ltitle'), '오늘(탭 첫 화면): 알약 + body.haspill(머리가 알약 아래에서 시작)');
+    await go('#timer'); click('[data-act="timer-reset"]'); click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10); await go('#today');
+    ok(!pill() && !d.body.classList.contains('haspill') && !TM.ctx, '타이머를 처음으로 → 알약·body.haspill 없음');
+    if (JSON.parse(mp0)) S().mockp['2026-10-24'] = JSON.parse(mp0); else delete S().mockp['2026-10-24'];
+    // 가리며 외우기: 다음 카드가 지워졌으면 "이 카드를 찾을 수 없어요"와 외우기의 "건너뛰기", 마지막 카드면 "완료"
+    await go('#practice'); if (view().querySelector('[data-act="resume-clear"][data-k="memo:study"]')) await tap('[data-act="resume-clear"][data-k="memo:study"]');
+    await tap('[data-act="memo-study"]'); const s0 = pe.SES(), n = M().items.length, e0 = errors.length;
+    ok(w.location.hash === '#memo' && n >= 4, `가리며 외우기 ${n}장`);
+    M().items[1].id = 'NOPE-1'; await tap('.mctl [data-act="memo-next"]');
+    ok(M().i === 1 && /이 카드를 찾을 수 없어요/.test(txt()) && view().querySelector('.empty [data-act="memo-next"]') && !view().querySelector('[data-act="sess-skip"]'), '지운 카드: 외우기의 "건너뛰기"(memo-next, 세션의 sess-skip이 아님)');
+    await tap('.empty [data-act="memo-next"]');
+    ok(M().i === 2 && pe.SES() === s0 && errors.length === e0 && w.location.hash === '#memo', '건너뛰기 → 다음 카드(세션은 그대로, 오류 없음)');
+    M().items[n - 1].id = 'NOPE-2'; for (let k = 0; k < 40 && M().i + 1 < n - 1; k++) { click('.mctl [data-act="memo-next"]'); await sleep(5); } await tap('.mctl [data-act="memo-next"]');
+    ok(M().i === n - 1 && /이 카드를 찾을 수 없어요/.test(txt()) && view().querySelector('.empty [data-act="memo-finish"]'), '마지막 카드가 지워졌으면 "완료"(memo-finish)');
+    await tap('.empty [data-act="memo-finish"]'); ok(M().fin && view().querySelector('.endc') && errors.length === e0, '완료 → 끝 화면');
+    // 이어 하는 목록(그날 카드 목록째로)에서 지운 카드는 빼고, 보던 카드부터
+    const ids = M().items.map(x => x.id).filter(id => !/^NOPE/.test(id)).slice(0, 3);
+    S().resume['memo:study'] = { i: 2, n: 4, day: T, ids: [ids[0], 'NOPE-3', ids[1], ids[2]] };
+    await go('#practice'); await tap('[data-act="memo-study"]');
+    ok(M().items.map(x => x.id).join() === ids.join() && M().i === 1 && !/이 카드를 찾을 수 없어요/.test(txt()), '이어 하기: 지운 카드는 빼고 보던 카드(4장 중 3번째 → 남은 3장의 2번째)부터');
+    await tap('.topbar [data-act="back"]'); await go('#today');
+  }
+
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);
