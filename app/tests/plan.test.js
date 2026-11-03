@@ -1063,6 +1063,9 @@ function runWeek(W, sets, st) {
     scene('2026-11-20T08:00:00', BLANK); await show('#week');
     const qn = () => V$().querySelector('#ql-notice');
     ok(qn() && qn().classList.contains('two') && /큐넷 2027 시행계획 공고 확인/.test(T_(qn())) && /시험 일정에서 확인/.test(T_(qn())) && !qn().querySelector('.tkc.on') && prim().length === 1 && !/공고/.test(T_(prim()[0])), '42. 11/20 이번 주: "큐넷 2027 시행계획 공고 확인" 줄(동그라미), 파란 버튼은 그 줄이 아님');
+    { const css = fs.readFileSync(path.join(SITE, 'styles.css'), 'utf8'), kids = [...qn().children];   // 4-5(CSS만): 이 줄의 화살표(›)는 숨기고 동그라미(○)와 글 사이 12px 이상
+      ok(kids.length === 2 && kids[0].matches('.qbody[data-act]') && kids[0].querySelector('.chev') && kids[1].matches('.tkc[data-act="tk"][data-id="notice:2027"]') && /(^|\n)\.qline\.two \.chev\{display:none\}/.test(css) && /(^|\n)\.qline\.two \.tkc\{margin:9px 14px 0 8px\}/.test(css),
+        '42. 4-5. 11/20 공고 줄: 줄 가운데(시험 일정으로)와 동그라미(확인했어요) 두 칸, 줄의 화살표는 CSS로 숨기고 동그라미 앞 여백 8px(틈 4px와 합쳐 12px, "›○"가 한 글자처럼 붙지 않음)'); }
     await show('#today'); ok(/큐넷 2027 시행계획 공고 확인/.test(T_(V$().querySelector('.wksec'))), '42. 11/20 오늘의 이번 주 칸에도 공고 확인 줄');
     await show('#week'); click('#ql-notice .tkc'); await sleep(10);
     const L1 = [...V$().querySelectorAll('.sec .qline')];

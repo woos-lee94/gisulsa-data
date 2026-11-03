@@ -136,7 +136,7 @@ button.row:active,a.row:active{background:var(--rule2)}
 .btn.ghost{background:transparent;color:var(--blue);border-color:transparent;min-height:44px}
 .btn.red{background:var(--red);color:#fff} .btn.ok{background:var(--ok);color:#fff}
 a.btn{text-decoration:none}
-.btn.sm{min-height:40px;width:auto;padding:6px 14px;font-size:.92rem;border-radius:12px}
+.btn.sm{min-height:40px;width:auto;padding:6px 14px;font-size:.86rem;border-radius:12px}   /* 작은 버튼 글자는 .86rem/700 하나(§9.3: 블록 이름·상태 값과 같은 칸) */
 .btn:disabled{opacity:.4}
 .btn:active{transform:scale(.985)}
 .btns{display:flex;gap:8px;margin-top:12px}
@@ -530,7 +530,7 @@ button.prow:active,.prow .pbody:active{background:var(--rule2)}
 .prow.now .pb>.btn{margin-top:10px}
 .prow.now .pgo{display:flex;align-items:center;gap:4px;margin-top:10px}
 .prow.now .pgo>.btn:first-child{flex:1;min-width:0}
-.prow.now .pgo>.ghost{flex:none;width:auto;min-height:44px;padding:4px 8px;font-size:.86rem}
+.prow.now .pgo>.ghost{flex:none;width:auto;min-height:44px;padding:4px 8px}
 .prow.done{min-height:0;padding:9px 14px;align-items:center}
 .prow.done .pt{-webkit-line-clamp:1;color:var(--ink3);text-decoration:line-through;text-decoration-color:var(--ink3)}
 .prow.g .pt{display:block}
@@ -683,7 +683,7 @@ details[open]>summary .fs small{display:none}
 .wkh .meta{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
 .wkh:active{opacity:.6}
 .sec.wksec{margin-top:18px}
-.btns.rp{justify-content:center;margin-top:8px}.btns.rp>.btn{flex:none;font-size:.86rem}
+.btns.rp{justify-content:center;margin-top:8px}.btns.rp>.btn{flex:none}
 
 /* ── 세트 화면: 공부 순서 탭(이름 + 지금 상태 두 줄), 도구 한 줄, 아래에 붙은 "다음" 막대(이 화면의 하나뿐인 파란 버튼) ── */
 .sseg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:12px 0 2px;overflow:visible}
@@ -694,7 +694,7 @@ details[open]>summary .fs small{display:none}
 .sone{margin:10px 4px 0;font-size:1rem;font-weight:600;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}   /* ②~④ 탭 머리의 세트 제목: 두 줄까지(§9.1.7, 한 줄 말줄임 없음) */
 .stools{flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px}
 .stools .btn.sm{flex:0 1 auto}
-.stools .lnk{padding:8px 6px;font-size:.94rem}
+.stools .lnk{padding:8px 6px;font-size:.86rem}
 .stools2{margin-top:2px}.stools2 .btn{flex:0 1 auto;width:auto}
 .snote{margin:6px 4px 10px}
 .acc.read .no{color:var(--ok);font-weight:800}
@@ -727,17 +727,17 @@ body.kb .nextbar{display:none}
 .steps3>p{margin:0 0 2px;font-size:.8rem;font-weight:700;color:var(--blue-ink)}
 .steps3 ol{margin:0;padding:0;list-style:none;counter-reset:s3}
 .steps3 li{counter-increment:s3;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:5px 0;font-size:.86rem;line-height:1.45}
-.steps3 li::before{content:counter(s3);flex:none;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--blue);color:#fff;font-size:.74rem;font-weight:800}
+.steps3 li::before{content:counter(s3);flex:none;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--blue);color:#fff;font-size:.8rem;font-weight:700}
 .steps3 li span{flex:1 1 150px;min-width:0}
 .steps3 .btn.sm{flex:0 1 auto;min-height:36px}
 .hwext{margin-top:14px}.hwxl{padding:0 10px 12px}.hwxl .hw{background:var(--paper)}
 .hwall{color:var(--ok);font-weight:700}
-.hwc .lnk{font-size:.9rem;padding:4px 2px}
+.hwc .lnk{font-size:.86rem;padding:4px 2px}
 /* ── 끝 화면: 결과 한 줄, 파란 "다음" 하나(아래 "또는:" 한 줄), 회색 닫기, 외우기로 다지기 ── */
 .endr{margin:6px 0 0;font-weight:700;font-variant-numeric:tabular-nums}
 .endx{margin:6px 0 0}
 .endb{margin-top:14px}.endb .btns{margin-top:8px}
-.endor{margin:6px 0 0;text-align:center}.endor .lnk{padding:6px;font-size:.92rem}
+.endor{margin:6px 0 0;text-align:center}.endor .lnk{padding:6px;font-size:.86rem}
 .endm{margin-top:14px;padding-top:10px;border-top:1px dashed var(--rule)}
 .endm>p{margin:0;font-size:.8rem;font-weight:700;color:var(--ink2)}
 .endm .btn{width:100%;justify-content:flex-start;min-height:40px;padding:6px 0;text-align:left}
@@ -788,17 +788,17 @@ body.kb .nextbar{display:none}
 .msteps{margin:0;padding:0;list-style:none;counter-reset:ms}
 .msteps>li{counter-increment:ms;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:8px 0;border-top:1px solid var(--rule2)}
 .msteps>li:first-child{border-top:0;padding-top:2px}
-.msteps>li::before{content:counter(ms);flex:none;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--paper);color:var(--ink2);font-size:.76rem;font-weight:800}
+.msteps>li::before{content:counter(ms);flex:none;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--paper);color:var(--ink2);font-size:.8rem;font-weight:700}
 .msteps>li>span{flex:1 1 150px;min-width:0}
 .msteps>li>.btn.sm{flex:0 1 auto}
 .msteps .mscore{flex-basis:100%;padding:2px 0 0 32px}
 .mgd{display:flex;align-items:center;gap:8px;margin:10px 0 0;font-weight:700;color:var(--ok)}
 .mgd .lnk{margin-left:auto;padding:6px 2px;font-size:.86rem}
-.mlinks{display:flex;justify-content:center;align-items:center;gap:6px;margin:14px 0 0;color:var(--ink3);font-size:.9rem}
-.mlinks .lnk{padding:8px 4px;font-weight:600}
+.mlinks{display:flex;justify-content:center;align-items:center;gap:6px;margin:14px 0 0;color:var(--ink3);font-size:.86rem}
+.mlinks .lnk{padding:8px 4px}
 .tline{display:flex;flex-wrap:wrap;align-items:center;gap:2px 12px;padding:10px 12px 10px 14px;border-radius:var(--r-md);background:var(--blue-soft)}
 .tline .tlt{flex:0 0 auto;white-space:nowrap;font-size:2rem;font-weight:800;line-height:1.1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--ink)}
-.tline .tlp{flex:1 1 110px;min-width:0;font-size:.86rem;font-weight:600;line-height:1.35;color:var(--ink2)}
+.tline .tlp{flex:1 1 110px;min-width:0;font-size:.86rem;font-weight:700;line-height:1.35;color:var(--ink2)}
 .tline .btn.sm{flex:0 0 auto;min-height:40px}
 .tline .tlr{margin-left:auto}   /* 끝난 화면 안 타이머: "5분 더" 옆(좁으면 아래 줄 오른쪽)에 같은 타이머 새로 시작 */
 .tline.urgent .tlt{color:var(--amber)}
@@ -807,4 +807,4 @@ body.kb .nextbar{display:none}
 .steps3 .tline{background:var(--sheet);margin:4px 0 2px;flex-wrap:nowrap}.steps3 .tline.end{flex-wrap:wrap}.steps3 .tline .tlt{font-size:1.6rem}.steps3 .tline .tlp{flex:1 1 0;min-width:56px}
 .qcard~.tline,.sec>.tline{margin-top:12px}
 .tpill.end{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber)}
-.tend{margin:4px 0 0;text-align:center;font-size:1.06rem;font-weight:800;color:var(--amber)}
+.tend{margin:4px 0 0;text-align:center;font-size:1.06rem;font-weight:700;color:var(--amber)}

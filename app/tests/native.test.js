@@ -78,6 +78,7 @@ function open(opt = {}) {
   const plan = host.notifPlan({ wd: { on: true, time: '07:30' }, su: { on: true, time: '21:05' } });
   ok(plan.length === 6 && plan.filter(n => n.weekday >= 2 && n.weekday <= 6 && n.hour === 7 && n.minute === 30 && n.hash === 'today').length === 5, '알림 예약: 평일 5개(월~금 07:30)');
   ok(plan.some(n => n.weekday === 1 && n.hour === 21 && n.minute === 5 && n.title === '복습 비우기' && n.hash === 'review'), '알림 예약: 일요일 21:05 복습 비우기');
+  ok(plan.some(n => n.weekday === 1 && n.body === '이번 주 오답 노트와 세트 복습을 정리해요.') && !plan.some(n => /다시 보기|복습 대기|목차 회상|체크리스트/.test(n.title + n.body)), '4-8. 일요일 알림 본문 "이번 주 오답 노트와 세트 복습을 정리해요."(물러난 낱말 "세트 다시 보기" 없음)');
   ok(host.notifPlan({ wd: { on: false }, su: { on: false } }).length === 0, '알림 끄면 예약 없음');
   ok(host.cleanNotif({ wd: { on: true, time: '25:00' } }).wd.time === '07:00', '잘못된 시각은 기본값');
   ok(host.safeFileName('../a b.json') === '..ab.json' && host.safeFileName('x.txt') === 'gisulsa-backup.json', '백업 파일 이름 정리');

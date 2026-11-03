@@ -391,7 +391,9 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(mapErr.length === 0, '시작일 134가지 주차 지도 ' + mapErr.slice(0, 4).join(' | '));
   }
   await go('#more');
-  ok(/준비 시작일·목표 회차/.test(txt()) && /제142회 2027-05-15\(예상\), 29주/.test(txt()), '더보기 시험 일정 줄');
+  { const ds = ([...view().querySelectorAll('.row')].find(r => /준비 시작일·목표 회차/.test(r.textContent)) || d).querySelector('.ds'), nw = ds ? [...ds.querySelectorAll('.nw')].map(x => x.textContent) : [];
+    ok(ds && ds.textContent === '10월 19일 시작 · 29주제142회 · 5월 15일(토, 예상)' && ds.querySelector('br') && JSON.stringify(nw) === '["제142회","5월 15일(토, 예상)"]' && !/\d{4}-\d\d/.test(ds.textContent),
+      `더보기 시험 일정 줄(4-9): "10월 19일 시작 · 29주" / 목표 "제142회 · 5월 15일(토, 예상)"(날짜는 모두 M월 D일, 회차·날짜는 줄 안에서 끊기지 않는 덩이): ${ds && ds.innerHTML}`); }
   await go('#schedule');
   ok(d.querySelector('#schStart') && d.querySelector('#schStart').value === '2026-10-19', '시작일 입력');
   ok(d.querySelectorAll('#schTarget option').length >= 4, '목표 회차 선택지 ' + d.querySelectorAll('#schTarget option').length);
@@ -455,6 +457,49 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(g17.some(g => /^연습 탭 전체 카드 1회전/.test(g)) && !g17.some(g => /암기 탭/.test(g)) && raw.goals[0] === '암기 탭 전체 카드 1회전(하루 40장)' && (!cur || JSON.stringify(cur.goals) === JSON.stringify(raw.goals)), `${w17}주차(틀 17) 목표는 "연습 탭 전체 카드 1회전"으로 보이고, PE_WEEKS는 curriculum.json과 같이 "암기 탭" 그대로`);
     ok(pe.tabWords('토요일 모의고사(앱 테스트 탭) · 기출 훑기(테스트 → 기출 단원별) · 테스트 → 기출 회차에서 · 암기 탭 · 플랜 탭 · 다시 볼 세트') === '토요일 모의고사(연습 탭) · 기출 훑기(연습 → 기출 문제은행(단원별)) · 연습 → 기출 문제은행(회차별)에서 · 연습 탭 · 이번 주 탭 · 세트 복습', 'tabWords: 예전 탭 이름 → 연습 탭 · 이번 주 탭 · 연습 → 기출 문제은행 · 세트 복습');
     await go('#plan'); ok(!/암기 탭|테스트 탭|테스트 →|플랜 탭|다시 볼 세트/.test(txt()) && /연습 → 기출 문제은행에서 실제 시험지/.test(txt()) && /모의고사 채점 \(모의고사 화면/.test(w.PE_PROMPTS.find(x => x.id === 'p9').n), '로드맵(주차 목표·요일별 루틴·Claude 활용 순서)과 프롬프트 이름에 예전 탭 이름이 없음'); }
+  // 4묶음(화면 모양·문구): 물러난 낱말(4-8), CSS만 고친 것(4-1~4-7)과 지운 죽은 CSS(4-10)를 styles.css 글로 본다(jsdom은 CSS를 계산하지 않음)
+  {
+    const OLD = /복습 대기|목차 회상|체크리스트|세트 다시 보기|암기 덱|암기에 넣기/, R = w.PE_ROUTINES, rt = Object.keys(R).flatMap(k => ['wd', 'sat', 'sun'].flatMap(x => R[k][x] || []));
+    const tbl = [...rt, ...w.PE_ACADEMY.flatMap(x => [x.a, x.b]), ...w.PE_CLAUDE_ROUTINE.flatMap(x => [x.n, x.d])];
+    ok(!tbl.some(x => OLD.test(x)) && rt.some(x => /카드 복습 0/.test(x)) && rt.some(x => /목차 떠올리기/.test(x)) && /오늘 몫과 학습 달력으로 확인/.test(w.PE_ACADEMY[0].b) && /세트 복습/.test(w.PE_ACADEMY[2].b) && /카드 덱/.test(w.PE_CLAUDE_ROUTINE[1].d),
+      '4-8. 요일별 루틴·학원 대체표·Claude 활용 순서에 물러난 낱말(복습 대기·목차 회상·체크리스트·세트 다시 보기·암기 덱) 없음: 카드 복습 0 · 목차 떠올리기 · 오늘 몫과 학습 달력 · 세트 복습 · 카드 덱');
+    const g11 = w.PE_WEEKS.find(x => x.w === 11).goals[1];
+    ok(g11 === '1~4단원 복습 대기 0, 별표 카드 다시 외우기' && pe.tabWords(g11) === '1~4단원 카드 복습 0, 별표 카드 다시 외우기' && pe.tabWords('퇴근길: 논술 목차 회상 3개') === '퇴근길: 논술 목차 떠올리기 3개',
+      '4-8. PE_WEEKS(= pipeline/curriculum.json) 글은 그대로, 보여 줄 때 tabWords가 "복습 대기 → 카드 복습", "목차 회상 → 목차 떠올리기"');
+    await go('#plan'); view().querySelectorAll('details').forEach(x => { x.open = true; });
+    ok(/요일별 루틴/.test(txt()) && !/복습 대기|목차 회상|세트 다시 보기|암기 덱|암기에 넣기|체크리스트와/.test(txt()), '4-8. 로드맵(주차 목표·요일별 루틴·학원 대체표·Claude 활용 순서)을 다 펼쳐도 물러난 낱말 없음');
+    const c0 = pe.deck().find(c => !(S().cards[c.id] || {}).seen), cb = d.createElement('button'); cb.dataset.act = 'card-modal'; cb.dataset.id = c0.id; view().appendChild(cb);
+    click('[data-act="card-modal"]', cb.parentNode); await sleep(10);
+    const mw4 = d.querySelector('#modal-wrap'), intro = mw4.querySelector('[data-act="introduce"]');
+    ok(intro && intro.textContent === '카드 복습에 넣기' && !/암기에 넣기/.test(mw4.textContent), '4-8. 아직 보지 않은 카드 창의 버튼 "카드 복습에 넣기"(예전 "암기에 넣기")');
+    ok(!mw4.querySelector('.msheet>:not(.btns)+.btns:last-child'), '4-4. 버튼 줄이 이어지는 카드 창은 마지막 줄("이 카드 숨기기")을 아래에 붙이지 않음(여러 카드 창에서 첫 카드 위에 뜨지 않게)');
+    mw4.innerHTML = ''; cb.remove();
+    const rep = pe.weeklyReport();
+    ok(/오답 노트 \d+개, 세트 복습 남은 \d+개/.test(rep) && !OLD.test(rep), '4-8. 주간 리포트 "세트 복습 남은 n개"(예전 "세트 복습 대기 n개")');
+    const css = fs.readFileSync(path.join(SITE, 'styles.css'), 'utf8'), appSrc = fs.readFileSync(path.join(SITE, 'app.js'), 'utf8');
+    const decl = sel => { const m = css.match(new RegExp('(^|[}\\n])' + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\{([^}]*)\\}')); return m ? m[2] : ''; };
+    const FILL = ['.grade3 .g2', '.cc.on', '.cd.today .n', 'nav.tabs .nb', '.calbtn .cm', '.opt.right .ab', '.opt.wrong .ab', '.hw.done .hwn', '.ch5 i'];
+    const isL = re => { const m = css.match(re); return m ? m[1].split(',') : []; };
+    const dk = isL(/:root\[data-theme="dark"\] :is\(([^)]*\.grade3 \.g2[^)]*)\)\{color:#08142E\}/), dm = isL(/:root:not\(\[data-theme="light"\]\) :is\(([^)]*\.grade3 \.g2[^)]*)\)\{color:#08142E\}/);
+    ok(FILL.every(x => dk.includes(x) && dm.includes(x)) && /:root\[data-theme="dark"\] \.grade3 \.g2 small\{color:rgba\(8,20,46,\.8\)\}/.test(css) && /:root:not\(\[data-theme="light"\]\) \.grade3 \.g2 small\{color:rgba\(8,20,46,\.8\)\}/.test(css),
+      '4-1. 어두운 화면: 색을 칠한 칸(카드 "앎", 숙제 동그라미, 달력 오늘, 탭 배지, 달력 아이콘 달, 보기 번호, 끝낸 숙제 번호, 그날 종류 수) 위 글자는 #08142E(설정 "어둡게"와 기기 다크 모드 둘 다)');
+    const INK2 = ['.blk .bn small', '.sseg button small', '.hwm', '.cc', '.stepper li', '.stepper i', '.brk', '.fs small', '.vfoot', '.fc .hint'];
+    ok(INK2.every(x => /color:var\(--ink2\)/.test(decl(x))), '4-2. 밝은 화면의 작은 정보 글(블록 자리·세트 탭 상태·숙제 분·동그라미 숫자·모의 단계·쉬는 시간·접힌 줄 미리보기·맨 아래 버전)은 --ink2(--ink3은 테두리·장식만): ' + INK2.filter(x => !/color:var\(--ink2\)/.test(decl(x))).join(', '));
+    const band = decl('body::before');
+    ok(/position:fixed/.test(band) && /top:0/.test(band) && /z-index:19/.test(band) && /height:var\(--sat\)/.test(band) && /pointer-events:none/.test(band) && /backdrop-filter/.test(band) && /z-index:20/.test(decl('.topbar')),
+      '4-3. 위쪽 상태 표시줄(시계·배터리) 띠: body::before 고정, 높이 --sat, z-index 19(위쪽 막대 20·아래 탭 30·알약 40·창 60 아래), 누름은 그대로 통과');
+    ok(/position:sticky/.test(decl('.msheet>:not(.btns)+.btns:last-child')) && /bottom:calc\(-20px - var\(--sab\)\)/.test(decl('.msheet>:not(.btns)+.btns:last-child')) && /background:var\(--paper\)/.test(decl('.msheet>:not(.btns)+.btns:last-child')),
+      '4-4. 창 맨 아래 버튼 줄(바뀐 점·오늘 시간 등의 "닫기")은 큰 글자·작은 화면에서도 아래에 붙어 보임(sticky)');
+    ok(/display:none/.test(decl('.qline.two .chev')) && decl('.qline.two .tkc') === 'margin:9px 14px 0 8px' && /gap:4px/.test(decl('.qline.two')),
+      '4-5. 이번 주 두 칸 줄(공고·원서접수 날짜 확인): 화살표 없이, 글과 동그라미 사이 12px 이상(틈 4 + 8)');
+    const sone = decl('.sone');
+    ok(/-webkit-line-clamp:2/.test(sone) && /overflow-wrap:anywhere/.test(sone) && !/nowrap|ellipsis/.test(sone), '4-6. ②~④ 탭 머리의 세트 제목은 두 줄까지(한 줄 말줄임 없음)');
+    const v3css = css.slice(css.indexOf('/* ── 오늘 몫·이번 주')), szs = [...new Set((v3css.match(/font-size:[^;}]+/g) || []).map(x => x.slice(10)))], ROLE = ['2rem', '1.7rem', '1.6rem', '1.45rem', '1.25rem', '1.06rem', '1rem', '.86rem', '.8rem'];
+    ok(v3css.length > 1000 && szs.every(x => ROLE.includes(x)) && /font-size:\.86rem/.test(decl('.btn.sm')) && decl('.wkd b') === 'font-weight:inherit' && !/font-weight:900/.test(v3css),
+      `4-7. v3 화면 글자는 역할 크기만(표시 1.7 · 제목 1.45 · 구역 1.06 · 줄 제목 1 · 보조 .86 · 작은 이름 .8rem, 타이머 숫자 2·1.6rem, 닫기 ×), 작은 버튼 .86rem, 굵은 칸 안 <b>는 더 굵어지지 않음: ${szs.filter(x => !ROLE.includes(x)).join(', ')}`);
+    ok(!/\.hw(top|pg|tx|go)\b/.test(css) && !/class="hw(top|pg|tx|go)\b/.test(appSrc) && !/case'set-task'/.test(appSrc) && /case'hw-task'/.test(appSrc) && /case'chk'/.test(appSrc) && /case'mock-done'/.test(appSrc) && /case'start-setrev-all'/.test(appSrc),
+      '4-10. 지운 화면의 쓰지 않는 숙제 머리 CSS(.hwtop·.hwpg·.hwtx·.hwgo)와 아무도 내지 않는 "set-task"는 없음(명세가 남기기로 한 chk·mock-done·start-setrev-all은 그대로)');
+  }
   // 연습 → "새 카드 n장"은 범위 안 새 카드만(카드 복습은 따로 "카드 복습 n장 · 전체 단원")
   await go('#study'); const nwRow = view().querySelector('[data-act="start-study"]'), nwN = Number(((nwRow && nwRow.textContent.match(/새 카드 (\d+)장/)) || [])[1] || 0);
   click('[data-act="start-study"]'); await sleep(40);
@@ -1527,6 +1572,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     const ds0 = view().querySelector('.daysum').textContent;
     click('[data-act="cap"]'); await sleep(10);
     ok(mw().querySelectorAll('[data-act="cap-set"]').length === 4 && /30분 · 최소 몫/.test(mw().textContent) && /평소대로 · /.test(mw().textContent) && /최소 몫\(용어 읽기 · 세트 퀴즈 · 단답 1문 · 자기 전 5분\)은 늘 남아요/.test(mw().textContent), '오늘 시간 창: 30분 · 최소 몫 / 1시간 / 1시간 30분 / 평소대로');
+    ok(mw().querySelector('.msheet>:not(.btns)+.btns:last-child [data-act="sheet-close"]'), '4-4. 오늘 시간 창의 맨 아래 "닫기" 줄이 창 아래에 붙는 줄(.msheet>:not(.btns)+.btns:last-child)');
     click('#modal-wrap [data-act="cap-set"][data-m="60"]'); await sleep(30);
     const late = (x => x.getHours() * 60 + x.getMinutes() >= 22 * 60 + 30)(new w.Date()), ds1 = view().querySelector('.daysum').textContent;
     ok(S().today && S().today.d === T0 && S().today.user === 60 && !mw().innerHTML && (ds1 !== ds0 || late) && /오늘 시간 (1시간|\d+분)/.test(ds1), `오늘 시간 1시간: S.today.user = 60, 상태 줄이 바뀜(${ds1.trim()})`);

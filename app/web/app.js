@@ -2120,11 +2120,12 @@ function weeklyReport(W){const t=todayStr(),cs=deck();W=W||wkStart(t);const E=ad
   return L.join('\n');}
 
 /* ════════ 17. 화면: 더보기와 하위 화면 ════════ */
+/* 시험 일정 줄: 첫 줄 "10월 19일 시작 · 29주", 둘째 줄 목표 "제142회 · 5월 15일(토, 예상)"(날짜는 모두 "M월 D일", 회차·날짜는 줄 안에서 끊기지 않음) */
 function vMore(){const s=S.sync||{};const rp=repoPlanState();
   const me=PE_IO.member();
   return`<div class="ltitle"><div><h1>더보기</h1>${me?`<p class="lsub">아이디 ${esc(me.id)}</p>`:''}</div></div>
   ${me&&me.admin?sec('관리','',`<div class="group">${row({ic:'check',tone:'ok',t:'승인 관리',d:'승인 요청, 회원, 초대 코드',act:'go',data:{h:'admin'}})}</div>`):''}
-  ${sec('시험 일정','',`<div class="group">${row({ic:'flag',tone:rp==='diff'?'red':'',t:'준비 시작일·목표 회차',d:`${esc(korDate(S.settings.start))} 시작 → <span class="nw">제${PLAN.target.r}회</span> · <span class="nw">${esc(korDate(PLAN.target.d))}(${DAYK[parse(PLAN.target.d).getDay()]}${esc(estTag(PLAN.target).replace(/^\((.+)\)$/,', $1'))})</span>, ${PLAN.E}주${rp==='diff'?'<br><b style="color:var(--red)">예약 작업 일정과 달라요</b>':''}`,act:'go',data:{h:'schedule'}})}</div>`)}
+  ${sec('시험 일정','',`<div class="group">${row({ic:'flag',tone:rp==='diff'?'red':'',t:'준비 시작일·목표 회차',d:`${esc(korDate(S.settings.start))} 시작 · ${PLAN.E}주<br><span class="nw">제${PLAN.target.r}회</span> · <span class="nw">${esc(korDate(PLAN.target.d))}(${DAYK[parse(PLAN.target.d).getDay()]}${esc(estTag(PLAN.target).replace(/^\((.+)\)$/,', $1'))})</span>${rp==='diff'?'<br><b style="color:var(--red)">예약 작업 일정과 달라요</b>':''}`,act:'go',data:{h:'schedule'}})}</div>`)}
   ${sec('공부 도구','',`<div class="group">${row({ic:'caldot',t:'학습 달력',d:'접속한 날과 끝낸 공부',act:'go',data:{h:'cal'}})}${row({ic:'cal',t:PLAN.E+'주 로드맵',d:'단계·주차별 목표와 학원 대체표',act:'go',data:{h:'plan'}})}${row({ic:'pen',t:'답안 작성 요령',d:'모범 답안으로 보는 답안지 쓰는 법',act:'go',data:{h:'guide'}})}${row({ic:'timer',t:'교시 타이머',d:'100분, 문제 경계마다 알림',act:'go',data:{h:'timer'}})}${row({ic:'chat',t:'Claude 프롬프트',d:'첨삭·카드 생성·주간 리포트 등 10개',act:'go',data:{h:'prompts'}})}</div>`)}
   ${sec('데이터','',`<div class="group">${row({ic:'sync',t:'지금 받아 오기',d:syncing?'받아 오는 중…':s.last&&!s.ok?'<span class="sfail">받아 오지 못했어요</span>':'',act:'sync'})}${row({ic:'imp',t:'카드·목차 가져오기',d:'Claude가 만든 JSON 붙여넣기',act:'go',data:{h:'imp'}})}${row({ic:'save',t:'백업·복원',d:(S.tk||{}).backup?'마지막 백업 '+md(S.tk.backup):'아직 백업한 적이 없어요',act:'go',data:{h:'backup'}})}</div>`)}
   ${sec('앱','',`<div class="group">${row({ic:'gear',t:'설정',d:'하루 공부 시간, 새 카드 수, 글자 크기, 테마',act:'go',data:{h:'settings'}})}${row({ic:'info',t:'콘텐츠 출처',d:'카드·기출·세트가 어디서 왔는지',act:'go',data:{h:'about'}})}</div>`)}
