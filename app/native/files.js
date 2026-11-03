@@ -62,6 +62,20 @@ export function writeNotifConfig(cfg) {
   writeText('notif.json', JSON.stringify(cfg));
 }
 
+// 백업 파일 불러오기: iOS 파일 앱(이 iPhone·iCloud Drive)에서 고른다. 취소하면 null. 고른 파일은 임시 사본이라 읽고 지운다
+const PICK_MAX = 30 * 1024 * 1024;
+export async function pickFile() {
+  const r = await File.pickFileAsync({ mimeTypes: ['application/json', 'text/plain'] });
+  if (!r || r.canceled || !r.result) return null;
+  const f = r.result;
+  try {
+    if (f.size > PICK_MAX) throw new Error('파일이 너무 커요');
+    return { name: f.name, text: await f.text() };
+  } finally {
+    try { f.delete(); } catch (e) { /* 임시 사본 */ }
+  }
+}
+
 // 백업 파일: 임시 폴더에 쓰고 iOS 공유 시트로 내보낸다("파일에 저장"으로 아이폰·iCloud Drive에 둘 수 있다)
 export async function saveFile(name, text, type) {
   const f = new File(Paths.cache, name);

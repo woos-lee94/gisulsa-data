@@ -1,5 +1,5 @@
 // 회원 승인 화면: 승인되기 전에는 앱 내용(웹 화면) 대신 이 화면만 보인다.
-// 아이디 만들기 → 승인 대기(다시 확인, 기기 번호, 아이디 지우기) / 거절됨 / 인터넷 없음 / 설정 없는 빌드
+// 아이디 만들기(관리자에게 보낼 말과 함께) → 승인 대기(다시 확인, 관리자에게 한마디 더, 기기 번호, 아이디 지우기) / 거절됨 / 인터넷 없음 / 설정 없는 빌드
 import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
@@ -17,13 +17,38 @@ function Btn({ c, title, onPress, kind, disabled }) {
   );
 }
 
-export default function Gate({ m, busy, error, dark, onRegister, onRefresh, onRemove }) {
+const MSG_MAX = 500;
+const hhmm = d => `${d.getHours() < 12 ? '오전' : '오후'} ${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+export default function Gate({ m, busy, error, dark, onRegister, onRefresh, onRemove, onSend }) {
   const c = dark ? DARK : LIGHT;
   const [id, setId] = useState('');
   const [code, setCode] = useState('');
   const [withCode, setWithCode] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [msg, setMsg] = useState(''); // 관리자에게 보낼 말(아이디 만들 때 함께, 못 보냈으면 승인 대기 화면에 그대로 남는다)
+  const [note, setNote] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(null);
   const st = m.state;
+  const hasCode = withCode && !!code.trim();
+  const msgBox = (placeholder) => (
+    <>
+      <TextInput value={msg} onChangeText={t => { setMsg(t); setNote(null); }} placeholder={placeholder} placeholderTextColor={c.ink2}
+        multiline maxLength={MSG_MAX} textAlignVertical="top" accessibilityLabel="관리자에게 보낼 말"
+        style={[s.input, s.area, { color: c.ink, borderColor: c.rule, backgroundColor: c.paper }]} />
+      <Text style={[s.count, { color: c.ink2 }]}>{msg.length}/{MSG_MAX} · 관리자만 읽어요</Text>
+    </>
+  );
+  const register = async () => {
+    if (!hasCode && !msg.trim()) return setNote('관리자에게 보낼 말을 적어 주세요. 누구인지 알아야 승인할 수 있어요.');
+    setNote(null);
+    if (await onRegister(id, withCode ? code : '', msg)) { setMsg(''); setSent(hhmm(new Date())); }
+  };
+  const send = async () => {
+    setSending(true); setNote(null);
+    try { await onSend(msg); setMsg(''); setSent(hhmm(new Date())); } catch (e) { setNote(String((e && e.message) || e)); } finally { setSending(false); }
+  };
 
   let body;
   if (st === 'loading') {
@@ -39,6 +64,8 @@ export default function Gate({ m, busy, error, dark, onRegister, onRefresh, onRe
         <TextInput value={id} onChangeText={setId} placeholder="2~16자, 한글·영문 소문자·숫자·_" placeholderTextColor={c.ink2}
           autoCapitalize="none" autoCorrect={false} maxLength={16} returnKeyType={withCode ? 'next' : 'done'}
           style={[s.input, { color: c.ink, borderColor: c.rule, backgroundColor: c.paper }]} />
+        <Text style={[s.label, { color: c.ink2 }]}>관리자에게 보낼 말{hasCode ? ' (넣지 않아도 돼요)' : ''}</Text>
+        {msgBox('이름과 신청 이유를 적어 주세요')}
         {withCode ? (
           <>
             <Text style={[s.label, { color: c.ink2 }]}>초대 코드</Text>
@@ -49,8 +76,8 @@ export default function Gate({ m, busy, error, dark, onRegister, onRefresh, onRe
         ) : (
           <Pressable onPress={() => setWithCode(true)}><Text style={[s.link, { color: c.blue }]}>초대 코드가 있어요</Text></Pressable>
         )}
-        {error ? <Text style={[s.err, { color: c.red }]}>{error}</Text> : null}
-        <Btn c={c} title={busy ? '보내는 중…' : withCode && code.trim() ? '아이디 만들기' : '승인 요청 보내기'} disabled={busy || !id.trim()} onPress={() => onRegister(id, withCode ? code : '')} />
+        {note || error ? <Text style={[s.err, { color: c.red }]}>{note || error}</Text> : null}
+        <Btn c={c} title={busy ? '보내는 중…' : hasCode ? '아이디 만들기' : '승인 요청 보내기'} disabled={busy || !id.trim()} onPress={register} />
       </View>
     );
   } else if (st === 'pending' || st === 'rejected') {
@@ -68,6 +95,11 @@ export default function Gate({ m, busy, error, dark, onRegister, onRefresh, onRe
         {m.offline ? <Text style={[s.err, { color: c.red }]}>인터넷에 연결되어 있지 않아요.</Text> : null}
         {error ? <Text style={[s.err, { color: c.red }]}>{error}</Text> : null}
         <Btn c={c} title={busy ? '확인하는 중…' : '다시 확인'} disabled={busy} onPress={onRefresh} />
+        <Text style={[s.label, { color: c.ink2, marginTop: 22 }]}>{sent ? '관리자에게 한마디 더' : '관리자에게 보낼 말'}</Text>
+        {msgBox(pending ? '예: 홍길동입니다. 승인 부탁드려요' : '예: 다시 확인 부탁드려요')}
+        {sent ? <Text style={[s.ok, { color: c.blue }]}>{sent}에 관리자에게 보냈어요</Text> : null}
+        {note ? <Text style={[s.err, { color: c.red }]}>{note}</Text> : null}
+        <Btn c={c} kind="sec" title={sending ? '보내는 중…' : '보내기'} disabled={sending || busy || !msg.trim()} onPress={send} />
         <Btn c={c} kind="ghost" title="아이디 지우기" disabled={busy} onPress={onRemove} />
       </View>
     );
@@ -112,6 +144,9 @@ const s = StyleSheet.create({
   desc: { fontSize: 15, lineHeight: 22 },
   label: { fontSize: 14, fontWeight: '600', marginTop: 16, marginBottom: 6 },
   input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12, fontSize: 17 },
+  area: { minHeight: 96, maxHeight: 180, paddingTop: 12 },
+  count: { fontSize: 13, marginTop: 6, textAlign: 'right' },
+  ok: { fontSize: 14, fontWeight: '600', marginTop: 10 },
   link: { fontSize: 15, fontWeight: '600', marginTop: 14 },
   err: { fontSize: 14, marginTop: 12 },
   btn: { borderRadius: 14, minHeight: 50, alignItems: 'center', justifyContent: 'center', marginTop: 14 },

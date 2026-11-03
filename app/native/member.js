@@ -4,6 +4,10 @@
 const ID_RE = /^[a-z0-9_가-힣]{2,16}$/;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const AUTH_KEY = 'pe_auth', CACHE_KEY = 'pe_member';
+const MSG_FROM = ['join', 'wait', 'app']; // 아이디 만들 때 · 승인 대기 화면 · 앱 안
+const MSG_MAX = 500;
+const MID_RE = /^[A-Za-z0-9]{1,40}$/;
+const ALNUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
 function cleanId(s) { return String(s || '').trim().toLowerCase(); }
 
@@ -132,9 +136,17 @@ function createMember({ apiKey, projectId, fetch, store, now = () => Date.now(),
     return check();
   }
 
-  // 아이디 지우기(앱 안 계정 삭제): 회원·아이디 문서와 익명 계정을 지우고 키체인을 비운다
+  // 내가 보낸 문자(규칙이 본인 것만 읽고 지우게 한다)
+  async function myMsgs(uid) {
+    const b = await req('POST', `${FS}:runQuery`, { structuredQuery: { from: [{ collectionId: 'msgs' }], where: { fieldFilter: { field: { fieldPath: 'uid' }, op: 'EQUAL', value: { stringValue: uid } } } } });
+    return (Array.isArray(b) ? b : []).filter(x => x && x.document).map(x => x.document.name);
+  }
+
+  // 아이디 지우기(앱 안 계정 삭제): 보낸 문자·회원·아이디 문서와 익명 계정을 지우고 키체인을 비운다
   async function remove() {
     const s = await auth();
+    // 문자는 먼저, 되는 만큼(문자 규칙을 아직 게시하지 않은 프로젝트에서도 아이디 지우기는 된다)
+    try { const names = await myMsgs(s.uid); for (let i = 0; i < names.length; i += 400) await req('POST', `${FS}:commit`, { writes: names.slice(i, i + 400).map(n => ({ delete: n })) }); } catch (e) { /* 건너뜀 */ }
     const m = await getDoc(`members/${enc(s.uid)}`);
     const writes = [{ delete: docName(`members/${s.uid}`) }];
     if (m && ID_RE.test(m.id)) writes.push({ delete: docName(`ids/${m.id}`) });
@@ -144,6 +156,21 @@ function createMember({ apiKey, projectId, fetch, store, now = () => Date.now(),
     await store.del(AUTH_KEY);
     await store.del(CACHE_KEY);
     return { state: 'none' };
+  }
+
+  // 관리자에게 문자 보내기(아이디가 있어야 한다: 아이디 만들기 뒤, 승인 대기·거절 화면, 앱 안). 시각은 서버 시각
+  async function sendMsg(rawText, from, dev, rand = Math.random) {
+    const text = String(rawText || '').trim().slice(0, MSG_MAX);
+    if (!text) throw new MemberError('empty', '보낼 말을 적어 주세요');
+    if (!MSG_FROM.includes(from)) throw new MemberError('badfrom', '모르는 보낸 곳');
+    const s = await auth();
+    const m = await getDoc(`members/${enc(s.uid)}`);
+    if (!m) throw new MemberError('noid', '아이디를 먼저 만들어 주세요');
+    let mid = '';
+    for (let i = 0; i < 20; i++) mid += ALNUM.charAt(Math.floor(rand() * ALNUM.length));
+    const fields = toFields({ uid: s.uid, id: m.id, text, from, dev: dev ? String(dev).slice(0, 60) : null, read: false });
+    await req('POST', `${FS}:commit`, { writes: [{ update: { name: docName(`msgs/${mid}`), fields }, updateTransforms: [{ fieldPath: 'at', setToServerValue: 'REQUEST_TIME' }], currentDocument: { exists: false } }] });
+    return mid;
   }
 
   // 관리자
@@ -176,7 +203,41 @@ function createMember({ apiKey, projectId, fetch, store, now = () => Date.now(),
   }
   async function delCode(code) { await req('DELETE', `codes/${enc(String(code).toUpperCase())}`); return true; }
 
-  return { configured, auth, check, cached, register, remove, list, setStatus, removeMember, codes, addCode, delCode, uid: () => session && session.uid };
+  // 관리자 문자함: 모든 문자(새것부터), 안 읽은 수, 읽음 표시, 지우기
+  async function msgs() {
+    const out = [];
+    let tok = '';
+    for (let i = 0; i < 10; i++) {
+      const b = await req('GET', `msgs?pageSize=300${tok ? '&pageToken=' + enc(tok) : ''}`);
+      out.push(...(b.documents || []).map(fromDoc));
+      if (!b.nextPageToken) break;
+      tok = b.nextPageToken;
+    }
+    const t = x => Date.parse(x) || 0;
+    return out.map(m => ({ mid: m._id, uid: m.uid || '', id: m.id || '', text: m.text || '', from: m.from || '', dev: m.dev || '', at: m.at || '', read: m.read === true }))
+      .sort((a, b) => t(b.at) - t(a.at));
+  }
+  async function unread() {
+    const b = await req('POST', `${FS}:runAggregationQuery`, { structuredAggregationQuery: {
+      structuredQuery: { from: [{ collectionId: 'msgs' }], where: { fieldFilter: { field: { fieldPath: 'read' }, op: 'EQUAL', value: { booleanValue: false } } } },
+      aggregations: [{ alias: 'n', count: {} }],
+    } });
+    const r = (Array.isArray(b) ? b : [b]).find(x => x && x.result);
+    return r ? Number(((r.result.aggregateFields || {}).n || {}).integerValue || 0) : 0;
+  }
+  const mids = a => (Array.isArray(a) ? a : []).map(String).filter(x => MID_RE.test(x)).slice(0, 400);
+  async function markRead(list, read = true) {
+    const ws = mids(list).map(mid => ({ update: { name: docName(`msgs/${mid}`), fields: toFields({ read: read === true }) }, updateMask: { fieldPaths: ['read'] }, currentDocument: { exists: true } }));
+    if (ws.length) await req('POST', `${FS}:commit`, { writes: ws });
+    return ws.length;
+  }
+  async function delMsgs(list) {
+    const ws = mids(list).map(mid => ({ delete: docName(`msgs/${mid}`) }));
+    if (ws.length) await req('POST', `${FS}:commit`, { writes: ws });
+    return ws.length;
+  }
+
+  return { configured, auth, check, cached, register, remove, sendMsg, list, setStatus, removeMember, codes, addCode, delCode, msgs, unread, markRead, delMsgs, uid: () => session && session.uid };
 }
 
-module.exports = { createMember, MemberError, cleanId, ID_RE };
+module.exports = { createMember, MemberError, cleanId, ID_RE, MSG_FROM, MSG_MAX };

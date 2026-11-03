@@ -2,7 +2,7 @@
 // 화면과 계산은 모두 web/app.js가 하고, 이 파일은 저장·복사·파일·확인 창·화면 켜 두기·받아 오기·알림만 잇는다(native/host.js).
 // 관리자가 승인한 휴대폰만 연다(native/member.js, Firebase). 승인 전에는 회원 화면(native/Gate.js)만 보인다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, Linking, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { Alert, AppState, Linking, Platform, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import Constants from 'expo-constants';
 import * as Clipboard from 'expo-clipboard';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
@@ -11,7 +11,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import { bootScript, createHost, jsLiteral } from './native/host';
-import { prepareWeb, readNotifConfig, readStore, saveFile, writeStore } from './native/files';
+import { pickFile, prepareWeb, readNotifConfig, readStore, saveFile, writeStore } from './native/files';
 import * as notify from './native/notify';
 import { createMember } from './native/member';
 import Gate from './native/Gate';
@@ -52,6 +52,12 @@ const member = createMember({
   fetch: (url, opt) => fetch(url, { ...opt, headers: { ...(opt && opt.headers), 'X-Ios-Bundle-Identifier': (Constants.expoConfig && Constants.expoConfig.ios && Constants.expoConfig.ios.bundleIdentifier) || '' } }),
   store: { get: k => SecureStore.getItemAsync(k, KC), set: (k, v) => SecureStore.setItemAsync(k, v, KC), del: k => SecureStore.deleteItemAsync(k, KC) },
 });
+// 관리자에게 보낸 문자의 "어디서": 보낸 화면(join·wait·app)과 이 기기 정보(이름·위치는 넣지 않는다)
+const DEV = `iOS ${Platform.Version} · 앱 ${(Constants.expoConfig && Constants.expoConfig.version) || ''}`;
+const sendErr = e => (e && e.code === 'offline' ? '인터넷에 연결되어 있지 않아요' : e && e.code === 'denied' ? '관리자가 아직 문자 받기를 켜지 않았어요. 관리자에게 앱 밖으로 알려 주세요' : String((e && e.message) || e));
+async function sendMsg(text, from) {
+  try { return await member.sendMsg(text, from, DEV); } catch (e) { throw new Error(sendErr(e)); }
+}
 const memberState = e => (e && e.code === 'offline' ? { state: 'offline' } : e && e.code === 'nocfg' ? { state: 'nocfg' } : { state: 'error', msg: String((e && e.message) || e) });
 
 async function fetchText(url) {
@@ -134,10 +140,21 @@ export default function App() {
   // 승인 전 화면에서는 스플래시를 바로 내린다
   useEffect(() => { if (m.state !== 'loading' && m.state !== 'approved') SplashScreen.hideAsync().catch(() => {}); }, [m.state]);
 
-  const onRegister = useCallback(async (id, code) => {
+  // 아이디 만들기 → 관리자에게 보낼 말(따로 보낸다: 문자를 못 보내도 아이디는 만들어진다). 문자를 보냈으면 true
+  const onRegister = useCallback(async (id, code, msg) => {
     setBusy(true); setGateErr(null);
-    try { setM(await member.register(id, code)); } catch (e) { setGateErr(String(e.message || e)); } finally { setBusy(false); }
+    let sent = false;
+    try {
+      const r = await member.register(id, code);
+      if (String(msg || '').trim()) {
+        try { await sendMsg(msg, 'join'); sent = true; }
+        catch (e) { setGateErr('아이디는 만들었지만 관리자에게 보낼 말은 못 보냈어요. ' + e.message); }
+      }
+      setM(r);
+    } catch (e) { setGateErr(String(e.message || e)); } finally { setBusy(false); }
+    return sent;
   }, []);
+  const onSend = useCallback(text => sendMsg(text, 'wait'), []);
   const onRefresh = useCallback(async () => { setBusy(true); await recheck(false); setBusy(false); }, [recheck]);
   const onRemove = useCallback(async () => {
     if (!(await confirmAlert('아이디를 지울까요? 승인도 함께 없어지고 처음 화면으로 돌아가요.'))) return;
@@ -172,13 +189,19 @@ export default function App() {
     writeStore: (k, v) => { store.current[k] = v; writeStore(k, v); },
     copy: text => Clipboard.setStringAsync(text),
     saveFile,
+    pickFile,
     confirm: confirmAlert,
     keepAwake: on => (on ? activateKeepAwakeAsync(AWAKE_TAG) : deactivateKeepAwake(AWAKE_TAG)).catch(() => {}),
     fetchText,
     setNotif: async cfg => (notifCfg.current = await notify.setNotif(cfg)),
     look: d => setDark(d),
     member: async (op, a) => {
-      if (op === 'list') return { members: await member.list(), codes: await member.codes(), me: member.uid() };
+      // 문자함은 규칙을 새로 게시하기 전이면 못 읽는다(msgs: null, 승인 관리는 그대로)
+      if (op === 'list') return { members: await member.list(), codes: await member.codes(), me: member.uid(), msgs: await member.msgs().catch(() => null) };
+      if (op === 'unread') return member.unread();
+      if (op === 'msg-read') return member.markRead(a.mids);
+      if (op === 'msg-del') return member.delMsgs(a.mids);
+      if (op === 'msg-send') return sendMsg(String(a.text || ''), 'app');
       if (op === 'set') return member.setStatus(String(a.uid), String(a.status));
       if (op === 'del') return member.removeMember(String(a.uid), String(a.id || ''));
       if (op === 'code-add') return member.addCode();
@@ -230,7 +253,7 @@ export default function App() {
   return (
     <View style={[styles.fill, { backgroundColor: bg }]}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      {m.state !== 'approved' && <Gate m={m} busy={busy} error={gateErr} dark={isDark} onRegister={onRegister} onRefresh={onRefresh} onRemove={onRemove} />}
+      {m.state !== 'approved' && <Gate m={m} busy={busy} error={gateErr} dark={isDark} onRegister={onRegister} onRefresh={onRefresh} onRemove={onRemove} onSend={onSend} />}
       {files && m.state === 'approved' && (
         <WebView
           key={gen}

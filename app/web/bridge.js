@@ -16,6 +16,11 @@ function webCopy(text){return new Promise((res,rej)=>{
   function fallback(){const ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');res();}catch(e){rej(e);}ta.remove();}
   if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(text).then(res,fallback);else fallback();});}
 function webSave(name,text,type){const blob=new Blob([text],{type});const u=URL.createObjectURL(blob);const x=document.createElement('a');x.href=u;x.download=name;document.body.appendChild(x);x.click();setTimeout(()=>{URL.revokeObjectURL(u);x.remove();},500);return Promise.resolve();}
+/* 파일 고르기(백업 불러오기): 고른 파일의 이름과 글. 취소하면 null(브라우저가 취소를 알려 줄 때) */
+function webPick(){return new Promise((res,rej)=>{const x=document.createElement('input');x.type='file';x.accept='.json,application/json,text/plain';x.style.display='none';
+  const done=()=>x.remove();x.addEventListener('cancel',()=>{done();res(null);});
+  x.addEventListener('change',()=>{const f=x.files&&x.files[0];done();if(!f)return res(null);const r=new FileReader();r.onload=()=>res({name:f.name,text:String(r.result)});r.onerror=()=>rej(r.error||new Error('읽지 못함'));r.readAsText(f);});
+  document.body.appendChild(x);x.click();});}
 function webFetch(url){return fetch(url,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});}
 
 let awake=false,lock=null,toast=()=>{};
@@ -29,6 +34,7 @@ const IO={
   onHide(fn){hideFns.push(fn);window.addEventListener('pagehide',fn);},
   copy(text){return N?call('copy',{text}):webCopy(text);},
   saveFile(name,text,type){type=type||'application/json';return N?call('save',{name,text,type}):webSave(name,text,type);},
+  pickFile(){return N?call('pick',{}):webPick();},
   /* 확인 창: 앱에서는 네이티브 Alert(취소·확인), 웹에서는 confirm(). 취소하면 no(있을 때) */
   ask(msg,yes,no){const r=ok=>{if(ok)yes();else if(no)no();};if(N){call('confirm',{msg}).then(r,()=>r(confirm(msg)));return;}r(confirm(msg));},
   keepAwake(on){on=!!on;if(on===awake)return;awake=on;
@@ -50,7 +56,8 @@ const IO={
   /* 알림을 눌러 연 화면: 앱의 라우터로(탭은 탭 첫 화면으로 바꿔 씀, 방문 기록을 늘리지 않음) */
   _go(h){const pe=window.__pe;if(pe&&pe.go)return pe.go(h);location.replace('#'+String(h||'today').replace(/^#/,''));},
   /* 승인·관리자 상태가 바뀌면(콘솔에서 관리자 지정 등) 앱이 알려 준다. 아이디가 보이는 화면이면 바로 다시 그린다 */
-  _member(m){if(!N)return;N.member=m&&m.id?m:null;if(/^#(more|settings|admin)\b/.test(location.hash)&&window.__pe)window.__pe.render();}
+  _member(m){if(!N)return;N.member=m&&m.id?m:null;const h=location.hash.replace(/^#\/?/,'').split('/')[0]||'today';
+    if(['more','settings','admin','inbox','msg','today','week','review','practice','study','test'].includes(h)&&window.__pe)window.__pe.render();}
 };
 
 /* ── 알림(앱 전용, 서버 없이 이 휴대폰 안에서 예약) ── */

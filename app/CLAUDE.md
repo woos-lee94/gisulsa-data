@@ -101,8 +101,9 @@
 
 ## 앱 폴더
 
-- `web/`: 앱 화면 원본(v3.0.0, 네이티브 다리 포함). `index.html`의 `?v=N`(지금 7)은 `tests/app.test.js`가 스크립트를 찾는 표시라 남겨 둔다. 버전은 `app.js`의 `APP_VER`, `app.json`의 `expo.version`, `package.json`의 `version`(과 `package-lock.json`의 앱 줄 두 곳)을 함께 올린다(`tests/native.test.js`가 확인)
+- `web/`: 앱 화면 원본(v3.0.1, 네이티브 다리 포함). `index.html`의 `?v=N`(지금 8)은 `tests/app.test.js`가 스크립트를 찾는 표시라 남겨 둔다. 버전은 `app.js`의 `APP_VER`, `app.json`의 `expo.version`, `package.json`의 `version`(과 `package-lock.json`의 앱 줄 두 곳)을 함께 올린다(`tests/native.test.js`가 확인)
 - `tests/`: jsdom 회귀 검사와 가짜 저장소(`tests/fake/data`)
+- 확대 막기: `index.html` viewport에 `maximum-scale=1, user-scalable=no`(WKWebView는 이것을 따른다. 글자 칸을 누를 때 16px보다 작은 칸이 확대되던 것도 막는다), `styles.css`의 `html{touch-action:manipulation}`(두 번 눌러 확대)
 - `assets/icon-1024.png`: iOS 앱 아이콘
 - 자료 형식은 `../pipeline/spec_set.md`, `../pipeline/spec_mock.md`, 실제 자료는 `../data/`
 
@@ -147,11 +148,11 @@
 
 ## 지금 구현(Expo SDK 58, react-native-webview)
 
-- `web/bridge.js`: 네이티브 다리 `PE_IO`. `app.js`는 저장(`get`·`set`·`onHide`)·복사·파일 저장·확인 창(`ask`)·화면 켜 두기·받아 오기를 모두 이것으로 부른다. `window.PE_NATIVE`가 없으면 예전 브라우저 동작 그대로다.
+- `web/bridge.js`: 네이티브 다리 `PE_IO`. `app.js`는 저장(`get`·`set`·`onHide`)·복사·파일 저장·파일 고르기(`pickFile`, 백업 불러오기)·확인 창(`ask`)·화면 켜 두기·받아 오기를 모두 이것으로 부른다. `window.PE_NATIVE`가 없으면 예전 브라우저 동작 그대로다.
   - 확인 창: react-native-webview의 기본 `confirm()` 창은 제목 없이 "Ok/Cancel"(영문)로 떠서, 앱에서는 네이티브 Alert(취소·확인)로 잇는다.
   - 설정 화면 맨 아래 "알림" 칸은 앱에서만 보인다(`PE_IO.settingsHTML()`). 알림 설정은 백업 JSON에 넣지 않고 앱 저장소에 따로 둔다.
 - `App.js`: WebView를 화면 전체로 띄우고 `native/host.js`로 메시지를 처리한다. 바깥 주소는 사파리로 열고, 웹뷰 프로세스가 꺼지면 최신 기록을 넣어 다시 띄운다.
-- `native/host.js`: 페이지와 주고받는 규칙(순수 JS, Node 검사에서도 쓴다). `native/files.js`: 웹 파일 풀기·학습 기록 저장(Documents/store/*.json)·백업 내보내기. `native/notify.js`: 로컬 알림.
+- `native/host.js`: 페이지와 주고받는 규칙(순수 JS, Node 검사에서도 쓴다). `native/files.js`: 웹 파일 풀기·학습 기록 저장(Documents/store/*.json)·백업 내보내기·백업 파일 고르기(expo-file-system `File.pickFileAsync`, 새 모듈 없이). `native/notify.js`: 로컬 알림.
 - 논술 답안 작성 요령(`#guide`, `web/data_guide.js`): 학습용 모범 답안(제2교시 25점형 "콘크리트 시공이음", 4면 × 22줄)을 답안지 모양으로 옮긴 것. 쓰는 법(답안지 생김새·쓰는 순서·번호 체계 Ⅰ.→1.→1)→①·기호·면 배분), 모범 답안, 형식 점검표 세 탭. 더보기 → 공부 도구(집)와 세트 ④ 논술·모의고사 화면의 링크에서 들어간다.
   - 같은 파일의 `check`(형식 점검표)와 `skeleton`(모범 답안 뼈대)이 프롬프트의 `{답안형식}` 자리에 들어가, 프로젝트 지침(p0)·논술 첨삭(p1)·모의/기출 채점(p9)이 글머리 기호·들여쓰기·밑줄·그림 번호·끝/이하 여백까지 "○면 ○줄"로 첨삭한다. 단답 첨삭(p2)은 형식 한 줄과 형식 지적 2개.
 - 세트 숙제(세트 화면 "③ 숙제", `vHw`·`hwItems`): 앱이 그날 세트 내용과 학습 단계(`data_plan.js`의 `PE_HW`: 단계별 횟수와 이유)로 정한다. 새 용어(세트의 `ref` 없는 카드)는 낱말마다 안 보고 쓰기·소리 내어 말하기 횟수, 복습 용어(`ref` 카드)는 키워드 백지 복원, 논술은 목차 옮겨 적기 N번·25분 실전 쓰기(`sp.essay.done`과 같은 기록, ④ 논술의 화면 안 타이머)·그림 그리기 N번, 단답 N문제(새 용어 중 기출이 많은 것부터, 답안지 버튼과 10분 타이머), 세트 퀴즈 틀린 문제(다 풀기 전에는 "퀴즈를 다 풀면 틀린 문제가 여기 나와요.", 다 맞히면 끝), 앞글자 외우기(입력해 `sp.hw.mn`에 둠), 자기 전 5분 떠올리기. 예약 작업의 공통 과제 3개(새 용어 말하기·논술 손글씨·퀴즈 오답, `HW_GEN`)는 이 숙제가 대신하고 나머지 세트만의 과제는 숙제 끝에 붙는다(`sp.tasks`). 항목마다 동그라미(k번째를 누르면 k번 한 것, 같은 것을 다시 누르면 하나 뺌, `sp.hw[키]`), 예상 시간, 요령(`HW_HOW`, 접힘), 숙제 원칙 6가지(`HW_RULES`). 학원 횟수와 동그라미는 그대로 두고, 앞쪽 동그라미 몇 개만 "필수"(`PE_HW_MIN`, 진한 테두리 `.cc.req`)로 표시한다. 나머지는 "더 하기"(접힘). 머리는 "이 세트 숙제 · 필수 a/b · 전체 n/m"(`reqParts`, `setStatus`의 `nt`·`td`). 오늘 몫의 숙제 줄을 누르면 그 카드를 펼쳐(`.hw.focus`, `HW_STEPS` 세 걸음) 가운데로 보여 주고, 아래 막대가 그 칸의 "다 썼어요"(`hw-bulk`). 이번 주 "다음 하나"(목차·쓰기 등)로 연 칸(`UI.hwf`)도 막대가 그 칸의 "다 했어요"가 먼저이고(핵심 읽기·퀴즈가 남아도), 그 칸을 다 하면 이 세트 순서로(`inSetNext`). 세트만의 그림 과제가 논술 그림과 같으면(`figDup`) 그 카드는 숨기고 그림·표 카드가 대신 친다("세트 숙제 항목과 같은 그림이에요"). 숙제에서 연 단답 답안지는 `#dandap/카드id/날짜`로 "다 썼어요(숙제에 표시)". 달력에는 숙제(용어)·숙제(논술)·숙제 전체(할 일)로 남는다(`hwCal`).
@@ -178,9 +179,11 @@
 - 스토어 문구: `docs/app-store.md`(부제·프로모션·설명·키워드·카테고리·심사 메모·App Privacy). Firebase 설정·관리자 지정·심사용 초대 코드는 `docs/firebase-setup.md`. 지원·개인정보 처리방침 URL은 `docs/support.md`·`docs/privacy.md`의 GitHub 주소(저장소가 공개일 때만 열린다). 문구를 고치면 이 파일들도 함께 고친다.
 - 회원 승인(`native/member.js`, `native/Gate.js`, `firebase/firestore.rules`)
   - 휴대폰 구분은 IP가 아니라 Firebase 익명 계정. 그 refresh token을 expo-secure-store 키체인(`AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY`)에 둔다. 토큰이 무효(400)일 때만 새 계정을 만든다.
-  - Firestore: `members/{uid}`(id·status·createdAt·code), `ids/{아이디}`(uid, 중복 방지), `codes/{코드}`(바로 승인), `admins/{uid}`(콘솔에서만 만든다). 아이디 만들기는 members·ids를 commit 한 번으로 만들고, 규칙이 `getAfter`로 둘을 묶는다. commit 본문의 문서 이름은 인코딩하지 않는다(한글 아이디).
+  - Firestore: `members/{uid}`(id·status·createdAt·code), `ids/{아이디}`(uid, 중복 방지), `codes/{코드}`(바로 승인), `admins/{uid}`(콘솔에서만 만든다), `msgs/{자동 ID}`(3.0.1, 관리자에게 보낸 문자: uid·id·text 500자·from join|wait|app·dev "iOS 18.1 · 앱 3.0.1"·at 서버 시각·read). members의 `hasOnly` 칸은 늘리지 않는다(예전 앱과 규칙이 같이 돌게 새 컬렉션으로). 문자는 아이디를 만든 뒤 따로 보낸다(규칙 게시 전이면 문자만 실패). 관리자는 모두 읽고 read만 바꾸며, 본인은 자기 것만 읽고 지운다(아이디 지우기 때 함께). 아이디 만들기는 members·ids를 commit 한 번으로 만들고, 규칙이 `getAfter`로 둘을 묶는다. commit 본문의 문서 이름은 인코딩하지 않는다(한글 아이디).
   - 승인 전에는 WebView 대신 `Gate` 화면만 띄운다. 승인된 상태는 키체인에 캐시해 인터넷 없이도 열고, 앱이 앞으로 올 때 다시 확인한다. 대기 중에는 15초마다 확인.
-  - 웹 쪽: `PE_NATIVE.member`({id, admin, uid}) → 더보기에 아이디, 관리자면 "승인 관리"(`#admin`, `vAdmin`), 설정에 "아이디 지우기"(애플 5.1.1(v) 앱 안 계정 삭제). 요청은 `PE_IO.memberCall(op)` → `host.js`의 `member`(list·set·del·code-add·code-del·remove만).
+  - 웹 쪽: `PE_NATIVE.member`({id, admin, uid}) → 더보기에 아이디, 관리자면 "문자함"·"승인 관리"(`#admin`, `vAdmin`), 회원이면 "관리자에게 문자 보내기"(`#msg`, `vMsg`), 설정에 "아이디 지우기"(애플 5.1.1(v) 앱 안 계정 삭제). 요청은 `PE_IO.memberCall(op)` → `host.js`의 `member`(`MEMBER_OPS`: list·set·del·code-add·code-del·remove·unread·msg-read·msg-del·msg-send만).
+  - 관리자 문자함(`#inbox`, `#inbox/uid`, `vInbox`): 탭 첫 화면(다섯 탭) 맨 위 오른쪽 `.ibxrow .ibx` 단추에 안 읽은 수(`.bdg`, 99+). 수는 `unread`(Firestore 세기 요청, 문서를 읽지 않음)로 탭 첫 화면을 그릴 때 1분에 한 번·앱으로 돌아올 때 센다(`IBX`, `ibxPoll`). 목록·문자는 `list`의 `msgs`(ADM과 함께, 규칙 게시 전이면 null → 안내). 사람을 열면(`onEnter`·목록을 받은 뒤) `ibxSeen`이 읽음으로. 승인 대기 줄에 마지막 문자, 문자 화면에서 바로 승인·거절.
+  - `Gate`: 아이디 만들기에 "관리자에게 보낼 말"(초대 코드 없이 승인을 기다릴 때는 꼭 적는다), 승인 대기·거절 화면에서 더 보내기. `App.js`의 `DEV`가 iOS·앱 버전(기기 이름·위치는 넣지 않는다).
   - Firebase 값은 EAS 환경 변수 `EXPO_PUBLIC_FIREBASE_API_KEY`·`EXPO_PUBLIC_FIREBASE_PROJECT_ID`(production)로만 넣는다. 없으면 "설정이 빠진 빌드" 화면.
-  - 검사: `npm run test:firebase`(Firebase 에뮬레이터, Java 21)가 실제 규칙으로 승인·거절·초대 코드·남의 아이디·스스로 승인 막기·지우기를 돈다. `tests/native.test.js`는 관리자 화면과 아이디 지우기를 가짜 회원 서버로 본다.
+  - 검사: `npm run test:firebase`(Firebase 에뮬레이터, Java 21)가 실제 규칙으로 승인·거절·초대 코드·남의 아이디·스스로 승인 막기·지우기·문자(남의 아이디·읽음·시각·501자 꾸미기 막기, 안 읽은 수, 아이디 지우기 때 함께 지움)를 돈다. `tests/native.test.js`는 관리자 화면·문자함·회원 문자 보내기·백업 파일 불러오기·아이디 지우기를 가짜 회원 서버로 본다.
 - 실기기에서 아직 확인할 것: 위 "받아들이는 기준 2". 특히 무음 모드에서 타이머 알림음(웹 오디오는 무음 스위치를 따른다), 알림 권한 묻기, 공유 시트의 "파일에 저장".

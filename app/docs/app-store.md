@@ -103,7 +103,7 @@ https://github.com/woos-lee94/gisulsa-data/blob/main/app/docs/privacy.md
 - 기본: 교육. 토목시공기술사 필기 시험 공부가 핵심 기능
 - 추가: 참고. 기출 문제 요지와 용어 카드를 찾아보는 용도
 
-## 앱 심사 메모 (3986자 / 4,000자)
+## 앱 심사 메모 (3980자 / 4,000자)
 
 ```
 OVERVIEW
@@ -116,14 +116,14 @@ HOW TO TEST (the Korean labels can be pasted)
 The tab bar has five tabs: "오늘" (Today), "이번 주" (This week), "복습" (Review), "연습" (Practice) and "더보기" (More).
 1. "오늘" shows the days left to the exam and today's numbered study list with one blue button.
 2. Tap "이번 주": what is due by Sunday and a weekly score.
-3. Tap "연습", then "4지선다 10문" (10 multiple-choice questions). Pick an answer, then tap "다음" (Next). To leave, tap "닫기" (Close) or swipe right from the left screen edge.
+3. Tap "연습", then "4지선다 10문" (10 multiple-choice questions). Pick an answer, then tap "다음" (Next). To leave, tap "닫기" (Close).
 4. On "연습" tap "기출 문제은행" (Past exam bank), then "제140회" (Round 140). Tap a question in the first period to see the linked study cards.
 5. Tap "복습", then "세트 보관함" (Set archive) and a set. In the sheet tap "다른 방법으로" (Other ways), then "세트 열기" (Open set). In "① 용어" (Terms) open a term and long-press a word in its explanation: a study card or glossary entry appears.
 6. Tap "더보기", then "답안 작성 요령" (How to write answers) and the "모범 답안" (Model answer) tab: a 4-page model answer on 22-line answer sheets.
 7. In "더보기" tap "교시 타이머" (Exam timer), then "시작" (Start). A short beep plays and the screen stays awake while the timer runs.
 8. In "더보기" > "설정" (Settings) > "알림" (Notifications), ticking the first box asks for permission and schedules a local reminder.
 9. In "더보기" tap "백업·복원" (Backup and restore). "파일로 저장" (Save as file) opens the iOS share sheet with a JSON backup file.
-10. Account deletion: "더보기" > "설정" > "아이디 지우기" (Delete ID) deletes the ID, approval record and account at once.
+10. Account deletion: "더보기" > "설정" > "아이디 지우기" (Delete ID) deletes the ID, approval record, messages and account at once.
 
 DATA SOURCES
 Past-exam question summaries for rounds 116 to 140 (2018 to 2026) of the written exam administered by HRD Korea, written by the developer (not the original wording). Study cards, the glossary, essay outlines, daily sets and weekly mock exams were written by the developer with the help of an AI assistant (Claude by Anthropic) and partly checked against Korean standards (KDS, KCS) and laws. Items the developer could not confirm are listed in each set under "교재로 확인할 것" (Check in a textbook). Sources are described under "더보기" > "콘텐츠 출처" (Content sources).
@@ -132,7 +132,7 @@ METHOD
 No AI runs inside the app. Spaced repetition, the daily list, weekly planning, exam dates and the term quizzes (built from the card text) are rule-based and computed on the device. Copy buttons give prompt text the user may paste into an AI assistant of their choice; the app sends nothing to any AI service.
 
 PRIVACY
-No ads, analytics or tracking. Study records stay on the device. For access control the app uses Firebase Anonymous Authentication and Cloud Firestore to store only the chosen ID, a random account number, the approval status and timestamps; no name, email or phone number. The account key is kept in the device keychain. Other network requests are HTTPS GET requests for public JSON files on raw.githubusercontent.com that carry no user data. In the word lookup, the "국어사전" and "지식백과" buttons open a Naver search for that word in Safari. The only permission is notifications.
+No ads, analytics or tracking. Study records stay on the device. For access control the app uses Firebase Anonymous Authentication and Cloud Firestore to store only the chosen ID, a random account number, the approval status, timestamps and messages the user sends to the administrator; no name, email or phone number. The account key is kept in the device keychain. Other requests are HTTPS GETs for public JSON files on raw.githubusercontent.com with no user data. In the word lookup, the "국어사전" and "지식백과" buttons open a Naver search for that word in Safari. The only permission is notifications.
 
 EXTENSIONS
 None.
@@ -150,6 +150,18 @@ The app is an independent study aid and is not affiliated with HRD Korea or any 
 ## 이 버전의 새로운 기능
 
 업데이트마다 바로 전 출시 버전과 비교해 바뀐 것만 쓴다. 2.3.0은 첫 출시라 비웠고, 2.3.1은 숙제·학습 달력·가리며 외우기(무작위 줄, 테이프, 완료, 이어 하기)·단답 답안지·카드 넘겨 보기 이어 하기였다(git 기록).
+
+3.0.1 (290자 / 4,000자, 3.0.0과 비교):
+
+```
+화면이 저절로 확대되던 문제를 고쳤습니다. 이제 두 번 누르거나 글자 칸을 눌러도 화면이 커지지 않습니다.
+
+백업을 파일에서 바로 불러옵니다. 더보기 → 백업·복원 → 파일에서 불러오기에서 "파일로 저장"으로 둔 백업 파일을 고르면 복원됩니다.
+
+아이디를 만들 때 관리자에게 보낼 말을 함께 적습니다. 승인을 기다리는 화면과 더보기의 관리자에게 문자 보내기에서도 관리자에게 글을 보낼 수 있습니다.
+
+관리자는 탭 첫 화면 오른쪽 위 문자함에서 안 읽은 문자 수를 보고, 사람마다 언제 어디서 무엇을 보냈는지 확인합니다.
+```
 
 3.0.0 (1173자 / 4,000자, 2.3.2와 비교. 중간 단계 빌드는 내지 않았다):
 
@@ -225,6 +237,17 @@ The app is an independent study aid and is not affiliated with HRD Korea or any 
 가릴 곳을 살짝 꾹 눌렀다가 그으면 테이프가 붙고, 그냥 밀면 화면이 움직이도록 바꿨습니다.
 ```
 
+## 3.0.1 심사 제출 순서
+
+0. 먼저 Firebase 규칙을 새로 게시한다(`docs/firebase-setup.md` 4-1). 안 하면 승인 요청 문구와 문자함이 안 된다.
+1. 빌드: `eas build -p ios --profile production --auto-submit`. 그 전에 `npm test`가 네 파일 모두 "모두 통과"인지 본다. 3.0.0 빌드에는 문자·파일 불러오기·확대 막기가 없다.
+2. 앱에서 심사 준비: 3.0.0 때와 같다(`apple_review` 정리, 새 초대 코드).
+3. App Store Connect: 3.0.0 버전이 아직 "제출 준비 중"이면 그 화면의 버전 칸을 `3.0.1`로 고치고 빌드를 3.0.1 빌드로 바꾼다. 3.0.0을 이미 심사에 냈으면 심사가 끝난 뒤 버전 추가 → `3.0.1` → 3.0.1 빌드를 고른다.
+4. 이 버전의 새로운 기능: 위 3.0.1 문구. 프로모션 텍스트·설명·스크린샷은 3.0.0 것이 그대로 따라오니 바꾸지 않는다.
+5. 앱 심사 정보: 3.0.0 때와 같다. 메모는 위 앱 심사 메모(PRIVACY에 관리자에게 보내는 문자가 더해졌다)를 붙이고 `INVITE_CODE`를 바꾼다. 데모 계정은 초대 코드로 만들므로 "관리자에게 보낼 말"은 비워도 된다.
+6. App Privacy를 바꾼다: 아래 App Privacy(참고)대로 "사용자 콘텐츠 → 기타 사용자 콘텐츠"를 더한다. 개인정보 처리방침(`docs/privacy.md`)은 main에 올라가면 같은 주소에서 새 시행일로 보인다.
+7. 저장 → 심사에 추가 → 심사에 제출. 끝나면 `apple_review`와 초대 코드를 정리한다.
+
 ## 3.0.0 심사 제출 순서
 
 1. 빌드: `eas build -p ios --profile production --auto-submit`. App Store Connect에 3.0.0 빌드가 올라오고 처리될 때까지(보통 10~30분, 메일이 온다) 기다린다. 그 전에 `npm test`가 네 파일 모두 "모두 통과"인지 본다.
@@ -253,10 +276,15 @@ The app is an independent study aid and is not affiliated with HRD Korea or any 
 
 ## App Privacy(참고)
 
-데이터 수집함 → 식별자 → 사용자 ID 하나만 고른다.
+데이터 수집함 → 두 가지를 고른다(3.0.1부터 두 번째가 더해졌다).
 
-- 목적: 앱 기능(승인한 사람만 열기)
-- 사용자와 연결됨: 예(아이디와 Firebase 익명 계정 번호)
-- 추적에 사용: 아니요
+1. 식별자 → 사용자 ID
+   - 목적: 앱 기능(승인한 사람만 열기)
+   - 사용자와 연결됨: 예(아이디와 Firebase 익명 계정 번호)
+   - 추적에 사용: 아니요
+2. 사용자 콘텐츠 → 기타 사용자 콘텐츠(관리자에게 보낸 문자)
+   - 목적: 앱 기능(승인 요청과 문의를 관리자가 읽기)
+   - 사용자와 연결됨: 예(보낸 아이디가 함께 저장된다)
+   - 추적에 사용: 아니요
 
-나머지(연락처, 위치, 사용 데이터, 진단 등)는 고르지 않는다. 학습 기록은 기기에만 있고, 세트 받기는 공개 JSON 파일을 받는 HTTPS GET 요청뿐이다. 분석·광고·오류 보고 SDK가 없고, Firebase는 SDK 없이 REST로 부른다.
+나머지(연락처, 위치, 사용 데이터, 진단 등)는 고르지 않는다. 문자에 함께 가는 iOS·앱 버전은 문자를 읽는 데만 쓰는 기기 정보라 진단으로 고르지 않는다. 학습 기록은 기기에만 있고, 세트 받기는 공개 JSON 파일을 받는 HTTPS GET 요청뿐이다. 분석·광고·오류 보고 SDK가 없고, Firebase는 SDK 없이 REST로 부른다.

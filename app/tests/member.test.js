@@ -54,6 +54,36 @@ const owner = (method, path, body) => fetch(`${FS}/${path}`, { method, headers: 
   const b1 = await B.register('lee', '');
   ok(b1.state === 'pending', 'B: lee 승인 대기');
 
+  // 관리자에게 문자(승인 요청 문구·앱 안 문의): 아이디가 있는 휴대폰만, 자기 아이디로
+  const m1 = await A.sendMsg('  김철수입니다. 승인 부탁드려요  ', 'join', 'iOS 18.1 · 앱 3.0.1');
+  ok(typeof m1 === 'string' && m1.length === 20, 'A: 승인 요청 문구 보내기');
+  await B.sendMsg('이영희예요', 'wait');
+  ok(await err(A.sendMsg('   ', 'join')) === 'empty', '빈 문자는 안 보냄');
+  ok(await err(A.sendMsg('x', 'hack')) === 'badfrom', '모르는 보낸 곳은 안 보냄');
+  ok(await err(phone().sendMsg('아이디 없이', 'join')) === 'noid', '아이디가 없는 휴대폰은 못 보냄');
+  ok(await err(A.msgs()) === 'denied' && await err(A.unread()) === 'denied', 'A는 문자함을 못 봄');
+  ok(await err(A.markRead([m1])) === 'denied', 'A는 읽음 표시를 못 바꿈');
+  const forge = async (fields, transform = true) => (await fetch(`${FS}:commit`, { method: 'POST', headers: { Authorization: 'Bearer ' + s.idToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ writes: [{ update: { name: `projects/${PROJECT}/databases/(default)/documents/msgs/forge${Math.random().toString(36).slice(2, 10)}`, fields }, updateTransforms: transform ? [{ fieldPath: 'at', setToServerValue: 'REQUEST_TIME' }] : [], currentDocument: { exists: false } }] }) })).status;
+  const base = { uid: { stringValue: s.uid }, id: { stringValue: 'kim' }, text: { stringValue: '안녕' }, from: { stringValue: 'app' }, read: { booleanValue: false } };
+  ok(await forge(base) === 200, '규칙대로 쓴 문자는 통과(대조군)');
+  ok(await forge({ ...base, id: { stringValue: 'boss' } }) === 403, '남의 아이디로 보내기 → 거부');
+  ok(await forge({ ...base, uid: { stringValue: ar.uid } }) === 403, '남의 기기 번호로 보내기 → 거부');
+  ok(await forge({ ...base, read: { booleanValue: true } }) === 403, '읽음으로 보내기 → 거부');
+  ok(await forge({ ...base, text: { stringValue: '가'.repeat(501) } }) === 403, '501자 → 거부');
+  ok(await forge({ ...base, at: { timestampValue: '2020-01-01T00:00:00Z' } }, false) === 403, '보낸 시각 꾸미기 → 거부');
+  ok(await forge({ ...base, extra: { stringValue: 'x' } }) === 403, '다른 칸 넣기 → 거부');
+  const bMid = (await admin.msgs()).find(x => x.id === 'lee').mid;
+  ok((await fetch(`${FS}/msgs/${bMid}`, { method: 'DELETE', headers: { Authorization: 'Bearer ' + s.idToken } })).status === 403, 'A는 남의 문자를 못 지움');
+  ok((await fetch(`${FS}/msgs/${bMid}`, { headers: { Authorization: 'Bearer ' + s.idToken } })).status === 403, 'A는 남의 문자를 못 읽음');
+  const ms = await admin.msgs();
+  const mine = ms.find(x => x.mid === m1);
+  ok(ms.length === 3 && mine && mine.text === '김철수입니다. 승인 부탁드려요' && mine.id === 'kim' && mine.from === 'join' && mine.dev === 'iOS 18.1 · 앱 3.0.1' && !mine.read && Date.parse(mine.at) > 0, '관리자: 문자함에 누가·언제·어디서·무슨 내용');
+  ok(await admin.unread() === 3, '관리자: 안 읽은 문자 3개');
+  ok(await admin.markRead([m1, 'bad/../id']) === 1 && await admin.unread() === 2 && (await admin.msgs()).find(x => x.mid === m1).read, '관리자: 읽음 표시(이상한 번호는 건너뜀) → 2개');
+  const forged = (await admin.msgs()).filter(x => x.from === 'app').map(x => x.mid);
+  ok(await admin.delMsgs(forged) === 1 && await admin.unread() === 1, '관리자: 문자 지우기');
+
   // 관리자 승인
   const list = await admin.list();
   ok(list.length === 3 && list.some(m => m.id === 'kim' && m.status === 'pending'), '관리자: 회원 목록 3명');
@@ -97,6 +127,7 @@ const owner = (method, path, body) => fetch(`${FS}/${path}`, { method, headers: 
   // 아이디 지우기(앱 안 계정 삭제) → 아이디가 풀린다
   const r = await A2.remove();
   ok(r.state === 'none' && !aStore.m.size, 'A: 아이디 지우기 → 키체인 비움');
+  ok(!(await admin.msgs()).some(x => x.uid === a1.uid) && (await admin.msgs()).some(x => x.id === 'lee'), 'A가 보낸 문자도 함께 지워짐(B 문자는 그대로)');
   const ownerGet = await owner('GET', `ids/kim`);
   ok(ownerGet.status === 404, 'kim 아이디 문서도 지워짐');
   const E = phone();

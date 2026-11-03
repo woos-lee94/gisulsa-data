@@ -4,6 +4,7 @@ rules_version = '2';
 // ids/{아이디}: 아이디 중복 방지(어느 휴대폰 것인지)
 // codes/{초대 코드}: 이 코드로 만들면 바로 승인(관리자가 만들고 지운다)
 // admins/{uid}: 관리자(콘솔에서 직접 만든다)
+// msgs/{자동 ID}: 관리자에게 보낸 문자(3.0.1부터)
 service cloud.firestore {
   match /databases/{db}/documents {
     function signedIn() { return request.auth != null; }
@@ -48,6 +49,27 @@ service cloud.firestore {
 
     match /admins/{uid} {
       allow get: if signedIn() && request.auth.uid == uid;
+    }
+
+    // msgs/{자동 ID}: 관리자에게 보내는 문자(승인 요청 문구, 앱 안 문의). 아이디가 있는 휴대폰만 자기 아이디로 보낸다.
+    // from: join(아이디 만들 때) · wait(승인 대기 화면) · app(앱 안), dev: "iOS 18.1 · 앱 3.0.1" 같은 기기 정보, at: 서버 시각
+    match /msgs/{mid} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'id', 'text', 'from', 'dev', 'at', 'read'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.id == get(/databases/$(db)/documents/members/$(request.auth.uid)).data.id
+        && request.resource.data.text is string && request.resource.data.text.size() >= 1 && request.resource.data.text.size() <= 500
+        && request.resource.data.from in ['join', 'wait', 'app']
+        && (!('dev' in request.resource.data) || (request.resource.data.dev is string && request.resource.data.dev.size() <= 60))
+        && request.resource.data.at == request.time
+        && request.resource.data.read == false;
+      // 관리자는 모두, 본인은 자기 문자만(아이디 지우기 때 함께 지운다)
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      // 관리자는 읽음 표시만 바꾼다
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+        && request.resource.data.read is bool;
+      allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
     }
   }
 }

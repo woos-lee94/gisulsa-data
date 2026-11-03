@@ -31,7 +31,7 @@
   color-scheme:dark;
 }
 
-html{font-size:17px;-webkit-text-size-adjust:100%;background:var(--paper)}
+html{font-size:17px;-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:manipulation;background:var(--paper)}   /* 두 번 눌러 확대 막기(손가락 벌려 확대는 index.html의 viewport가 막는다) */
 html[data-fs="l"]{font-size:19px}
 html[data-fs="xl"]{font-size:21px}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -665,7 +665,7 @@ button.drow:active{background:var(--rule2)}
 :root[data-theme="dark"] .pdd.due{color:#08142E}
 :root[data-theme="dark"] .dcard.exam{border-left:4px solid var(--amber)}
 /* 다크 모드: 색을 칠한 칸(--ok·--blue·--red·--violet·--amber) 위 글자는 #08142E(§9.5, .btn·.pn과 같게. 흰 글자는 1.9~2.7:1) — 카드 "앎", 숙제 동그라미, 달력 오늘, 탭 배지, 달력 아이콘 달, 보기 번호, 끝낸 숙제 번호, 그날 종류 수 */
-:root[data-theme="dark"] :is(.grade3 .g2,.cc.on,.cd.today .n,nav.tabs .nb,.calbtn .cm,.opt.right .ab,.opt.wrong .ab,.hw.done .hwn,.ch5 i){color:#08142E}
+:root[data-theme="dark"] :is(.grade3 .g2,.cc.on,.cd.today .n,nav.tabs .nb,.ibx .bdg,.ibxlist .badge,.calbtn .cm,.opt.right .ab,.opt.wrong .ab,.hw.done .hwn,.ch5 i){color:#08142E}
 :root[data-theme="dark"] .grade3 .g2 small{color:rgba(8,20,46,.8)}
 :root[data-theme="dark"] .cd.today.ev .n::after{background:#08142E}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) :is(.plan,.score,.dcard,.pinfo,.notice,.wkd){border:1px solid var(--rule2)}
@@ -673,7 +673,7 @@ button.drow:active{background:var(--rule2)}
   :root:not([data-theme="light"]) :is(.pn.done,.tkc.on,.wg.done,.dot.on,.check input:checked)::after{border-color:#08142E}
   :root:not([data-theme="light"]) .pdd.due{color:#08142E}
   :root:not([data-theme="light"]) .dcard.exam{border-left:4px solid var(--amber)}
-  :root:not([data-theme="light"]) :is(.grade3 .g2,.cc.on,.cd.today .n,nav.tabs .nb,.calbtn .cm,.opt.right .ab,.opt.wrong .ab,.hw.done .hwn,.ch5 i){color:#08142E}
+  :root:not([data-theme="light"]) :is(.grade3 .g2,.cc.on,.cd.today .n,nav.tabs .nb,.ibx .bdg,.ibxlist .badge,.calbtn .cm,.opt.right .ab,.opt.wrong .ab,.hw.done .hwn,.ch5 i){color:#08142E}
   :root:not([data-theme="light"]) .grade3 .g2 small{color:rgba(8,20,46,.8)}
   :root:not([data-theme="light"]) .cd.today.ev .n::after{background:#08142E}}
 .prow.moved{min-height:0}.prow.moved .pm{color:var(--ink2)}
@@ -808,3 +808,27 @@ body.kb .nextbar{display:none}
 .qcard~.tline,.sec>.tline{margin-top:12px}
 .tpill.end{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber)}
 .tend{margin:4px 0 0;text-align:center;font-size:1.06rem;font-weight:700;color:var(--amber)}
+
+/* ── 관리자 문자함(앱 전용): 탭 첫 화면 오른쪽 위 단추와 안 읽은 수(빨간 동그라미), 보낸 사람 목록, 한 사람의 문자 ── */
+.ibxrow{display:flex;justify-content:flex-end;padding-top:6px;margin-right:-6px}
+.ibxrow+.ltitle{padding-top:0}
+body.haspill .ibxrow{padding-right:var(--pw,0px)}   /* 타이머 알약 왼쪽에 */
+.ibx{position:relative;display:grid;place-items:center;width:44px;height:40px;border-radius:12px;color:var(--ink)}
+.ibx:active{background:var(--rule2)}
+.ibx svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ibx .bdg{position:absolute;top:0;right:1px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--red);color:#fff;font-size:.8rem;font-weight:800;line-height:20px;text-align:center;box-shadow:0 0 0 2px var(--paper)}
+.ic.av{font-weight:800;font-size:1rem}
+.ic.av.on{background:var(--blue);color:var(--sheet)}
+.mst{font-size:.8rem;font-weight:600;color:var(--ink2);margin-left:2px;white-space:nowrap}
+.ds.msnip{color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.msgs{display:grid;gap:10px;margin-top:14px}
+.sheet.msg{padding:14px 16px 14px 40px}
+.msg .mh{display:flex;align-items:center;gap:8px;font-size:.86rem;color:var(--ink2)}
+.msg .mh b{font-weight:700}
+.msg .mh .tag-new{margin-left:0}
+.msg .mt{margin:6px 0 0;white-space:pre-wrap;font-size:1rem;line-height:1.6;color:var(--ink)}
+#view .msg .mt{-webkit-user-select:text;user-select:text}
+.msg .mw{margin:8px 0 0;font-size:.8rem;color:var(--ink2)}
+.sheet.msg.fresh::before{background:var(--blue)}   /* 이번에 처음 본 문자: 여백 줄을 파랗게 */
+textarea.in.plain{font-family:inherit;font-size:1rem;line-height:1.6;min-height:150px}
+.btn.ghost.dng{color:var(--red)}
