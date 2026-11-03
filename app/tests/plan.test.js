@@ -589,7 +589,8 @@ function runWeek(W, sets, st) {
     ok(/다른 날로 옮긴 것 · 9개 · 약 2시간 52분/.test(t) && /내일\(일\) 손글씨 몫 3개 · 내일 다시 나와요 6개/.test(t) && !/시간이 되면/.test(t), '28. 다른 날로 옮긴 것 9개(갈 곳별 수: 손글씨 몫 3 · 7일 차 세트 복습 5와 카드 복습 1), 시간이 되면 없음');
     ok(/빠듯해요 · 권장은 접어 두었어요/.test(V$().querySelector('.wksec').textContent) && /주간 리포트\(일\) 0\/1/.test(V$().querySelector('.wksec').textContent), '28. 이번 주: 단계 1 문장, 토·일요일엔 주간 리포트 줄');
     await show('#week'); const sc = V$().querySelector('.score');
-    ok(sc && /다 하면 94%/.test(sc.textContent) && /지금 18%/.test(sc.textContent) && /세트 핵심 14\/25 · 모의고사 0\/25 · 손글씨 4\/30 · 복습 1\/15 · 마감 0\/5/.test(sc.textContent) && prim().length === 1 && /^다음: 주간 모의고사 1교시 · 100분$/.test(prim()[0].textContent), '28. 이번 주 화면: 다 하면 94% · 지금 18%, 부분 점수, 파란 버튼 "다음: 주간 모의고사 1교시 · 100분"');
+    const pm = sc && sc.textContent.match(/세트 핵심 (\d+)\/25\u00a0· 모의고사 (\d+)\/25\u00a0· 손글씨 (\d+)\/30\u00a0· 복습 (\d+)\/15\u00a0· 마감 (\d+)\/5/), pv = pm ? pm.slice(1).map(Number) : [];
+    ok(sc && /다 하면 94%/.test(sc.textContent) && /지금 18%/.test(sc.textContent) && pm && pv.reduce((a, b) => a + b, 0) === 18 && [14, 0, 4, 1, 0].every((x, i) => Math.abs(pv[i] - x) <= 1) && prim().length === 1 && /^다음: 주간 모의고사 1교시 · 100분$/.test(prim()[0].textContent), '28. 이번 주 화면: 다 하면 94% · 지금 18%, 부분 점수(합 18, 칸 사이 붙는 "·") ' + pv + ', 파란 버튼 "다음: 주간 모의고사 1교시 · 100분"');
     const L = [...V$().querySelectorAll('.qline')].map(q => q.id);
     ok(L.join() === 'ql-mock,ql-core,ql-dd,ql-eo,ql-w,ql-rev,ql-close' && V$().querySelectorAll('.drow').length === 7, '28. 일요일까지 끝낼 것 7줄(모의·핵심·단답·목차·쓰기·세트 복습·리포트), 날마다 7줄'); }
   // 29. 주간 리포트는 그 리포트가 다루는 주로 친다: 일요일 오늘 줄 → report:W, 수요일 통계 → 치지 않고 알림, 월요일 "지난주 리포트" → 지난주 머리·report:LW, 토요일 통계 → report:W
@@ -1619,6 +1620,18 @@ function runWeek(W, sets, st) {
       await show('#mock/' + MD); ok(pe.mockStep(MD).cur === 'p1' && !V$().querySelector('.mrev .group.plain') && V$().querySelector('.mrev [data-act="mock-reveal"]'), '47-9. 복원 뒤 그 모의는 안 쓴 첫 교시(1교시)부터, 열어보기는 다시 "열기" 버튼부터');
       pe.goTab('today'); await sleep(40); }
   }
+
+  // 48. 점수 칸을 반올림해도 합이 머리 숫자와 같음(스크린샷 검토: 8+0+6+4+0=18인데 "지금 17%"), 줄이 "·"로 시작하지 않음
+  { const r = pe.rParts([7.5, 0, 6, 3.8, 0], 17); ok(JSON.stringify(r) === '[7,0,6,4,0]' && r.reduce((a, b) => a + b, 0) === 17, '48-1. 칸 합 = 머리 숫자 ' + r);
+    const r2 = pe.rParts([33.33, 33.33, 33.34]); ok(r2.reduce((a, b) => a + b, 0) === 100 && r2.every(x => x === 33 || x === 34), '48-2. 머리 숫자가 없으면 합을 반올림 ' + r2);
+    ok(JSON.stringify(pe.rParts([0, 0, 0], 0)) === '[0,0,0]' && JSON.stringify(pe.rParts([2.6, 2.6], 4)) === '[2,2]', '48-3. 빈 주·머리 숫자가 칸 내림 합보다 작을 때도 맞춤');
+    scene('2026-10-31T08:00:00', ST); pe.goTab('week'); await sleep(40);
+    const sc4 = V$().querySelector('.score .sc4'), head = V$().querySelector('.score .sc3 span');
+    if (sc4 && head) { const nums = [...sc4.querySelectorAll('.nw')].map(e => e.textContent).filter(t => !/목표/.test(t)).map(t => +t.match(/(\d+)\//)[1]);
+      ok(nums.reduce((a, b) => a + b, 0) === +head.textContent.match(/\d+/)[0], '48-4. 이번 주 점수 카드: 칸 합 = 지금 %');
+      ok(!/ · /.test(sc4.innerHTML.replace(/&nbsp;/g, '\u00a0').replace(/\u00a0· /g, '')), '48-5. 칸 사이 "·" 앞은 붙는 칸(줄 첫머리에 "·"가 오지 않음)'); }
+    else ok(false, '48-4. 이번 주 점수 카드가 없음');
+    pe.goTab('today'); await sleep(40); }
 
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');

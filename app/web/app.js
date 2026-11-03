@@ -1037,9 +1037,13 @@ function monNoticeHTML(n,ph){return n?`<div class="notice mon"><span><b>${esc(n.
 /* 60% 넘은 주가 이어진 수(W 전 주부터 거꾸로, 고정한 지난 주들) */
 function wkRun(W){let n=0;for(const k of Object.keys(S.wk||{}).filter(k=>k<W&&S.wk[k]&&S.wk[k].at&&S.wk[k].p!=null).sort().reverse()){if(S.wk[k].p>=60)n++;else break;}return n;}
 /* 지난주 기록(월요일 안내의 창): 지난주 점수와 부분(그 주를 고정한 S.wk[LW]), 넘어온 것, 놓아준 것(이름), 60% 넘은 주 연속 */
+/* 점수 칸을 반올림해도 합이 머리 숫자(t, 없으면 합을 반올림)와 같게: 내림한 뒤 남는 점은 소수 부분이 큰 칸부터 1씩 */
+function rParts(vs,t){const v=vs.map(x=>+x||0),f=v.map(Math.floor);if(t==null)t=Math.round(v.reduce((a,x)=>a+x,0));let r=t-f.reduce((a,x)=>a+x,0);const o=v.map((x,i)=>[x-f[i],i]).sort((a,b)=>b[0]-a[0]);
+  for(const[,i]of o){if(r<=0)break;f[i]++;r--;}for(const[,i]of o.slice().reverse()){if(r>=0)break;if(f[i]>0){f[i]--;r++;}}return f;}
+const SEP='\u00a0· ';   /* 줄이 "·"로 시작하지 않게 점 앞은 붙는 칸 */
 function lastWeekSheet(LW){const x=(S.wk||{})[LW]||{},w=wkIdx(LW),sc=PE_SCORE[Math.max(1,phaseObj(w).id)]||PE_SCORE[1],T=taskList(todayStr()),cs=T.find(r=>r.k==='carry.sets'),cm=T.find(r=>r.k==='carry.mock'),run=wkRun(addDays(LW,7)),rel=x.rel||[];
   const gs=weekObj(Math.max(0,w)).goals||[],gd=gs.filter((_,i)=>(S.tk||{})['goal:'+LW+':'+i]).length;   /* 마감(5점)은 리포트 + 그 주 목표라 목표 수를 함께(점수 카드의 "이번 주 목표"와 같은 수) */
-  const parts=Object.keys(x.parts||{}).map(k=>`<span class="nw">${esc(PART_N[k]||k)} ${Math.round(x.parts[k])}/${sc[k]||0}</span>${k==='close'&&gs.length?` <span class="nw">· 그 주 목표 ${gd}/${gs.length}</span>`:''}`).join(' · ');
+  const pk=Object.keys(x.parts||{}),pr=rParts(pk.map(k=>x.parts[k]),x.pct),parts=pk.map((k,i)=>`<span class="nw">${esc(PART_N[k]||k)} ${pr[i]}/${sc[k]||0}</span>${k==='close'&&gs.length?` <span class="nw">· 그 주 목표 ${gd}/${gs.length}</span>`:''}`).join(SEP);
   const car=(cs?row({t:esc(`지난주 세트 읽기·퀴즈 ${cs.ds.length}개`),d:esc(cs.sub+' · 이번 일요일까지(권장)')}):'')+(cm?row({t:esc(`지난주 모의고사(${md(cm.d)})`),d:'토요일 새 모의 전까지'}):'');
   return`<p class="sheet-k">지난주 기록 · ${md(LW)}~${md(addDays(LW,6))}</p><h3 class="cmh">지난주(${esc(weekLabel(w))}) ${x.p==null?'· 시험 주라 점수 대신 체크':x.p+'%'}</h3>${x.lv?`<p class="ds">${esc(LV_TXT[x.lv].split(' · ')[0])}</p>`:''}
   ${parts?`<p class="sc4 lwp">${parts}</p>`:''}${car?sec('넘어온 것','',`<div class="group">${car}</div>`):''}${rel.length?sec('놓아준 것',rel.length+'개',`<div class="group">${rel.map(l=>row({t:esc(l)})).join('')}</div>`):''}
@@ -1223,9 +1227,9 @@ function scoreHTML(b,c,L){const W=wkTop(b,c.V),top=`<p class="sc1">${W.top}</p>$
   else{const l=L.find(l=>!l.done&&!l.xt&&!l.pin&&!l.tick&&wkCan(l,b)),nx=l&&/^다음 하나: /.test(l.next||'')?l.next.slice(7):'';go=l?`<button class="btn" data-act="week-next" data-k="${esc(l.k)}">다음: ${esc(l.hand?l.lab+(nx?' · '+nx:''):nx||l.lab)}</button>`:'<button class="btn" data-act="start-free">연습에서 자유 연습</button>';}
   if(b.chk)return`<div class="score">${top}<p class="sc3"><b>시험 주 · 점수 대신 체크</b></p><p class="sc4">${chkTxt(b)}</p>${go}</div>`;
   /* 마감(5점)은 리포트 0.6 + 이번 주 목표 0.4라 목표 수를 함께 적는다 */
-  const cl=b.lines.find(l=>l.k==='close'),pt=([k,v,m])=>`<span class="nw">${PART_N[k]} ${Math.round(v)}/${m}</span>${k==='close'&&cl&&cl.gn?` <span class="nw">· 이번 주 목표 ${cl.gd}/${cl.gn}</span>`:''}`;
+  const cl=b.lines.find(l=>l.k==='close'),rp=rParts(b.parts.map(p=>p[1]),b.pct),pt=([k,v,m],i)=>`<span class="nw">${PART_N[k]} ${rp[i]}/${m}</span>${k==='close'&&cl&&cl.gn?` <span class="nw">· 이번 주 목표 ${cl.gd}/${cl.gn}</span>`:''}`;
   return`<div class="score">${top}<div class="sc3"><b class="num">다 하면 ${b.reach}%</b><span>지금 ${b.pct}%</span></div><div class="sbar${b.pct>=80?' ok':''}"><i style="width:${b.pct}%"></i><u style="left:60%"></u><u style="left:80%"></u></div>
-  <p class="sc4">${b.parts.map(pt).join(' · ')}</p><p class="note">필수와 이번 주 목표만 세요 · <span class="nw">60%면 합격선,</span> <span class="nw">80%면 잘 지킨 주</span></p>${go}</div>`;}
+  <p class="sc4">${b.parts.map(pt).join(SEP)}</p><p class="note">필수와 이번 주 목표만 세요 · <span class="nw">60%면 합격선,</span> <span class="nw">80%면 잘 지킨 주</span></p>${go}</div>`;}
 /* 날마다: 그날 표시와 남은 곳(평일 → 세트, 토요일 → 모의고사, 일요일 → 리포트 줄로) */
 function dayRowsHTML(t,b){let h='';const tk=S.tk||{};
   for(let i=0;i<7;i++){const d=addDays(b.W,i),dw=parse(d).getDay(),g=dayGlyph(d,t),lab=`${DAYK[dw]} ${md(d)}`;let tx='',at='';
@@ -2121,10 +2125,10 @@ function vStats(){const t=todayStr(),cs=deck();weekSnap(t);const b=weekBoard(t),
   const wks=Object.keys(S.wk||{}).filter(W=>W<b.W&&S.wk[W]&&S.wk[W].at&&S.wk[W].p!=null).sort().reverse().slice(0,8),run=wkRun(b.W);
   const ss=Object.keys(SETS.sets).map(setStatus).filter(Boolean),qa=ss.reduce((a,x)=>a+x.qa,0),qk=ss.reduce((a,x)=>a+x.qok,0);
   const ms=Object.keys(S.mockp||{}).filter(D=>/^\d{4}-/.test(D)&&S.mockp[D]&&S.mockp[D].sc&&Object.keys(S.mockp[D].sc).length).sort().reverse().slice(0,6);
-  const pt=x=>x&&x.parts?Object.keys(x.parts).map(k=>`${PART_N[k]||k} ${Math.round(x.parts[k])}`).join(' · '):'';
+  const pt=x=>{if(!x||!x.parts)return'';const ks=Object.keys(x.parts),r=rParts(ks.map(k=>x.parts[k]),x.pct);return ks.map((k,i)=>`${PART_N[k]||k} ${r[i]}`).join(SEP);};
   return topbar('통계')+`<h1 class="ptitle">통계</h1>
   <div class="tiles" style="margin-top:12px"><div class="tile"><b>${learned}<small style="font-size:.9rem;color:var(--ink2)">/${cs.length}</small></b><span>학습한 카드</span></div><div class="tile"><b>${b.pct==null?(inPlan?'체크':'—'):b.pct+'%'}</b><span>이번 주 필수</span></div><div class="tile"><b>${core.a}/${core.b}</b><span>핵심 끝낸 세트</span></div></div>
-  ${sec('주간 기록',run?`60% 넘은 주 ${run}주 연속`:'',`${inPlan||wks.length?`<div class="group">${inPlan?row({t:esc(weekLabel(b.w))+' · 이번 주',d:esc(b.pct==null?'시험 주 · 점수 대신 체크':`다 하면 ${b.reach}% · ${b.parts.map(([k,v])=>`${PART_N[k]} ${Math.round(v)}`).join(' · ')}`),v:b.pct==null?'체크':b.pct+'%'}):''}
+  ${sec('주간 기록',run?`60% 넘은 주 ${run}주 연속`:'',`${inPlan||wks.length?`<div class="group">${inPlan?row({t:esc(weekLabel(b.w))+' · 이번 주',d:esc(b.pct==null?'시험 주 · 점수 대신 체크':`다 하면 ${b.reach}% · ${(r=>b.parts.map(([k],i)=>`${PART_N[k]} ${r[i]}`).join(SEP))(rParts(b.parts.map(p=>p[1]),b.pct))}`),v:b.pct==null?'체크':b.pct+'%'}):''}
     ${wks.map(W=>{const x=S.wk[W];return row({t:esc(weekLabel(wkIdx(W))),d:esc(`${md(W)}~${md(addDays(W,6))}${x.lv?' · '+LV_TXT[x.lv].split(' · ')[0]:''}${pt(x)?' · '+pt(x):''}`),v:x.p+'%'});}).join('')}</div>`:'<div class="empty">아직 기록이 없어요</div>'}
     <p class="note">필수와 이번 주 목표만 세요 · 60%면 합격선, <span class="nw">80%면 잘 지킨 주.</span> 지난 주는 그 주가 끝난 뒤 처음 연 날 고정해요.</p>`)}
   ${sec('단원별','학습 / 정답률 / ★',`<div class="group" style="padding:4px 8px"><table class="t">${rows.map(r=>`<tr><td>${esc(r.u.n)}</td><td class="n">${r.l}/${r.n}</td><td class="n" style="color:${r.acc==null?'var(--ink3)':r.acc>=.8?'var(--ok)':r.acc>=.6?'var(--amber)':'var(--red)'}">${r.acc==null?'—':Math.round(r.acc*100)+'%'}</td><td class="n">${cs.filter(c=>Number(c.u)===r.u.id&&pget(c.id).star).length}</td></tr>`).join('')}</table></div>`)}
@@ -2794,7 +2798,7 @@ PE_IO.init({toast});recalcPlan();applyLook();setPreset('essay');R=parseHash();
 if(!location.hash)history.replaceState(null,'','#today');
 calOpen();sync(true);route();v3Once();   /* 받아 오기를 먼저 시작해 첫 화면이 오래된 자료로 오늘 몫을 고정하지 않게(받아 온 뒤 고정) */
 const fresh2=f=>(...a)=>{PLN++;return f(...a);};
-window.__pe={S:()=>S,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession,
+window.__pe={S:()=>S,rParts,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession,
   enough,setReviewItems,startDueAll,startWrong,budgetOf,dayKind,TM:()=>TM,go:h=>{nav(h);v3Again();},goUp,goTab,R:()=>R,navBadgeN,tabWords,
   /* 오늘 몫·이번 주(검사용: 부를 때마다 새로 센다) */
   taskList:fresh2(taskList),dayPlan:fresh2(dayPlan),planToday:fresh2(planToday),weekBoard:fresh2(weekBoard),weekSnap:fresh2(weekSnap),reqParts:fresh2(reqParts),cardsOut:fresh2(cardsOut),hwParts:fresh2(hwParts),

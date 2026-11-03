@@ -146,7 +146,7 @@ a.btn{text-decoration:none}
 /* ── 세그먼트(필터) ── */
 .seg{display:flex;gap:4px;padding:3px;background:var(--rule2);border-radius:12px;overflow-x:auto;scrollbar-width:none}
 .seg::-webkit-scrollbar{display:none}
-.seg button{flex:1 0 auto;min-height:36px;padding:4px 12px;border-radius:9px;font-size:.9rem;font-weight:600;color:var(--ink2);white-space:nowrap}
+.seg button{flex:1 0 auto;min-height:36px;padding:4px 12px;border-radius:9px;font-size:.9rem;font-weight:600;color:var(--ink2);white-space:nowrap;text-align:center}
 .seg button.on{background:var(--sheet);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .select{width:100%;min-height:46px;padding:8px 12px;border-radius:12px;border:1px solid var(--rule);background:var(--sheet);font-size:1rem}
 label.f{display:block;font-size:.86rem;color:var(--ink2);font-weight:600;margin:14px 4px 6px}
