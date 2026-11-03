@@ -34,7 +34,7 @@ function notifPlan(cfg) {
   }
   if (c.su.on) {
     const [hour, minute] = hm(c.su.time);
-    out.push({ id: 'pe-su', weekday: 1, hour, minute, title: '복습 비우기', body: '이번 주 오답 노트와 밀린 세트 다시 보기를 비우세요.', hash: 'review' });
+    out.push({ id: 'pe-su', weekday: 1, hour, minute, title: '복습 비우기', body: '이번 주 오답 노트와 세트 복습을 정리해요.', hash: 'review' });
   }
   return out;
 }
