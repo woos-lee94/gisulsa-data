@@ -212,10 +212,17 @@ function open(opt = {}) {
   // 예전(2.x) 기록이 든 휴대폰에서 3.0.0을 처음 열면 "바뀐 점" 창 한 번(기록은 그대로), 표시는 네이티브 저장소에 남아 다시 열면 없음
   { const keep = disk.pe_state_v1, v2 = JSON.parse(keep); delete v2.tk; delete v2.today; delete v2.wk; disk.pe_state_v1 = JSON.stringify(v2);
     const U = open(); await sleep(300);
-    ok(/오늘 몫 · 이번 주 · 복습 · 연습으로 정리했어요\. 예전 기능은 모두 그대로 있어요\./.test(U.d.querySelector('#modal-wrap').textContent) && U.pe.S().tk['seen:v3'] && U.pe.S().cards['K04'] && U.pe.S().cards['K04'].seen === 3, '예전 기록으로 처음 연 3.0.0: 바뀐 점 창(진도는 그대로)');
-    U.click('#modal-wrap [data-act="sheet-close"]'); await sleep(20); U.w.PE_IO._hide(); await sleep(20);
+    ok(/오늘 몫 · 이번 주 · 복습 · 연습으로 정리했어요\. 예전 기능은 모두 그대로 있어요\./.test(U.d.querySelector('#modal-wrap').textContent) && !U.pe.S().tk['seen:v3'] && U.pe.S().cards['K04'] && U.pe.S().cards['K04'].seen === 3, '예전 기록으로 처음 연 3.0.0: 바뀐 점 창(진도는 그대로, 본 것은 닫을 때 적음)');
+    U.w.PE_IO._go('review'); await sleep(60);   // 일요일 알림 "복습 비우기"를 눌러 연 앱(App.js onLoadEnd → _go)
+    ok(U.w.location.hash === '#review' && /바뀐 점/.test(U.d.querySelector('#modal-wrap').textContent) && !U.pe.S().tk['seen:v3'], '알림으로 연 화면(_go review) 위에도 바뀐 점 창(본 것 아님)');
+    U.click('#modal-wrap [data-act="sheet-close"]'); await sleep(20); ok(!U.d.querySelector('#modal-wrap').innerHTML && U.pe.S().tk['seen:v3'], '바뀐 점 창 닫기 → 본 것으로 적음'); U.w.PE_IO._hide(); await sleep(20);
     const U2 = open(); await sleep(300);
     ok(!U2.d.querySelector('#modal-wrap').innerHTML && JSON.parse(disk.pe_state_v1).tk['seen:v3'] && U.errors.length === 0 && U2.errors.length === 0, '다시 열면 바뀐 점 창 없음(표시는 네이티브 저장소에)');
+    // 왼쪽 가장자리 밀기로 닫아도 본 것으로 적는다(닫기·바깥·밀기 모두 사용자가 닫은 것)
+    disk.pe_state_v1 = JSON.stringify(v2); const U3 = open(); await sleep(300); U3.w.PE_IO._go('today'); await sleep(60);
+    const sw = (type, x) => { const e = new U3.w.Event(type, { bubbles: true }); e[type === 'touchstart' ? 'touches' : 'changedTouches'] = [{ clientX: x, clientY: 300 }]; U3.d.querySelector('#modal-wrap .modal').dispatchEvent(e); };
+    const had = /바뀐 점/.test(U3.d.querySelector('#modal-wrap').textContent) && !U3.pe.S().tk['seen:v3']; sw('touchstart', 6); sw('touchend', 150); await sleep(30); U3.w.PE_IO._hide(); await sleep(20);
+    ok(had && !U3.d.querySelector('#modal-wrap').innerHTML && U3.pe.S().tk['seen:v3'] && JSON.parse(disk.pe_state_v1).tk['seen:v3'] && U3.errors.length === 0, '바뀐 점 창을 왼쪽 가장자리 밀기로 닫아도 본 것으로 적음(네이티브 저장소에)');
     disk.pe_state_v1 = keep; }
 
   // 3) 회원: 아이디 없는 앱 묶음(검사용)에는 회원 칸이 없고, 관리자 휴대폰에만 승인 관리가 보인다

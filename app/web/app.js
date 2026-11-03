@@ -360,6 +360,7 @@ const TAB_VIEWS={today:vToday,week:vWeek,review:vReview,practice:vPractice,more:
 const UP_LABEL={today:'오늘',week:'이번 주',review:'복습',practice:'연습',study:'연습',test:'연습',more:'더보기',set:'세트',kichul:'기출','kichul/u':'단원별',mock:'모의고사',cal:'달력'};
 const SET_TABS=['cards','quiz','essay','tasks'];
 let R={tab:'today',page:null,a:null,b:null},RET={},FLOW=null;   /* RET: 화면 → 들어온 주소. FLOW: 오늘 화면의 줄이 연 흐름 {id, from, at} */
+let SCR={},UPH=null;   /* SCR: 주소 → 그 화면을 떠날 때의 스크롤 위치(앞으로 갈 때·탭을 바꿀 때 적음). UPH: 위로(goUp) 가는 주소(닿으면 그 자리로, 한 번만) */
 let SES=null;
 const nh=h=>{h=String(h||'');try{h=decodeURIComponent(h);}catch(e){}return h.replace(/^#\/?/,'');};
 const curH=()=>nh(location.hash)||'today';
@@ -380,7 +381,11 @@ function tabOf(h,k){h=nh(h)||'today';k=k||0;const p=h.split('/')[0];
   if(TABS.includes(p))return p;if(TAB_ALIAS[p])return TAB_ALIAS[p];if(k>5)return'today';
   if(p==='sess')return tabOf(SES&&SES.from,k+1);if(p==='memo')return tabOf(MEMO&&MEMO.from,k+1);
   const ret=nh(RET[p]);return tabOf(retOk(ret,p)?ret:(PARENT[p]||'today'),k+1);}
-const upLabel=h=>{h=nh(h);return UP_LABEL[h]||UP_LABEL[h.split('/')[0]]||'뒤로';};
+/* 위쪽 이름: 주소 그대로(UP_LABEL) → 기출 회차·단원 화면은 "제140회"·그 단원 이름(첫 마디 "기출"은 목록 이름이라 쓰지 않음.
+   6자가 넘는 단원 이름은 줄인 이름 "콘크리트Ⅱ"·"가시설": 글자 크게·위쪽 알약에서도 제목과 알약을 덮지 않게) → 첫 마디(세트·모의고사…) → "뒤로" */
+const upLabel=h=>{h=nh(h);const p=h.split('/');if(UP_LABEL[h])return UP_LABEL[h];
+  if(p[0]==='kichul'&&p[2]){if(p[1]==='r')return'제'+p[2]+'회';if(p[1]==='u'){const u=PE_UNITS.find(x=>x.id===Number(p[2]));return u?(u.n.length<=6?u.n:u.s):'뒤로';}}
+  return UP_LABEL[p[0]]||'뒤로';};
 function parseHash(){const h=curH(),p=h.split('/');const r={tab:'today',page:null,a:p[1]||null,b:p[2]||null};
   if(isTab(p[0]))r.tab=tabKey(p[0]);else if(PAGES[p[0]]){r.page=p[0];r.tab=tabOf(h);}return r;}
 /* 집중 모드: 세션·가리며 외우기, 타이머가 도는 그 모의고사(아래 탭을 숨기고 위쪽은 "닫기") */
@@ -388,36 +393,42 @@ const isFocus=()=>R.page==='sess'||R.page==='memo'||(R.page==='mock'&&TM.running
 /* 빈 흐름: SES 없는 #sess, MEMO 없는 #memo. 그리지 않고 위로 보낸다 */
 const flowGone=r=>(r.page==='sess'&&!SES)||(r.page==='memo'&&!MEMO);
 /* 같은 주소면 다시 그리기만 한다(세션 → 세션, 외우기 안의 외우기). 그 주소가 빈 흐름이면 위로(바꿔 쓰지 않아 route()를 거치지 않는 길에도 빈 화면을 막는다) */
-function rep(h){h=nh(h)||'today';if(curH()===h){R=parseHash();if(flowGone(R))return hop(upOf(R));render();window.scrollTo(0,0);return scrollDo();}location.replace('#'+h);}
+function rep(h){h=nh(h)||'today';if(curH()===h){UPH=null;R=parseHash();if(flowGone(R))return hop(upOf(R));render();window.scrollTo(0,0);return scrollDo();}location.replace('#'+h);}
 /* 그린 뒤 보여 줄 곳(SV.scrollTo: 첫 안 읽은 용어·펼친 숙제 카드 등): 짧은 것은 가운데로, 펼친 용어와 화면 반보다 긴 것은 머리가 위쪽 막대 바로 아래에 오게
    (가운데로 맞추면 긴 설명에서 제목이 화면 위로 나간다) */
 function scrollDo(){if(!SV.scrollTo)return;const el=document.querySelector(SV.scrollTo);SV.scrollTo=null;if(!el)return;const r=el.getBoundingClientRect();
   if(el.matches('.acc.open')||r.height>window.innerHeight*.55){const tb=document.querySelector('.topbar');window.scrollTo(0,Math.max(0,r.top+window.scrollY-(tb?tb.getBoundingClientRect().height:0)-8));}
   else el.scrollIntoView({block:'center'});}
 function hop(h){h=nh(h)||'today';return isTab(h)?goTab(tabKey(h)):rep(h);}
-/* 앞으로: 탭 주소는 goTab, 그 밖은 들어온 곳을 RET에 적고 바꿔 쓴다(o.from: 들어온 곳을 따로 줄 때) */
-function nav(h,o){o=o||{};closeModal();h=nh(h)||'today';if(isTab(h))return goTab(tabKey(h));
+/* 앞으로: 탭 주소는 goTab, 그 밖은 들어온 곳을 RET에 적고 바꿔 쓴다(o.from: 들어온 곳을 따로 줄 때). 떠나는 화면의 스크롤 위치는 SCR에(위로 돌아오면 그 자리로) */
+function nav(h,o){o=o||{};closeModal();SCR[curH()]=window.scrollY;h=nh(h)||'today';if(isTab(h))return goTab(tabKey(h));
   const p=h.split('/')[0],from=nh(o.from)||curH();if(p!=='sess'&&p!=='memo'&&from.split('/')[0]!==p&&!upHas(from,p))RET[p]=from;
   if(p==='set'&&curH()!==h)UI.hwf=null;   /* 다른 세트로 가면 이번 주 "다음 하나"로 펼친 숙제 카드는 놓는다(부른 곳이 nav 뒤에 다시 적는다) */
   rep(h);}
-/* 위로: 뒤로·닫기·가장자리 밀기. 세션·외우기는 지우지 않는다(이어서 할 수 있게). 외우기 안에서 연 외우기는 바깥 외우기로(T5) */
+/* 위로: 뒤로·닫기·가장자리 밀기. 세션·외우기는 지우지 않는다(이어서 할 수 있게). 외우기 안에서 연 외우기는 바깥 외우기로(T5).
+   닿은 화면은 떠날 때의 스크롤 자리로(route가 SCR에서), 펼친 숙제 카드가 있는 세트면 그 카드로(목록 자리·펼친 카드를 잃지 않게) */
 function goUp(up){closeModal();
   if(!up&&R.page==='memo'&&MEMO&&MEMO.outer){const o=MEMO.outer;memoStop();MEMO=o;return render();}
-  hop(up||upOf(R));}
+  const h=nh(up||upOf(R))||'today',r=hashR(h);UPH=h;if(r.page==='set'&&r.a&&hwFocus(r.a))SV.scrollTo='.hw.focus';
+  hop(h);}
 /* 탭: 그 탭 첫 화면으로 바꿔 쓴다(탭이 쌓이지 않음). 지금 탭을 다시 누르면 맨 위로 */
-function goTab(tab){closeModal();tab=tabKey(tab);if(!TABS.includes(tab))tab='today';FLOW=null;RET={};UI.hwf=null;
-  if(curH()===tab){R=parseHash();render();return window.scrollTo(0,0);}
+function goTab(tab){closeModal();SCR[curH()]=window.scrollY;tab=tabKey(tab);if(!TABS.includes(tab))tab='today';FLOW=null;RET={};UI.hwf=null;
+  if(curH()===tab){UPH=null;R=parseHash();render();return window.scrollTo(0,0);}
   location.replace('#'+tab);}
 /* 흐름을 다른 화면에서 시작하면 오늘 줄의 흐름(FLOW)을 놓는다 */
 function flowKeep(o){if(!(o&&o.keepFlow)&&!(FLOW&&curH()===FLOW.at))FLOW=null;}
-function route(){closeModal();
+/* 복원·초기화: 메모리에만 있던 흐름을 비운다(하던 세션·가리며 외우기, 오늘 줄의 흐름, 들어온 곳·스크롤 자리, 펼친 줄·나중에·고른 답안지, 고치던 시험 일정, 그 기록에 묶인 타이머).
+   남겨 두면 오늘에 지운 기록의 "이어서"가 뜨고, 그것을 끝내면 매김·오답·세트 복습이 새 기록에 들어간다 */
+function flowReset(){memoStop();SES=null;MEMO=null;FLOW=null;RET={};SCR={};UPH=null;Object.assign(UI,{later:{},act:null,d:null,hwf:null,ddx:null});SCH=null;if(TM.ctx||TM.ended)setPreset(TM.preset);}
+/* 주소가 바뀐 뒤: 그리고 맨 위로(위로 온 것이면 떠날 때 자리로, 그 위 SV.scrollTo가 있으면 그곳으로). 아직 닫지 않은 "바뀐 점" 창은 다시 띄운다 */
+function route(){closeModal();const up=UPH;UPH=null;
   try{R=parseHash();
     if(flowGone(R))return hop(upOf(R));
     if(!R.page&&!isTab(curH()))return goTab('today');
     if(R.page==='set'&&R.b){if(SET_TABS.includes(R.b))SV[R.a]=R.b;return rep('set/'+R.a);}
     onEnter(R);
   }catch(e){console.error(e);R=parseHash();}
-  if(R.page!=='memo')memoStop();render();window.scrollTo(0,0);scrollDo();}
+  if(R.page!=='memo')memoStop();render();window.scrollTo(0,up&&up===curH()&&SCR[up]||0);scrollDo();v3Again();}
 /* 화면에 들어갈 때 한 번(그리기와 따로, 그리기는 기록을 쓰지 않는다): 토·일요일에 다음 주 단원의 기출 화면을 열면 "다음 주 단원 기출 훑기"(S.tk['kichul:주']) */
 function onEnter(r){if(r.page!=='kichul'||r.a!=='u'||!r.b)return;const t=todayStr(),dw=parse(t).getDay(),W=wkStart(t),tk=S.tk||(S.tk={});if(dw!==0&&dw!==6||tk['kichul:'+W])return;
   if((weekObj(weekIndex(addDays(W,7))).u||[]).map(Number).includes(Number(r.b))){tk['kichul:'+W]=t;touchDay();save();}}
@@ -443,7 +454,10 @@ function paintNavBadges(){const b=document.querySelector('#nav button[data-tab="
   if(n){if(!nb){nb=document.createElement('span');nb.className='nb due';b.appendChild(nb);}nb.textContent=n;b.setAttribute('aria-label',`이번 주, 날짜가 다가온 일 ${n}개`);}
   else{if(nb)nb.remove();b.setAttribute('aria-label','이번 주');}}
 /* 위쪽 막대: 왼쪽은 올라갈 곳 이름(오늘·세트·더보기…, 그 밖은 "뒤로"), 집중 모드에서는 "닫기" */
-const topbar=(title)=>`<div class="topbar"><button class="back" data-act="back">${isFocus()?'닫기':icon('back')+esc(upLabel(upOf(R)))}</button><div class="ttl">${esc(title)}</div></div>`;
+const backLab=()=>isFocus()?'닫기':icon('back')+esc(upLabel(upOf(R)));
+const topbar=(title)=>`<div class="topbar"><button class="back" data-act="back">${backLab()}</button><div class="ttl">${esc(title)}</div></div>`;
+/* 다시 그리지 않고 집중 모드 표시만 맞춘다(점수 칸을 쓰는 중에 교시 시간이 끝났을 때): 아래 탭과 위쪽 "닫기" ↔ "‹ 이름" */
+function focusPaint(){document.body.classList.toggle('focus',isFocus());const b=$('#view .topbar .back');if(b)b.innerHTML=backLab();}
 const sec=(title,meta,body)=>`<section class="sec"><div class="sec-h"><h2>${esc(title)}</h2>${meta?`<span class="meta">${meta}</span>`:''}</div>${body}</section>`;
 function row(o){const tag=o.act?'button':'div';const attrs=o.act?` data-act="${o.act}"${o.data?Object.keys(o.data).map(k=>` data-${k}="${esc(o.data[k])}"`).join(''):''}`:'';
   return`<${tag} class="row${o.ic?'':' noic'}"${attrs}>${o.ic?`<span class="ic ${o.tone||''}">${icon(o.ic)}</span>`:''}<span class="tx"><span class="tt">${o.t}</span>${o.d?`<span class="ds">${o.d}</span>`:''}</span>${o.v!=null?`<span class="val${o.zero?' zero':''}">${o.v}</span>`:''}${o.badge?o.badge:''}${o.act?'<span class="chev"></span>':''}</${tag}>`;}
@@ -2249,6 +2263,8 @@ function memberSettingsHTML(){const me=PE_IO.member();if(!me)return'';
   return sec('아이디','',`<div class="group">${row({ic:'flag',t:esc(me.id),d:me.admin?'이 휴대폰에 고정된 아이디, 관리자':'이 휴대폰에 고정된 아이디'})}</div>
   <div class="btns"><button class="btn red" data-act="member-remove">아이디 지우기</button></div><p class="note">지우면 승인도 함께 없어지고 처음 화면으로 돌아가요. 학습 기록은 이 휴대폰에 그대로 남아요.</p>`);}
 function backupDone(){S.tk=S.tk||{};S.tk.backup=todayStr();save();if(R.page==='backup')render();}
+/* 백업 글: 그 백업의 날짜(S.tk.backup)를 넣고 만든다(그 백업으로 복원한 휴대폰도 "마지막 백업"이 그 날). 복사·저장에 실패하면 undo로 전 날짜로 되돌린다. 형식 {state, sets}는 그대로 */
+function backupJSON(){S.tk=S.tk||{};const b0=S.tk.backup;S.tk.backup=todayStr();return[JSON.stringify({state:S,sets:SETS}),()=>{if(b0)S.tk.backup=b0;else delete S.tk.backup;save();}];}
 function vBackup(){const bl=(S.tk||{}).backup;return topbar('백업')+`<h1 class="ptitle">백업·복원</h1><p class="lsub">학습 기록은 이 기기에만 있어요. 1~2주에 한 번 메모나 메일에 붙여 두세요. ${bl?`마지막 백업 ${esc(md(bl))}`:'아직 백업한 적이 없어요'}</p>
   <div class="btns" style="margin-top:14px"><button class="btn" data-act="backup-copy">백업 복사</button><button class="btn sec" data-act="backup-dl">파일로 저장</button></div>
   <label class="f">복원(백업 내용 붙여넣기)</label><textarea class="in" id="restoreText" placeholder='{"v":2,...}'></textarea>
@@ -2396,11 +2412,12 @@ function tPause(){if(!TM.running)return;clearInterval(TM.iv);TM.running=false;TM
 function tReset(){clearInterval(TM.iv);TM.running=false;PE_IO.keepAwake(false);TM.remain=TM.total;TM.lastPart=-1;TM.ended=null;paintTimer();paintPill();}
 /* 그 타이머의 자리: 모의고사 화면 · 세트 ④ 논술 · 세트 ③ 숙제(단답 카드), 자리 없는 타이머는 타이머 화면 */
 const tHome=c=>!c?R.page==='timer':c.kind==='mock'?R.page==='mock'&&R.a===c.D:R.page==='set'&&R.a===c.D&&(SV[c.D]||'cards')===(c.kind==='essay'?'essay':'tasks');
-/* 0이 됐을 때(틱 안에서): 그 모의고사 화면이고 창이 없으면 다시 그려 시간 끝 창을 띄우고(tEndShow), 아니면 알림과 위쪽 "⏱ 시간 끝" 알약만.
-   가리며 외우기·세션 화면, 창이 열린 동안에는 창을 띄우지 않는다(돌아가면 그 모의 화면에서) */
+/* 0이 됐을 때(틱 안에서): 그 모의고사 화면이면 다시 그려 집중 모드를 끄고 시간 끝 창(tEndShow), 그 밖은 알림과 위쪽 "⏱ 시간 끝" 알약만.
+   다른 창(낱말 풀이 등)이 열려 있으면 그 아래 화면만 다시 그리고 알림, 시간 끝 창은 그 창을 닫을 때(dismissModal).
+   점수 칸을 쓰는 중이면 다시 그리지 않고(쓰던 칸 그대로) 집중 모드 표시만 끈다(창은 다음에 그릴 때). 가리며 외우기·세션 화면에서는 돌아가면 그 모의 화면에서 */
 function tEnd(){const c=TM.ctx,E=TM.ended={ctx:c,at:Date.now(),seen:0},home=tHome(c),mk=!!c&&c.kind==='mock';
   if(home&&!mk)E.seen=1;
-  if(home&&mk&&!$('#modal-wrap').innerHTML&&!kbEl(document.activeElement))return render();   /* 점수 칸을 쓰는 중이면 다시 그리지 않음(다음에 그릴 때 창) */
+  if(home&&mk){if(kbEl(document.activeElement))focusPaint();else{render();if(E.seen)return;}}
   if(R.page==='timer')render();
   toast(c?c.short+' 시간이 끝났어요':'시간 종료');}
 /* 모의고사 화면을 그린 뒤: 그 교시 시간이 끝났고 아직 안 적었으면 시간 끝 창(한 번). 다른 자리는 본 것으로 */
@@ -2461,12 +2478,21 @@ function vTimer(){return topbar('타이머')+`<h1 class="ptitle">교시 타이�
 
 /* ════════ 19. 모달(카드·목차 보기) ════════ */
 /* 3.0.0을 처음 열 때 한 번(S.tk['seen:v3']): 바뀐 점. 새로 설치한 휴대폰(저장된 기록 없음)에는 띄우지 않고 표시만 해 둔다 */
-function v3Sheet(){return`<p class="sheet-k">기술사 6개월 ${APP_VER}</p><h3 class="cmh">바뀐 점</h3><p class="v3l">오늘 몫 · 이번 주 · 복습 · 연습으로 정리했어요. 예전 기능은 모두 그대로 있어요.</p>
+function v3Sheet(){return`<p class="sheet-k" data-v3="1">기술사 6개월 ${APP_VER}</p><h3 class="cmh">바뀐 점</h3><p class="v3l">오늘 몫 · 이번 주 · 복습 · 연습으로 정리했어요. 예전 기능은 모두 그대로 있어요.</p>
   <div class="group">${[['오늘','체크리스트 대신 "오늘 몫": 남은 시간에 맞춰 고른 번호 순서예요'],['이번 주','일요일까지 끝낼 것과 이번 주 점수, 학습 달력·통계'],['복습','세트 복습·오답 노트·별표 카드, 가리며 외우기'],['연습','예전 암기·테스트 탭(카드·문제·기출 문제은행·모의고사)'],['더보기','시험 일정, 답안 작성 요령, 교시 타이머, 백업']].map(([a,b])=>row({t:a,d:esc(b)})).join('')}</div>
   <div class="btns"><button class="btn sec" data-act="sheet-close">닫기</button></div>`;}
-function v3Once(){S.tk=S.tk||{};if(S.tk['seen:v3'])return;S.tk['seen:v3']=todayStr();save();if(!S_NEW)openModal(v3Sheet());}
+/* 본 것(S.tk['seen:v3'])은 사용자가 그 창을 닫을 때 적는다(닫기·바깥·왼쪽 가장자리 밀기, dismissModal). 그 전에 알림을 눌러 다른 화면으로 가도(App.js → _go → go) 그 화면 위에 다시 띄운다(V3P) */
+let V3P=false;
+function v3Once(){S.tk=S.tk||{};if(S.tk['seen:v3'])return;if(S_NEW){S.tk['seen:v3']=todayStr();return save();}V3P=true;v3Again();}
+function v3Again(){if(V3P&&!(S.tk||{})['seen:v3']&&!$('#modal-wrap').innerHTML)openModal(v3Sheet());}
 function openModal(html){$('#modal-wrap').innerHTML=`<div class="modal" data-act="modal-close"><div class="msheet" data-stop="1"><div class="grab"></div>${html}</div></div>`;}
 function closeModal(){$('#modal-wrap').innerHTML='';}
+/* 사용자가 창을 닫을 때(닫기 · 바깥 · 왼쪽 가장자리 밀기)만: "바뀐 점" 창이면 본 것으로 적고, 그 창 아래서 모의 교시 시간이 끝났으면 다시 그려 시간 끝 창.
+   closeModal에는 붙이지 않는다(여러 동작이 시작할 때 부르므로, 거기서 다시 그리면 지난 시간 끝 창이 "2교시 시작"·새 타이머 위에 뜬다) */
+function dismissModal(){const v3=!!$('#modal-wrap [data-v3]');closeModal();
+  if(v3){V3P=false;S.tk=S.tk||{};S.tk['seen:v3']=todayStr();save();}
+  const E=TM.ended;if(E&&!E.seen&&tHome(E.ctx))render();
+  v3Again();}
 function cardModal(c){const p=pget(c.id);return`<div class="sheet" style="margin-top:4px"><p class="sheet-k">${esc(unitName(c.u))}${p.seen?`, 다음 복습 ${esc(p.due||'—')}`:', 아직 학습 전'}</p><h3>${esc(c.t)}</h3><p class="defn ruled" style="margin-top:10px">${glHTML(c.d,c.id)}</p><ul class="kws">${(c.k||[]).map(k=>`<li><span>${esc(k)}</span></li>`).join('')}</ul>${c.x&&c.x.length?`<p class="xref">기출: ${c.x.map(kLabelShort).join(', ')}</p>`:''}${c.basis?`<p class="xref">근거: ${esc(c.basis)}</p>`:''}</div>
   <div class="btns"><button class="btn sec" data-act="star" data-id="${c.id}">${p.star?'★ 별표 해제':'☆ 별표'}</button>${p.seen?'':`<button class="btn" data-act="introduce" data-id="${c.id}">암기에 넣기</button>`}</div><div class="btns"><button class="btn sec" data-act="memo-one" data-id="${c.id}">가리며 외우기</button><button class="btn sec" data-act="go" data-h="${esc(ddHash(c.id))}">단답 답안지로 보기</button></div><div class="btns"><button class="btn ghost" data-act="hide-card" data-id="${c.id}">이 카드 숨기기</button></div>`;}
 function kqModal(id){const q=kq()[id];if(!q)return;let html=`<p class="qnum">제${q.r}회 ${q.p}교시 ${q.n}번, ${esc(unitName(q.u))}</p><p class="qtext">${esc(q.t)}</p>`;
@@ -2508,15 +2534,16 @@ document.addEventListener('touchstart',e=>{const t=e.touches&&e.touches[0];swXY=
 document.addEventListener('touchend',e=>{const t=e.changedTouches&&e.changedTouches[0];if(!swXY||!t||glFired){swXY=null;return;}const dx=t.clientX-swXY[0],dy=t.clientY-swXY[1];swXY=null;
   if(Math.abs(dx)<=60||Math.abs(dy)>=50)return;
   if(R.page==='sess'&&SES){if(dx<0)sessAdvance();else sessPrev();}else if(R.page==='memo'&&MEMO)memoGo(MEMO.i+(dx<0?1:-1));else if(R.page==='cal')calShift(dx<0?1:-1,true);},{passive:true});
-/* 왼쪽 가장자리(20px 안)에서 오른쪽으로 밀기 = 뒤로(앱의 기기 뒤로 가기 몸짓은 껐다): 창이 열려 있으면 닫고, 아니면 위로(goUp). 탭 첫 화면에서는 그대로.
-   테이프를 긋는 중, 입력 칸을 쓰는 중, 두 손가락, 옆으로 밀리는 칸(세그먼트 등) 위에서는 하지 않는다. 0.7초 안에 70px 넘게, 위아래로는 60px 안에서 */
+/* 왼쪽 가장자리(20px 안)에서 오른쪽으로 밀기 = 뒤로(앱의 기기 뒤로 가기 몸짓은 껐다): 창이 열려 있으면 닫고(dismissModal), 아니면 위로(goUp). 탭 첫 화면에서는 그대로.
+   테이프 붙이기를 켠 동안(상자 밖 왼쪽 여백에서 시작해도: 줄 첫머리를 노린 테이프가 외우기를 나가지 않게), 테이프를 긋는 중, 입력 칸을 쓰는 중, 두 손가락,
+   옆으로 밀리는 칸(세그먼트 등) 위에서는 하지 않는다. 0.7초 안에 70px 넘게, 위아래로는 60px 안에서 */
 let edXY=null;
 const hScroll=el=>{for(;el&&el.nodeType===1&&el!==document.body;el=el.parentElement)if(el.scrollWidth>el.clientWidth+1&&/auto|scroll/.test(getComputedStyle(el).overflowX))return true;return false;};
 document.addEventListener('touchstart',e=>{const t=e.touches&&e.touches[0],tg=e.target;
-  edXY=t&&e.touches.length===1&&t.clientX<=20&&!tpDrag&&!(tg&&tg.closest&&tg.closest('#memoBox.editing'))&&!kbEl(document.activeElement)&&!hScroll(tg)?[t.clientX,t.clientY,Date.now()]:null;},{passive:true});
+  edXY=t&&e.touches.length===1&&t.clientX<=20&&!tpDrag&&!$('#memoBox.editing')&&!kbEl(document.activeElement)&&!hScroll(tg)?[t.clientX,t.clientY,Date.now()]:null;},{passive:true});
 document.addEventListener('touchend',e=>{const t=e.changedTouches&&e.changedTouches[0],s=edXY;edXY=null;if(!s||!t||glFired||tpDrag)return;
   const dx=t.clientX-s[0],dy=t.clientY-s[1];if(dx<70||Math.abs(dy)>=60||Date.now()-s[2]>700)return;
-  if($('#modal-wrap').innerHTML)return closeModal();if(R.page)goUp();},{passive:true});
+  if($('#modal-wrap').innerHTML)return dismissModal();if(R.page)goUp();},{passive:true});
 document.addEventListener('touchcancel',()=>{edXY=null;});
 document.addEventListener('contextmenu',e=>{if(glAt(e.target,e.clientX,e.clientY))e.preventDefault();});
 document.addEventListener('click',e=>{if(glFired&&Date.now()-glFired<1500){glFired=0;e.preventDefault();e.stopPropagation();}},true);
@@ -2528,7 +2555,7 @@ document.addEventListener('click',e=>{
   switch(a){
   case'go':closeModal();return nav(D.h);
   case'back':return goUp();
-  case'modal-close':return closeModal();
+  case'modal-close':return dismissModal();
   case'sync':return sync(true);
   /* 오늘 몫·이번 주 */
   case'task':{const ids=String(D.ids||D.id||'').split(' ').filter(Boolean);if(!ids.length)return;closeModal();return taskGo(ids[0],ids.length>1?{chain:ids.slice(1)}:{});}
@@ -2538,7 +2565,7 @@ document.addEventListener('click',e=>{
   case'redo-undo':return redoTick(-1);
   case'cap':return openModal(capSheet());
   case'cap-set':{const m=Number(D.m)||0;closeModal();planToday(todayStr(),{replan:'cap',user:m||null});toast(m?`오늘 ${mfmt(m)}에 맞춰 다시 짰어요`:'평소 시간으로 다시 짰어요');return render();}
-  case'sheet-close':closeModal();return;
+  case'sheet-close':dismissModal();return;
   case'plan-reset':planToday(todayStr(),{replan:'reset'});toast('오늘 몫을 다시 짰어요');return render();
   case'resume':return resumeGo(D.id||null);
   case'week-next':return weekNext(D.k,D);
@@ -2703,12 +2730,12 @@ document.addEventListener('click',e=>{
   case'sch-copy':return copy(schReq(),'변경 요청을 복사했어요. Claude Code에 붙여 넣으세요');
   case'sch-round-set':{const r=Number($('#schRound').value),d=$('#schRoundDate').value;if(!r||!/^\d{4}-\d{2}-\d{2}$/.test(d))return toast('회차와 날짜를 고르세요');const pre=planPre();S.settings.roundDates[r]=d;recalcPlan();save();planChanged('sched',pre);toast(`제${r}회를 ${d}로 고쳤어요`);return render();}
   case'sch-round-reset':{const r=Number($('#schRound').value);if(!r)return;const pre=planPre();delete S.settings.roundDates[r];recalcPlan();save();planChanged('sched',pre);toast(`제${r}회를 예상일로 되돌렸어요`);return render();}
-  case'backup-copy':return PE_IO.copy(JSON.stringify({state:S,sets:SETS})).then(()=>{backupDone();toast('백업을 복사했어요. 메모 앱에 붙여 두세요');},()=>toast('복사하지 못했어요'));
-  case'backup-dl':{PE_IO.saveFile('gisulsa-backup-'+todayStr()+'.json',JSON.stringify({state:S,sets:SETS})).then(backupDone,()=>toast('파일로 저장하지 못했어요'));return;}
+  case'backup-copy':{const[j,undo]=backupJSON();return PE_IO.copy(j).then(()=>{backupDone();toast('백업을 복사했어요. 메모 앱에 붙여 두세요');},()=>{undo();toast('복사하지 못했어요');});}
+  case'backup-dl':{const[j,undo]=backupJSON();PE_IO.saveFile('gisulsa-backup-'+todayStr()+'.json',j).then(backupDone,()=>{undo();toast('파일로 저장하지 못했어요');});return;}
   case'restore':{let j,st;try{j=JSON.parse($('#restoreText').value);st=j.state||j;if(!st.settings||!st.cards)throw 0;}catch(err){return toast('백업 형식이 아니에요');}
     /* 이 휴대폰의 "바뀐 점" 표시는 그대로 둔다(예전 백업을 복원해도 다음에 다시 뜨지 않게) */
-    return PE_IO.ask('지금 기록을 덮어씁니다. 계속할까요?',()=>{try{const sv=(S.tk||{})['seen:v3'];S=Object.assign(fresh(),st);S.settings=Object.assign(fresh().settings,st.settings||{});if(!S.settings.roundDates)S.settings.roundDates={};S.v=2;S.today=null;S.tk=S.tk||{};S.tk['seen:v3']=sv||S.tk['seen:v3']||todayStr();if(j.sets)SETS=Object.assign({sets:{},mocks:{},kichul:null,index:null,plan:null},j.sets);recalcPlan();flush();invalidate();applyLook();toast('복원했어요');nav('today');}catch(err){toast('백업 형식이 아니에요');}});}
-  case'reset':return PE_IO.ask('모든 학습 기록과 내 카드를 지웁니다. 초기화할까요?',()=>PE_IO.ask('마지막 확인: 백업을 복사해 두었나요?',()=>{S=fresh();S.tk['seen:v3']=todayStr();SETS={sets:{},mocks:{},kichul:null,index:null,plan:null};recalcPlan();flush();invalidate();applyLook();nav('today');toast('초기화했어요');sync(true);}));
+    return PE_IO.ask('지금 기록을 덮어씁니다. 계속할까요?',()=>{try{const sv=(S.tk||{})['seen:v3'];S=Object.assign(fresh(),st);S.settings=Object.assign(fresh().settings,st.settings||{});if(!S.settings.roundDates)S.settings.roundDates={};S.v=2;S.today=null;S.tk=S.tk||{};S.tk['seen:v3']=sv||S.tk['seen:v3']||todayStr();if(j.sets)SETS=Object.assign({sets:{},mocks:{},kichul:null,index:null,plan:null},j.sets);recalcPlan();flush();invalidate();applyLook();flowReset();toast('복원했어요');nav('today');}catch(err){toast('백업 형식이 아니에요');}});}
+  case'reset':return PE_IO.ask('모든 학습 기록과 내 카드를 지웁니다. 초기화할까요?',()=>PE_IO.ask('마지막 확인: 백업을 복사해 두었나요?',()=>{S=fresh();S.tk['seen:v3']=todayStr();SETS={sets:{},mocks:{},kichul:null,index:null,plan:null};recalcPlan();flush();invalidate();applyLook();flowReset();nav('today');toast('초기화했어요');sync(true);}));
   }
 });
 document.addEventListener('change',e=>{if(e.target.id==='rangeSel'){S.range=e.target.value;save();render();}
@@ -2736,7 +2763,7 @@ if(!location.hash)history.replaceState(null,'','#today');
 calOpen();route();sync(true);v3Once();
 const fresh2=f=>(...a)=>{PLN++;return f(...a);};
 window.__pe={S:()=>S,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession,
-  enough,setReviewItems,startDueAll,startWrong,budgetOf,dayKind,TM:()=>TM,go:h=>nav(h),goUp,goTab,R:()=>R,navBadgeN,tabWords,
+  enough,setReviewItems,startDueAll,startWrong,budgetOf,dayKind,TM:()=>TM,go:h=>{nav(h);v3Again();},goUp,goTab,R:()=>R,navBadgeN,tabWords,
   /* 오늘 몫·이번 주(검사용: 부를 때마다 새로 센다) */
   taskList:fresh2(taskList),dayPlan:fresh2(dayPlan),planToday:fresh2(planToday),weekBoard:fresh2(weekBoard),weekSnap:fresh2(weekSnap),reqParts:fresh2(reqParts),cardsOut:fresh2(cardsOut),hwParts:fresh2(hwParts),
   wkStart,estMock,figDup,hwMin,setStatus,planOrder,planActive,nextAfter,curBlock,phaseStart,taskGo,startRot,recalcPlan,setIds,dueSetReviews,weekIndex,weekObj,phaseObj,MIN_PER,HW_STEPS,PLAN_BLK,UI:()=>UI,

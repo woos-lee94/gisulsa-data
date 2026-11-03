@@ -161,11 +161,17 @@ function runWeek(W, sets, st) {
   pe = w.__pe;
   ok(gradePatched, '예시 계산용 MOCK_GRADE_SINCE를 2026-10-31로 맞춤');
   ok(cntPatched, '검사용 호출 수 세기(hwItems·dueCards·dueSetReviews)를 붙임');
-  // 예전(2.x) 기록으로 3.0.0을 처음 열면 "바뀐 점" 창 한 번(S.tk['seen:v3']를 적어 다시 뜨지 않음)
-  { const mw = d.querySelector('#modal-wrap');
-    ok(/오늘 몫 · 이번 주 · 복습 · 연습으로 정리했어요\. 예전 기능은 모두 그대로 있어요\./.test(mw.textContent) && /바뀐 점/.test(mw.textContent) && !pe.S_NEW() && pe.S().tk['seen:v3'] === '2026-10-31',
-      '예전 기록으로 처음 열면 바뀐 점 창("오늘 몫 · 이번 주 · 복습 · 연습으로 정리했어요. 예전 기능은 모두 그대로 있어요.")');
-    click('#modal-wrap [data-act="sheet-close"]'); await sleep(10); ok(!mw.innerHTML, '바뀐 점 창 닫기'); }
+  // 예전(2.x) 기록으로 3.0.0을 처음 열면 "바뀐 점" 창 한 번. 본 것(S.tk['seen:v3'])은 사용자가 닫을 때 적어 다시 뜨지 않음(점검 3-2):
+  // 알림을 눌러 연 앱(App.js onLoadEnd → PE_IO._go)이 다른 화면으로 가도 창은 그 화면 위에 그대로, 본 것도 아직 아님
+  { const mw = d.querySelector('#modal-wrap'), v3 = () => /바뀐 점/.test(mw.textContent) && !!mw.querySelector('[data-v3]'), hl = w.history.length;
+    ok(/오늘 몫 · 이번 주 · 복습 · 연습으로 정리했어요\. 예전 기능은 모두 그대로 있어요\./.test(mw.textContent) && v3() && !pe.S_NEW() && !pe.S().tk['seen:v3'],
+      '예전 기록으로 처음 열면 바뀐 점 창("오늘 몫 · 이번 주 · 복습 · 연습으로 정리했어요. 예전 기능은 모두 그대로 있어요."), 본 것은 닫을 때 적음');
+    w.PE_IO._go('today'); await sleep(60);
+    ok(v3() && !pe.S().tk['seen:v3'] && w.location.hash === '#today', '3-2. 평일 알림 "오늘 세트 확인"(_go today)으로 열어도 바뀐 점 창은 그대로(본 것 아님)');
+    w.PE_IO._go('review'); await sleep(60);
+    ok(v3() && !pe.S().tk['seen:v3'] && w.location.hash === '#review' && /오답 노트/.test(d.querySelector('#view').textContent) && w.history.length === hl, '3-2. 일요일 알림 "복습 비우기"(_go review): 복습 화면 위에 바뀐 점 창을 다시(방문 기록 그대로)');
+    click('#modal-wrap [data-act="sheet-close"]'); await sleep(10); ok(!mw.innerHTML && pe.S().tk['seen:v3'] === '2026-10-31', '바뀐 점 창 닫기 → 본 것으로 적음(S.tk seen:v3)');
+    w.PE_IO._go('today'); await sleep(60); ok(!mw.innerHTML && w.location.hash === '#today', '3-2. 닫은 뒤에는 알림으로 열어도 다시 뜨지 않음'); }
   ok(Object.keys(pe.SETS().sets).length === 10 && pe.SETS().mocks['2026-10-31'] && pe.SETS().mocks['2026-10-31'].p2.length === 2, '가짜 저장소: 세트 10개(10/19~10/30), 10/31 모의(1교시 + 논술 2문)');
   ok(Object.values(REFS).flat().every(id => pe.deck().some(c => c.id === id)), '복제 세트가 가리키는 카드가 모두 덱에 있음');
   ok(pe.setIds('2026-10-29').length === 10 && pe.setIds('2026-10-29')[0] === 'D20261029-1', '복제 세트의 새 용어는 날짜마다 다른 카드(D20261029-1…)');
@@ -1442,6 +1448,53 @@ function runWeek(W, sets, st) {
     click('.hw.focus .steps3 .tline [data-act="tl-start"]'); await sleep(20);
     ok(TM.running && TM.preset === 'one1' && TM.remain === 600 && TM.ctx.kind === 'dd' && !TM.ended, '44-7. "타이머 10분" → 10분 타이머를 새로');
     await show('#timer'); click('[data-act="timer-reset"]'); click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10); pe.goTab('today'); await sleep(40);
+  }
+
+  // 45. 점검 고침(화면 이동·창·집중 모드, 시계 고정): 교시 시간이 창(낱말 풀이) 아래서 끝나면 아래 화면만 다시 그려 집중 모드를 끄고 알림,
+  //     그 창을 사용자가 닫으면(바깥·왼쪽 가장자리 밀기) 시간 끝 창. 점수 칸을 쓰는 중에 끝나면 쓰던 칸 그대로 집중 모드 표시만 끔(3-4).
+  //     오늘 줄로 펼친 숙제 카드에서 답안지로 갔다가 위로 오면 그 카드를 다시 보여 줌(3-5)
+  {
+    const T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), H = () => w.location.hash, tap = async s => { click(s); await sleep(60); };
+    const TM = pe.TM(), MD = '2026-10-31', MH = '#mock/' + MD, mw = () => d.querySelector('#modal-wrap'), up = () => T_(d.querySelector('.topbar .back')), foc = () => d.body.classList.contains('focus'), toastT = () => d.querySelector('#toast').textContent;
+    const edgeSw = async () => { const a = new w.Event('touchstart', { bubbles: true }); a.touches = [{ clientX: 6, clientY: 300 }]; V$().dispatchEvent(a); const b = new w.Event('touchend', { bubbles: true }); b.changedTouches = [{ clientX: 150, clientY: 300 }]; V$().dispatchEvent(b); await sleep(60); };
+    scene('2026-10-31T09:00:00', ST); pe.goTab('practice'); await sleep(40); await show(MH); await tap('.nextbar [data-act="mock-start"][data-k="p1"]');
+    ok(TM.running && TM.ctx.pk === 'p1' && foc() && up() === '닫기', '(준비) 연습 → 모의 1교시 시작(집중 모드, 위쪽 "닫기")');
+    pe.glOpen('콘크리트'); await sleep(10); const gl = mw().innerHTML;
+    ok(gl && !/시간 끝/.test(mw().textContent), '(준비) 낱말 풀이 창을 연 채');
+    at('2026-10-31T10:41:00'); await sleep(320);
+    ok(!TM.running && TM.ended && !TM.ended.seen && !foc() && up() === '연습' && mw().innerHTML === gl && /1교시 시간이 끝났어요/.test(toastT()), `45-1. 창 아래서 1교시 시간 끝 → 아래 화면을 다시 그려 집중 모드를 끔(아래 탭, 위쪽 "${up()}"), 창은 그대로, 알림`);
+    click('#modal-wrap .modal'); await sleep(20);
+    ok(/시간 끝 · 1교시/.test(mw().textContent) && TM.ended.seen, '45-1. 그 창을 바깥을 눌러 닫으면 시간 끝 창');
+    click('#modal-wrap [data-act="sheet-close"]'); await sleep(20);
+    ok(!mw().innerHTML && H() === MH && T_(V$().querySelector('.nextbar .btn')) === '1교시 다 썼어요', '45-1. 시간 끝 창 닫기 → 그 모의 화면(다시 뜨지 않음, 아래 막대 "1교시 다 썼어요")');
+    await tap('.nextbar [data-act="mock-part"]'); await tap('.nextbar [data-act="mock-start"]');
+    ok(TM.running && TM.ctx.pk === 'p2' && foc(), '(준비) 1교시 다 썼어요 → 2교시 시작');
+    pe.glOpen('콘크리트'); await sleep(10); at('2026-10-31T11:32:00'); await sleep(320);
+    ok(!foc() && TM.ended && !TM.ended.seen && !/시간 끝/.test(mw().textContent), '45-2. 2교시도 창 아래서 끝 → 집중 모드 끔, 시간 끝 창은 아직');
+    await edgeSw();
+    ok(/시간 끝 · 2교시/.test(mw().textContent) && TM.ended.seen && H() === MH, '45-2. 왼쪽 가장자리 밀기로 그 창을 닫으면 시간 끝 창(화면은 그대로)');
+    click('#modal-wrap [data-act="timer-more"]'); await sleep(20);
+    ok(TM.running && TM.remain === 300 && foc() && up() === '닫기', '(준비) 5분 더 → 다시 집중 모드');
+    const gf = V$().querySelector('details.mgrade'); gf.open = true; const si = V$().querySelector('[data-act="mock-score"][data-k="p1"]'); si.focus(); const vh = V$().innerHTML;
+    at('2026-10-31T11:38:00'); await sleep(320);
+    ok(!TM.running && d.activeElement === si && V$().querySelector('[data-act="mock-score"][data-k="p1"]') === si && !foc() && up() === '연습' && !mw().innerHTML && /2교시 시간이 끝났어요/.test(toastT()), `45-3. 점수 칸을 쓰는 중 시간 끝 → 다시 그리지 않고(쓰던 칸 그대로) 집중 모드 표시만 끔(위쪽 "${up()}"), 알림`);
+    si.blur(); pe.render(); await sleep(10);
+    ok(/시간 끝 · 2교시/.test(mw().textContent), '45-3. 다음에 그릴 때 시간 끝 창');
+    click('#modal-wrap [data-act="mock-part"]'); await sleep(20); ok(!mw().innerHTML && !TM.ctx, '(정리) 2교시 다 썼어요');
+    await show('#timer'); click('[data-act="timer-reset"]'); click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10); pe.goTab('today'); await sleep(40);
+    // 45-4. 목 07:40 오늘 줄 "단답 1문제" → 펼친 단답 카드 → 답안지 → ‹ 세트: 그 카드를 다시 가운데로(맨 위로 가서 카드가 화면 밖에 남지 않게)
+    scene('2026-10-29T07:40:00', ST); await show('#today'); click('#view [data-task="hw.dd:2026-10-29"]'); await sleep(60);
+    const fc0 = V$().querySelector('.hw.focus'), bar0 = T_(V$().querySelector('.nextbar .btn'));
+    ok(H() === '#set/2026-10-29' && fc0 && /단답/.test(bar0), `(준비) 오늘 줄 → 세트 숙제 단답 카드 펼침(아래 막대 "${bar0}")`);
+    { const calls = [], si0 = w.HTMLElement.prototype.scrollIntoView, st0 = w.scrollTo;
+      w.HTMLElement.prototype.scrollIntoView = function (o) { calls.push(['into', this.className, o && o.block]); }; w.scrollTo = (x, y) => { calls.push(['to', y]); };
+      await tap('.hw.focus [data-act="go"][data-h^="dandap/"]');
+      ok(/^#dandap\//.test(H()) && up() === '세트', '(준비) 펼친 카드의 답안지(위쪽 "세트")');
+      calls.length = 0; await tap('.topbar [data-act="back"]');
+      const fc = V$().querySelector('.hw.focus');
+      ok(H() === '#set/2026-10-29' && fc && calls.some(c => c[0] === 'into' && /\bhw\b/.test(c[1]) && /\bfocus\b/.test(c[1]) && c[2] === 'center') && T_(V$().querySelector('.nextbar .btn')) === bar0, `45-4. ‹ 세트 → 펼친 숙제 카드를 다시 가운데로(아래 막대 그대로 "${bar0}")`);
+      w.HTMLElement.prototype.scrollIntoView = si0; w.scrollTo = st0; }
+    pe.goTab('today'); await sleep(40);
   }
 
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));

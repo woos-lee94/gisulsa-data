@@ -1412,6 +1412,82 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     await go('#backup'); d.querySelector('#restoreText').value = bk; click('[data-act="restore"]'); await sleep(80);
     ok(Object.keys(S().cards).length > 0 && H() === '#today', '(되돌림) 백업으로 복원');
 
+    // 점검 3-1: 복원·초기화는 메모리에만 있던 흐름(하다 만 세션·가리며 외우기, 그 기록에 묶인 모의 교시 타이머)을 비운다.
+    // 남기면 오늘에 지운 기록의 "이어서"가 뜨고, 그것을 끝내면 매김·오답·세트 복습이 새 기록에 들어간다
+    {
+      const TM = pe.TM(), pill = () => d.querySelector('#tpill-wrap .tpill'), rs = () => [...view().querySelectorAll('.resume, .prow .btn')].map(b => b.textContent).filter(t => /이어서/.test(t)).join(' | ');
+      const busy = async () => {
+        await tab('practice'); await tap('[data-act="start-free"]'); click('[data-act="sess-flip"]'); await sleep(10); click('[data-act="sess-grade"][data-g="2"]'); await sleep(10); await back();
+        await tab('practice'); if (view().querySelector('[data-act="resume-clear"][data-k="memo:study"]')) await tap('[data-act="resume-clear"][data-k="memo:study"]');
+        await tap('[data-act="memo-study"]'); click('.mctl [data-act="memo-next"]'); await sleep(10); await back();
+        await go('#mock/2026-10-24'); await tap('.nextbar [data-act="mock-start"][data-k="p1"]'); await back(); await tab('today'); };
+      const cleared = () => !pe.SES() && !pe.MEMO() && !pe.FLOW() && !TM.ctx && !TM.running && !TM.ended && !pill() && !/이어서 · (자유 연습|가리며 외우기)/.test(rs());
+      await busy();
+      ok(pe.SES() && pe.MEMO() && TM.ctx && TM.running && pill() && /이어서 · 자유 연습 2\/\d+/.test(rs()), `(준비) 하다 만 자유 연습·가리며 외우기와 도는 모의 1교시 타이머(오늘: ${rs()})`);
+      await go('#backup'); const hb = L(); d.querySelector('#restoreText').value = bk; click('[data-act="restore"]'); await sleep(80);
+      ok(H() === '#today' && L() === hb && cleared(), `3-1. 복원 → 하던 세션·가리며 외우기·모의 타이머를 비움(오늘에 "이어서" 없음, 알약 없음${rs() ? ': ' + rs() : ''})`);
+      await busy(); ok(pe.SES() && pe.MEMO() && TM.running, '(준비) 다시 하다 만 세션·외우기·타이머');
+      await go('#backup'); click('[data-act="reset"]'); await sleep(300);
+      ok(H() === '#today' && !Object.keys(S().cards).length && cleared(), '3-1. 초기화 → 하던 세션·가리며 외우기·모의 타이머를 비움(지운 기록의 "이어서" 없음)');
+      await go('#backup'); d.querySelector('#restoreText').value = bk; click('[data-act="restore"]'); await sleep(80);
+      await go('#timer'); click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10);
+      ok(Object.keys(S().cards).length > 0 && H() === '#timer' && TM.preset === 'essay' && !TM.running, '(되돌림) 백업으로 복원, 타이머는 논술 교시');
+    }
+
+    // 점검 3-3: 테이프 붙이기를 켠 동안은 상자 밖 왼쪽 여백(x 0~15, 상자는 16부터)에서 시작한 가장자리 밀기도 외우기를 나가지 않음
+    // (줄 첫머리를 노린 테이프가 여백에 떨어져도). 테이프 붙이기를 끄면 다시 위로
+    {
+      const m0 = S().settings.memo; S().settings.memo = Object.assign({}, m0, { mode: 'tape' });
+      await toSet(); await cardsTab(); await tap('[data-act="memo-set"]'); await tap('[data-act="memo-tape-edit"]');
+      ok(H() === '#memo' && view().querySelector('#memoBox.editing'), '(준비) 세트 → 가리며 외우기 → 테이프 붙이기');
+      await edge(6, 150);
+      ok(H() === '#memo' && view().querySelector('#memoBox.editing') && focus(), '3-3. 테이프 붙이기 중 왼쪽 여백(x=6, 상자 밖)에서 민 것은 외우기를 나가지 않음');
+      await tap('[data-act="memo-tape-edit"]'); await edge(6, 150);
+      ok(H() === '#set/' + D0 && !focus(), '3-3. 테이프 붙이기를 끄면 가장자리 밀기는 다시 위로(세트)');
+      if (H() !== '#memo') await tap('[data-act="memo-set"]'); for (let k = 0; k < 30 && H() === '#memo' && pe.MEMO() && pe.MEMO().i + 1 < pe.MEMO().items.length; k++) { click('[data-act="memo-next"]'); await sleep(5); }
+      click('[data-act="memo-finish"]'); await sleep(20); await tap('[data-act="memo-close"]'); S().settings.memo = m0;
+      ok(H() === '#set/' + D0 && !pe.MEMO(), '(정리) 그 외우기 완료 → 세트');
+    }
+
+    // 점검 3-5: 위로(뒤로·닫기·가장자리 밀기) 돌아온 화면은 떠날 때의 스크롤 자리로(목록 자리를 잃지 않음), 앞으로 들어간 화면과 탭은 맨 위로
+    {
+      let Y = 0; const st0 = w.scrollTo, sy0 = Object.getOwnPropertyDescriptor(w, 'scrollY');
+      w.scrollTo = (x, y) => { Y = typeof x === 'object' ? x.top : y; }; Object.defineProperty(w, 'scrollY', { configurable: true, get: () => Y });
+      await tab('practice'); await tap('[data-act="go"][data-h="kichul"]'); Y = 1199; await tap('[data-h="kichul/r/120"]');
+      ok(H() === '#kichul/r/120' && Y === 0, '(준비) 기출 문제은행 목록(1199)에서 제120회 → 그 회차는 맨 위');
+      Y = 420; await back();
+      ok(H() === '#kichul' && Y === 1199, `3-5. ‹ 기출 → 목록은 떠날 때 자리(1199, 지금 ${Y})`);
+      await tab('practice'); await tap('[data-act="go"][data-h="kichul"]');
+      ok(H() === '#kichul' && Y === 0, '3-5. 앞으로 다시 들어간 목록은 맨 위');
+      await tab('review'); Y = 974; await tap('#view [data-act="go"][data-h="archive"]');
+      ok(H() === '#archive' && Y === 0, '(준비) 복습 탭 아래(974)에서 세트 보관함');
+      await edge(6, 150);
+      ok(H() === '#review' && Y === 974, `3-5. 세트 보관함에서 가장자리 밀기 → 복습 탭은 떠날 때 자리(974, 지금 ${Y})`);
+      await tap('#nav button[data-tab="review"]'); ok(Y === 0, '3-5. 지금 탭을 다시 누르면 맨 위');
+      Y = 600; await tap('#nav button[data-tab="today"]'); Y = 0; await tap('#nav button[data-tab="review"]');
+      ok(H() === '#review' && Y === 0, '3-5. 탭을 눌러 들어간 탭 첫 화면은 맨 위(위로가 아님)');
+      w.scrollTo = st0; if (sy0) Object.defineProperty(w, 'scrollY', sy0); else delete w.scrollY;
+    }
+
+    // 점검 3-6: 기출 회차·단원 화면이 위 화면이면 위쪽 이름은 "‹ 제140회"·"‹ 단원 이름", 끝 화면 버튼도 "기초로"(그 목록 이름 "기출"이 아님)
+    {
+      await go('#kichul/r/140'); await tap('[data-act="timer-go"][data-p="p1"]');
+      ok(H() === '#timer' && upTxt() === '제140회', `3-6. 제140회 → 1교시 타이머: 위쪽 "${upTxt()}"`);
+      await back(); ok(H() === '#kichul/r/140', '3-6. 뒤로 → 제140회');
+      await go('#timer'); click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10);
+      const c3 = pe.deck().find(c => Number(c.u) === 3); S().cards[c3.id] = Object.assign({ box: 1, ok: 0, ng: 0, star: false }, S().cards[c3.id] || {}, { seen: 1, due: '2000-01-01', last: '2000-01-01' });
+      await go('#kichul/u/3'); await tap('[data-act="study-unit"]'); pe.SES().i = pe.SES().items.length; pe.render(); await sleep(10);
+      const cb = view().querySelector('.endb .btn.sec');
+      ok(cb && cb.textContent.trim() === '기초로', `3-6. 단원 3(기초) → 이 단원 카드 외우기 끝 화면의 버튼 "${cb && cb.textContent.trim()}"`);
+      await tap('[data-act="sess-close"]'); ok(H() === '#kichul/u/3' && !pe.SES(), '3-6. 기초로 → 그 단원 화면');
+      await go('#kichul/u/6'); pe.go('dandap/' + c3.id); await sleep(60);
+      ok(/^#dandap\//.test(H()) && upTxt() === '콘크리트Ⅱ', `3-6. 단원 6 → 단답 답안지: 위쪽 "${upTxt()}"(6자가 넘는 "콘크리트(균열·내구성·특수)"는 줄인 이름)`);
+      await back(); ok(H() === '#kichul/u/6', '3-6. 뒤로 → 그 단원 화면');
+      await go('#kichul/u/2'); pe.go('dandap/' + c3.id); await sleep(60);
+      ok(upTxt() === '연약지반', `3-6. 단원 2 → 단답 답안지: 위쪽 "${upTxt()}"(6자 안이면 단원 이름 그대로)`); await back();
+      await go('#kichul/u'); await tap('[data-h="kichul/u/3"]'); ok(upTxt() === '단원별', '단원 화면의 위는 그대로 "단원별"');
+    }
+
     const K = JSON.parse(keep); S().settings.memo = K.memoCfg || undefined; delete K.memoCfg; if (!S().settings.memo) delete S().settings.memo;
     Object.keys(K).forEach(k => { S()[k] = K[k]; }); pe.render(); await go('#today');
   }
@@ -1469,6 +1545,20 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     delete S().tk.backup; await go('#backup'); ok(/아직 백업한 적이 없어요/.test(txt()), '백업: 아직 백업한 적이 없어요');
     click('[data-act="backup-copy"]'); await sleep(20);
     ok(S().tk.backup === T0 && /마지막 백업/.test(txt()) && /백업을 복사했어요/.test(toastTxt()), '백업 복사 → 마지막 백업 날짜(S.tk.backup)');
+    // 점검 3-7: 백업(복사·파일)에는 그 백업의 날짜가 들어간다 → 그 백업으로 복원한 휴대폰도 "마지막 백업"(형식 {state, sets}는 그대로). 복사·저장에 실패하면 전 날짜 그대로
+    { const bj = JSON.parse(copied), sf0 = w.PE_IO.saveFile; let saved = null;
+      ok(bj.state.tk.backup === T0 && Object.keys(bj).sort().join() === 'sets,state', '3-7. 복사한 백업 안에도 그 백업의 날짜(S.tk.backup), 형식은 {state, sets}');
+      w.PE_IO.saveFile = (n, x) => { saved = x; return Promise.resolve(); }; delete S().tk.backup; pe.render(); click('[data-act="backup-dl"]'); await sleep(20);
+      ok(saved && JSON.parse(saved).state.tk.backup === T0 && S().tk.backup === T0, '3-7. 파일로 저장한 백업에도 그 날짜(전에 백업한 적이 없어도)');
+      S().tk.backup = '2026-10-01'; w.PE_IO.copy = () => Promise.reject(new Error('x')); click('[data-act="backup-copy"]'); await sleep(20);
+      ok(S().tk.backup === '2026-10-01' && /복사하지 못했어요/.test(toastTxt()), '3-7. 복사에 실패하면 마지막 백업 날짜는 그대로');
+      delete S().tk.backup; w.PE_IO.saveFile = () => Promise.reject(new Error('x')); click('[data-act="backup-dl"]'); await sleep(20);
+      ok(!S().tk.backup && /파일로 저장하지 못했어요/.test(toastTxt()), '3-7. 파일 저장에 실패하면(전에 백업 없음) 날짜를 적지 않음');
+      w.PE_IO.saveFile = sf0;
+      d.querySelector('#restoreText').value = saved; click('[data-act="restore"]'); await sleep(80);
+      await go('#more'); const br = [...view().querySelectorAll('.row')].find(r => /백업·복원/.test(r.textContent));
+      ok(S().tk.backup === T0 && br && /마지막 백업/.test(br.textContent) && !/아직 백업한 적이 없어요/.test(br.textContent), `3-7. 그 백업으로 복원 → 더보기 "${br && br.textContent.trim()}"`);
+      await go('#backup'); }
     w.PE_IO.copy = cp0;
     // 모의고사: 채점 받았어요(되돌리기)와 점수 칸
     await go('#mock/2026-10-24');
