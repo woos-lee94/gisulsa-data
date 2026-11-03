@@ -1675,6 +1675,33 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     await tap('.topbar [data-act="back"]'); await go('#today');
   }
 
+  // 점검 고침 2(진짜 날짜): 복원은 이 휴대폰이 받은 세트와 합치고(같은 날짜는 _rev가 큰 것, 백업에만 있는 세트도 더함) 곧바로 다시 받아 온다.
+  //   받아 오기 상태는 이 휴대폰 것(백업의 실패 기록을 가져오지 않음). 초기화는 그 기록의 모의 "다 쓴 뒤 열어보기"(SV mk:)도 비움
+  {
+    const SS = () => pe.SETS(), D0 = '2026-10-19', keep2 = JSON.stringify({ state: S(), sets: SS() }), sy0 = JSON.stringify(S().sync), t0 = SS().sets[D0].title;
+    const bk = JSON.parse(keep2); delete bk.sets.sets[D0];   // 이 휴대폰이 10/19 세트를 받기 전에 만든 백업
+    bk.sets.sets['2026-10-16'] = Object.assign(JSON.parse(JSON.stringify(SS().sets[D0])), { date: '2026-10-16', _rev: 1 });   // 이 휴대폰에는 없는 세트
+    bk.state.sync = { last: 1000, ok: false, err: 'Failed to fetch' };
+    const f0 = fetchLog.length; await go('#backup'); d.querySelector('#restoreText').value = JSON.stringify(bk); click('[data-act="restore"]'); const syR = JSON.stringify(S().sync); await sleep(150);
+    ok(SS().sets[D0] && SS().sets[D0].title === t0 && SS().sets['2026-10-16'] && w.location.hash === '#today', '복원: 이 휴대폰이 받은 세트(10/19)는 남고 백업에만 있는 세트(10/16)도 더함(예전 백업이 받은 세트를 지우지 않음)');
+    ok(syR === sy0, '복원: 받아 오기 상태는 이 휴대폰 것(백업의 "받아 오지 못했어요" 기록을 가져오지 않음)');
+    ok(fetchLog.slice(f0).some(u => /data\/index\.json/.test(u)), '복원 뒤 곧바로 다시 받아 옴(저장소 목록 요청)');
+    const hi = JSON.parse(keep2); hi.sets.sets[D0]._rev = 5; hi.sets.sets[D0].title = t0 + ' (고침)';
+    await go('#backup'); d.querySelector('#restoreText').value = JSON.stringify(hi); click('[data-act="restore"]'); await sleep(150);
+    ok(SS().sets[D0]._rev === 5 && SS().sets[D0].title === t0 + ' (고침)', '같은 날짜 세트는 _rev가 큰 것(백업 쪽이 새것이면 백업의 세트)');
+    const lo = JSON.parse(keep2); lo.sets.sets[D0]._rev = 1; lo.sets.sets[D0].title = '예전 제목';
+    await go('#backup'); d.querySelector('#restoreText').value = JSON.stringify(lo); click('[data-act="restore"]'); await sleep(150);
+    ok(SS().sets[D0]._rev === 5 && SS().sets[D0].title === t0 + ' (고침)', '이 휴대폰 쪽 _rev가 크면 이 휴대폰 세트 그대로');
+    // 초기화 → 그 기록의 모의 열어보기(SV)도 비움
+    await go('#mock/2026-10-24'); if (view().querySelector('[data-act="mock-reveal"]')) { click('[data-act="mock-reveal"]'); await sleep(10); }
+    ok(view().querySelector('.mrev .group.plain'), '(준비) 모의 "다 쓴 뒤 열어보기"를 엶');
+    await go('#backup'); click('[data-act="reset"]'); await sleep(300); await go('#mock/2026-10-24');
+    ok(!view().querySelector('.mrev .group.plain') && view().querySelector('.mrev [data-act="mock-reveal"]'), '초기화 → 그 모의는 다시 "열기" 버튼부터(지운 기록에서 연 키워드·목차가 남지 않음)');
+    const back = JSON.parse(keep2); await go('#backup'); d.querySelector('#restoreText').value = JSON.stringify(back); click('[data-act="restore"]'); await sleep(150);
+    delete SS().sets['2026-10-16']; const o19 = back.sets.sets[D0]; SS().sets[D0] = o19; pe.invalidate(); pe.render(); await go('#today');
+    ok(Object.keys(S().cards).length > 0 && SS().sets[D0].title === t0 && !SS().sets['2026-10-16'], '(되돌림) 백업으로 복원, 세트 자료도 처음대로');
+  }
+
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);
