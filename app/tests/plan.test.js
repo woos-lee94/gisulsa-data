@@ -1738,6 +1738,83 @@ function runWeek(W, sets, st) {
     { runW2({ decl: { [TH2]: { [SU2]: { m: 0 } } }, skip: [WE2, TH2], until: SA2 }); const V = pe.planToday(SA2); applyRows(V.rows, SA2); at(SA2 + 'T20:00:00'); await show('#today');
       const fin = V$().querySelector('.dcard.fin'); ok(fin && /이번 주 남은 필수 약 .+ 다음 주로 놓아줘요|이번 주 필수를 다 했어요/.test(T_(fin)) && !/내일\(일\)/.test(T_(fin)), `54. 일요일이 쉬는 날인 토요일 끝 카드: "${T_(fin)}"`);
       const rp = pe.weeklyReport(W2); ok(/쉬는 날·짧은 날: 11\/8\(일\) 쉼/.test(rp), '54. 주간 리포트에 "쉬는 날·짧은 날: 11/8(일) 쉼"'); }
+
+    // 61. Slice 1 고침(리뷰): 미리 보기 = 오늘 몫 계산 = 쉬는 날 카드, 갈 곳은 쉬는 날·시험 날을 건너뜀
+    { const fore = () => [...mw().querySelectorAll('.ds.fore')].map(T_), card = () => T_(V$().querySelector('.dcard.off .ds')), segOn = () => [...mw().querySelectorAll('[data-act="cap-set"].on,[data-act="day-set"].on')].map(T_);
+      const closeM = async () => { click('#modal-wrap [data-act="sheet-close"]'); await sleep(10); }, dsheet = async x => { click(`.drow[data-act="day-cap"][data-d="${x}"]`); await sleep(10); };
+      const dset = async (x, m) => { await dsheet(x); const b = m == null ? [...mw().querySelectorAll('[data-act="day-set"]')].pop() : mw().querySelector(`[data-act="day-set"][data-m="${m}"]`); b.dispatchEvent(new w.MouseEvent('click', { bubbles: true })); await sleep(30); };
+      const pre = (s, p) => s.replace(p + ' → ', ''), TU2 = DAYS[1];
+      // 61-1. 리허설 주 토요일을 쉬면: 토요일 교시는 일요일에 교시째로 들어가는 만큼(통째 430분이 아니라), 놓아주는 것은 3·4교시뿐
+      { let pw = -1; for (let i = 0; i < 40; i++) if (pe.weekObj(i).pre) { pw = i; break; } const Wq = add('2026-10-19', 7 * pw), Dq = [0, 1, 2, 3, 4, 5, 6].map(i => add(Wq, i));
+        const Xq = { sets: clone(FIX.sets), mocks: clone(FIX.mocks) }; Dq.slice(0, 5).forEach(x => Xq.sets[x] = cloneSet(x, pw, refsFor(2))); Xq.mocks[Dq[5]] = cloneMock(Dq[5], { p1: clone(MOCK0.p1), p2: P6(2), p3: P6(3), p4: P6(4) });
+        let od; const R = runW2({ skip: [Dq[5]], hook: x => { if (x === Dq[4]) od = pe.offDelta(Dq[4], Dq[5]); } }, Xq, Wq, BLANK), sun = R[Dq[6]].V, aSun = od.alt.out.find(x => x.d === Dq[6]).load;
+        const mv = sun.moved.filter(x => x.k === 'mock' && x.dest === '다음 모의 전까지').reduce((a, x) => a + x.min, 0);
+        ok(od.ds.mock === 200 && aSun === 240 && cm(sun) === 240 && mv === 200 && sun.rows.some(r => /^mock:.*:p1$/.test(r.id)) && sun.rows.some(r => /^mock:.*:p2$/.test(r.id)),
+          `61-1. 리허설 주(${Wq}) 금요일에 토요일 쉬면: 앞날 일 ${aSun}분 · 놓아줌 ${od.ds.mock}분 = 계산 일 ${cm(sun)}분 · 다음 모의 전까지 ${mv}분`);
+        runW2({ until: Dq[5] }, Xq, Wq, BLANK); pe.planToday(Dq[5]); await show('#today'); click('[data-act="cap"]'); await sleep(10); const f = fore();
+        click('#modal-wrap [data-act="cap-off"]'); await sleep(30); const c = card();
+        ok(/^오늘 쉬면 → 일 \+/.test(f[0]) && /^약 3시간 20분은 다음 주로 놓아줘요\(모의고사\) · 시험 일정은 그대로예요$/.test(f[1]) && c === pre(f[0], '오늘 쉬면') + '에 나눠 넣었어요', `61-1. 토요일 오늘 시간 창 "${f.join(' / ')}" = 쉬는 날 카드 "${c}"`); }
+      // 61-2. 짧은 날: 쉬면 미리 보기는 지금(짧은 날)과 견주고, 정한 시간이 켜짐. 짧은 날을 쉬는 날로 바꿔도 같은 분, 다시 공부할래요는 짧은 날로
+      runW2({ until: WE2 }); pe.planToday(WE2); await show('#week'); await dset(FR2, 60);
+      { const a = pe.wkAhead(WE2), b = pe.wkAhead(WE2, { days: { [FR2]: 0 } }), we = b.out[3].load - a.out[3].load + b.out[4].load - a.out[4].load; await dsheet(FR2); const f1 = fore()[0], on1 = segOn().join(); await closeM();
+        await dset(FR2, 0); await dsheet(FR2); const f2 = fore()[0]; await closeM();
+        ok(we === 56 && f1 === '이날 쉬면 → 주말 +56분' && on1 === '1시간' && JSON.stringify(pe.S().days[FR2]) === '{"m":0,"p":60}' && f2 === f1, `61-2. 금 1시간 → 이날 쉬면 "${f1}"(켜짐 ${on1}), 쉬어요로 바꾼 뒤 "${f2}" ${JSON.stringify(pe.S().days[FR2])}`); }
+      runW2({ decl: { [WE2]: { [TH2]: { m: 60 } } }, until: TH2 }); pe.planToday(TH2); await show('#today'); click('[data-act="cap"]'); await sleep(10);
+      { const od = pe.offDelta(TH2, TH2), a = pe.wkAhead(TH2), b = pe.wkAhead(TH2, { days: { [TH2]: 0 } }), same = a.out.every((x, i) => od.dl[x.d] === b.out[i].load - x.load), f = fore()[0], on = segOn();
+        click('#modal-wrap [data-act="cap-off"]'); await sleep(30); const c = card(), dd = JSON.stringify(pe.S().days[TH2]); click('[data-act="off-clear"]'); await sleep(30);
+        ok(same && !on.length && f === '오늘 쉬면 → ' + pe.placeTxt(od.dl, TH2) && /\+/.test(f) && c === pre(f, '오늘 쉬면') + '에 나눠 넣었어요' && dd === '{"m":0,"p":60}' && pe.S().days[TH2].m === 60,
+          `61-2. 짧은 날(목 1시간) 오늘 시간 창: 켜진 칸 ${on.length}개, "${f}" = 카드 "${c}", 다시 공부할래요 → ${JSON.stringify(pe.S().days[TH2])}`); }
+      // 61-3. 오늘 시간 30분으로 줄인 뒤 쉬면: 창의 미리 보기와 쉬는 날 카드가 같은 분, 다시 공부할래요는 30분으로
+      runW2({ until: WE2 }); pe.planToday(WE2); await show('#today'); click('[data-act="cap"]'); await sleep(10); click('#modal-wrap [data-act="cap-set"][data-m="30"]'); await sleep(30);
+      { click('[data-act="cap"]'); await sleep(10); const f = fore()[0]; click('#modal-wrap [data-act="cap-off"]'); await sleep(30); const c = card(), dd = JSON.stringify(pe.S().days[WE2]); click('[data-act="off-clear"]'); await sleep(30);
+        ok(c === pre(f, '오늘 쉬면') + '에 나눠 넣었어요' && dd === '{"m":0,"u":30}' && pe.S().today.user === 30 && !pe.S().days[WE2], `61-3. 30분 → 오늘 쉬면 "${f}" = 카드 "${c}", 다시 공부할래요 → 오늘 시간 ${pe.S().today.user}분`); }
+      // 61-4. 앞날을 쉬는 날로 정해도 오늘 단계·줄인 목표는 그대로(다음 고정 때, 미리 보기가 말한 날부터), 평소대로로 되돌리면 흔적 없음
+      runW2({ skip: [WE2, TH2], until: FR2 }); { const V0 = pe.planToday(FR2), r0 = V0.rows.map(r => r.id).join(); await show('#week'); await dsheet(SA2); const f = fore(); await closeM();
+        await dset(SA2, 0); const a1 = [pe.S().today.lv, JSON.stringify(pe.S().wk[W2] || {})], r1 = pe.S().today.rows.map(r => r.id).join(); await dset(SA2, null); const a2 = [pe.S().today.lv, JSON.stringify(pe.S().wk[W2] || {})];
+        ok(f.includes('일요일부터 손글씨 몫을 줄여요(줄인 목표)') && a1[0] === 0 && a1[1] === '{"lvx":0}' && r1 === r0 && a2[0] === 0 && a2[1] === '{"lvx":0}' && !Object.keys(pe.S().days).length,
+          `61-4. 금 07:00 토요일 쉬어요 → 오늘 단계 ${a1[0]} · ${a1[1]}, 평소대로 → ${a2[0]} · ${a2[1]}`); }
+      { const R0 = runW2({ skip: [WE2, TH2] }), R1 = runW2({ skip: [WE2, TH2], hook: x => { if (x === FR2) { pe.planToday(FR2); pe.S().days = { [SA2]: { m: 0 } }; pe.planToday(FR2, { replan: 'day' }); delete pe.S().days[SA2]; pe.planToday(FR2, { replan: 'day' }); } } });
+        const R2 = runW2({ skip: [WE2, TH2, SA2], hook: x => { if (x === FR2) { pe.planToday(FR2); pe.S().days = { [SA2]: { m: 0 } }; pe.planToday(FR2, { replan: 'day' }); } } });
+        ok(R1.snap.lv === R0.snap.lv && R1.snap.p === R0.snap.p && R1[SA2].plan === R0[SA2].plan && R1[SU2].plan === R0[SU2].plan && R2[FR2].lv === 0 && R2[SU2].lv === 2 && R2.snap.lv === 2,
+          `61-4. 쉬어요 → 평소대로 한 주 = 안 누른 주(${R1.snap.p}% 단계 ${R1.snap.lv}), 토요일을 쉬면 금 단계 ${R2[FR2].lv} · 일 단계 ${R2[SU2].lv}(미리 보기의 일요일부터)`); }
+      // 61-5. 일요일 쉬는 날로 토요일에 리포트 줄을 고정한 뒤 일요일을 평소대로: 끝내지 않은 리포트 줄이 끝낸 줄로 남지 않음
+      runW2({ decl: { [TH2]: { [SU2]: { m: 0 } } }, until: SA2 }); pe.planToday(SA2); at(SA2 + 'T10:00:00'); await show('#week');
+      { const r0 = pe.S().today.rows.some(r => r.id === 'report:' + W2); await dset(SU2, null); const V = pe.planToday(SA2);
+        ok(r0 && !pe.S().today.rows.some(r => /^report:/.test(r.id)) && V.doneMin === 0 && pe.weekBoard(SA2).dm === 0 && !pe.S().tk['report:' + W2], `61-5. 토요일 리포트 줄 ${r0} → 일요일 평소대로 뒤 오늘 몫 ${pe.S().today.rows.length}줄, 한 분 ${V.doneMin}`); }
+      // 61-6. 옮긴 줄의 갈 곳: 쉬는 날·시험 날은 건너뜀
+      runW2({ decl: { [WE2]: { [FR2]: { m: 0 }, [SA2]: { m: 0 } } }, until: FR2 }); { const V = pe.planToday(FR2), ds = k => (V.moved.find(x => x.k === k) || {}).dest;
+        ok(!V.moved.some(x => /토요일/.test(x.dest)) && ds('set.read') === '일요일 밀린 핵심' && ds('hw.write') === '일요일 손글씨 몫', `61-6. 금·토 쉬는 날, 금 옮긴 것: ${V.moved.map(x => x.k + '→' + x.dest).join(', ')}`); }
+      runW2({ decl: { [FR2]: { [SA2]: { m: 0 }, [SU2]: { m: 0 } } }, until: SA2 }); { const V = pe.planToday(SA2); await show('#today');
+        ok(!V.moved.some(x => /내일\(일\)/.test(x.dest)) && V.moved.filter(x => x.mock).every(x => x.dest === '다음 모의 전까지') && (V.moved.find(x => x.k === 'report') || {}).dest === '다음 주로 놓아줘요' && card() === '다른 날로 옮길 수 있는 필수는 없어요',
+          `61-6. 토·일 쉬는 날, 토 옮긴 것: ${V.moved.map(x => x.k + '→' + x.dest).join(', ')} · 카드 "${card()}"`); }
+      { const XE = clone(FIX); ['2027-01-25', '2027-01-26', '2027-01-27', '2027-01-28', '2027-01-29'].forEach(x => XE.sets[x] = cloneSet(x, 14, refsFor(2)));
+        scene('2027-01-29T07:00:00', BLANK, XE); await show('#today'); click('[data-act="cap"]'); await sleep(10); const n0 = [...mw().querySelectorAll('.note')].map(T_);
+        click('#modal-wrap [data-act="cap-off"]'); await sleep(30); const V = pe.planToday('2027-01-29'); click('[data-act="cap"]'); await sleep(10); const n1 = [...mw().querySelectorAll('.note')].map(T_); await closeM();
+        ok(n0.includes('날짜가 정해진 일(준비물)은 쉬는 날에도 남아요') && !V.moved.some(x => /토요일/.test(x.dest)) && (V.moved.find(x => x.k === 'set.read') || {}).dest === '일요일 밀린 핵심' && !n1.some(x => /최소 몫/.test(x)) && n1.includes('날짜가 정해진 일(준비물)은 쉬는 날에도 남아요'),
+          `61-6. 시험 전날(1/29, 토요일 시험)을 쉬면: ${V.moved.map(x => x.k + '→' + x.dest).join(', ')} · 창 "${n0.join(' / ')}" → 쉬는 날 창 "${n1.join(' / ')}"`);
+        scene('2027-01-31T09:00:00', BLANK, XE); await show('#today'); click('[data-act="cap"]'); await sleep(10); click('#modal-wrap [data-act="cap-off"]'); await sleep(30);
+        ok(toastT() === '오늘은 쉬어요. 남은 필수는 다음 주로 놓아줘요', `61-6. 일요일 오늘은 쉬어요 알림 "${toastT()}"`); }
+      // 61-7. 일요일이 쉬는 날인 주: 리포트 줄은 "(토)", 토요일 끝 카드와 이번 주 줄이 같은 말
+      runW2({ decl: { [TH2]: { [SU2]: { m: 0 } } }, until: SA2 }); pe.planToday(SA2); await show('#today');
+      { const q = [...V$().querySelectorAll('.wksec .qline')].map(T_); await show('#week'); const qw = [...V$().querySelectorAll('.qline')].map(T_).find(x => /주간 리포트/.test(x)) || '';
+        ok(q.includes('주간 리포트(토) 0/1') && /오늘 밤까지/.test(qw) && !q.some(x => /리포트\(일\)/.test(x)), `61-7. 토요일 이번 주 줄 "${q.join(' / ')}" · 이번 주 탭 "${qw}"`); }
+      { runW2({ decl: { [TH2]: { [SU2]: { m: 0 } } }, skip: [WE2, TH2], until: SA2 }); const V = pe.planToday(SA2); applyRows(V.rows, SA2); at(SA2 + 'T20:00:00'); await show('#today');
+        const wl = T_(V$().querySelector('.wksec .wkline')), fin = T_(V$().querySelector('.dcard.fin'));
+        ok(/남은 필수 약 .+ 다음 주로 놓아줘요|이번 주 필수를 다 했어요/.test(wl) && !V$().querySelector('.wksec .lvc') && /다음 주로 놓아줘요|이번 주 필수를 다 했어요/.test(fin), `61-7. 일요일이 쉬는 날인 토요일 다 함: 이번 주 "${wl}" · 끝 카드 "${fin}"`); }
+      // 61-8. 리포트만 남은 주의 "놓아준 필수"는 없음(리포트는 월요일 "지난주 리포트"로)
+      { runW2({ until: SU2 }); const V = pe.planToday(SU2); applyRows(V.rows.filter(r => !/^report:/.test(r.id)), SU2); const MO3 = add(W2, 7); at(MO3 + 'T07:30:00'); const sn = pe.weekSnap(MO3);
+        ok(sn.left === 0 && !/놓아준 필수/.test(pe.weeklyReport(W2)), `61-8. 리포트만 남은 주: left ${sn.left}, 주간 리포트에 "놓아준 필수" 없음`); }
+      // 61-9. 옮길 곳 없이 놓아줄 것만: 서로 어긋나는 말 없이, "시험 일정은 그대로예요"는 한 덩이
+      { const W3 = '2027-02-22', D3 = [0, 1, 2, 3, 4, 5, 6].map(i => add(W3, i)), X3 = { sets: clone(FIX.sets), mocks: clone(FIX.mocks) };
+        D3.slice(0, 5).forEach(x => X3.sets[x] = cloneSet(x, 18, refsFor(3))); X3.mocks[D3[5]] = cloneMock(D3[5], { p1: clone(MOCK0.p1), p2: P6(2), p3: P6(3), p4: P6(4) });
+        runW2({ until: D3[4] }, X3, W3, BLANK); pe.planToday(D3[4]); await show('#week'); await dsheet(D3[5]); const f = fore(), h = mw().querySelectorAll('.ds.fore')[1].innerHTML; await closeM();
+        ok(f[0] === '이날 쉬면 → 다른 날로 옮길 수 있는 필수는 없어요' && f[1] === '약 3시간 20분은 다음 주로 놓아줘요(모의고사) · 시험 일정은 그대로예요' && /<span class="nw">시험 일정은 그대로예요<\/span>$/.test(h), `61-9. 3단계 금요일 토요일 창 "${f.join(' / ')}"`); }
+      // 61-10. 쉬는 날의 이번 주 파란 버튼은 오늘 세트로 보내지 않음(지난 세트가 비었으면 그것)
+      runW2({ until: WE2 }); pe.planToday(WE2); await show('#today'); click('[data-act="cap"]'); await sleep(10); click('#modal-wrap [data-act="cap-off"]'); await sleep(30); await show('#week');
+      { const p1 = prim().map(T_).join(); runW2({ skip: [TU2], until: WE2 }); pe.planToday(WE2); await show('#today'); click('[data-act="cap"]'); await sleep(10); click('#modal-wrap [data-act="cap-off"]'); await sleep(30); await show('#week'); const p2 = prim().map(T_).join();
+        ok(prim().length === 1 && !/11\/4\(수\)/.test(p1) && p2 === '다음: 11/3(화) 용어', `61-10. 수요일 쉬는 날 이번 주 파란 버튼 "${p1}" · 화요일을 건너뛴 주 "${p2}"`); }
+      // 61-11. 새 누르는 칸은 44px(오늘 시간·날마다 창의 칸, 밀린 몫 줄)
+      { const css = fs.readFileSync(path.join(SITE, 'styles.css'), 'utf8'); ok(/\.capseg button\{[^}]*min-height:44px/.test(css) && /\.wkline\.catch\{[^}]*min-height:44px/.test(css), '61-11. .capseg button · .wkline.catch 높이 44px'); } }
     pe.goTab('today'); await sleep(40); }
 
   // 60. 쉬는 날의 가장자리와 읽기만
