@@ -160,6 +160,11 @@
 | Exam papers | **1교시 단답**, **2교시 논술** … (only for real papers) | weekday "교시" |
 | Timer buttons | "타이머 {n}분" | 타이머, 교시 타이머 (as a button) |
 | Tab names in text (slice 5) | **연습 탭**, **연습 → 기출 문제은행**, **이번 주 탭**, **모의고사 화면** | 암기 탭, 테스트 탭, 앱 테스트 탭, 플랜 탭, "테스트 → 기출 회차/단원별". App-only strings are edited (`HW_HOW.rev` 404, 설정 1144, `memo-study` label 1381, `PE_PROMPTS` p9 name, `PE_CLAUDE_ROUTINE` 153/154/157, `PE_ROUTINES` texts); `vReview` 625 goes with its section (slice 4). `PE_WEEKS` goals stay equal to `pipeline/curriculum.json` and are rewritten at display time by `tabWords()` inside `weekObj` (§6.10). |
+| Day with study time 0 (v3.1) | **쉬는 날** (`S.days[d].m === 0`; set from "오늘은 쉬어요", 이번 주 날마다, 설정 → 쉬는 날·짧은 날) | – |
+| Day shorter than usual (v3.1) | **짧은 날** ("짧은 날 1시간 · …") | – |
+| Undone 필수 of earlier days this week (v3.1) | **밀린 몫** ("밀린 몫은 11/7(토)까지 다 따라잡아요"; this week only, never across Monday) | 못 한 것, 진도, 단계 (for the overflow level) |
+| Opt-in weekday split of the 손글씨 몫 (v3.1) | **평일 저녁에 나눠 하기** / "그만 나누기" (`S.wk[W].cu`) | – |
+| Asking whether to postpone the exam (v3.1) | **시험 일정 살펴보기** (rows), section "시험을 미룰지 살펴봐요"; round tags **지금** / **추천** | – |
 
 ---
 
@@ -1674,3 +1679,19 @@ Also found and fixed while revising:
 - `data_plan.js` cannot call `app.js` functions because `app.js` is one IIFE, so the mock estimate moved from `PE_EST.mock` to `estMock(w)` in `app.js`.
 - The "다시 받아 오기" (sync failed) and Saturday "지금 받아 오기" buttons are now explicitly ghost/secondary, so 오늘 keeps exactly one primary. Walkthrough H now follows the real `set.read` path (set page → 카드 넘겨 보기).
 - New probe `ux/final/route_probe.js` (21 checks, "모두 통과"). Slice sizes re-estimated: app.js ≈1,205 lines, tests ≈765 lines.
+
+## v3.1 amendments (3.1.0: 쉬는 날 · 앞날 셈 · 시험 일정 살펴보기)
+
+These rules of this spec were changed by v3.1.0. The full description is in `app/CLAUDE.md` ("쉬는 날·앞날 셈·시험 일정 살펴보기(v3.1.0)"); the tests are `tests/plan.test.js` cases 49–64.
+
+1. **§4.2 "오늘 시간 changes only today's fit"**: still true for 30/60/90. "오늘은 쉬어요" is a different input, a capacity declaration (`S.days`). It lowers C and can raise the level, because the time really is gone and the user asked to see that.
+2. **§3.7 step 6 "always rows are forced"**: on a declared 쉬는 날, only P0 pins are forced. No paper floor, no late≤5 exception.
+3. **§3.7 step 7 half rule**: when Sunday is declared 쉬는 날, Saturday takes all quota units that fit and the weekly report moves to Saturday.
+4. **§3.4/§3.9 "quotas only on weekends/holidays; one late set per weekday"**: with the explicit per-week "평일 저녁에 나눠 하기", weekday evenings get quota rows and up to 2 late sets. It is opt-in.
+5. **§9.1.6 "no raw backlog on 오늘"**: 오늘 shows only a date-only 밀린 몫 line and placement minutes for a skip the user chose. Forecast minutes appear only in sheets the user opens and on 이번 주.
+6. **시험 일정 save**: a target-only change that would alter this week's map entry, its exam dates or an applied old round waits for a Monday (`S.settings.nextTarget`). Start changes and round fixes stay immediate.
+7. **§3.5 rule 9, homework phase of past sets**: after a plan switch, the phase is the one the week was lived under (`S.wk[W].ph`).
+8. **§9.4 repo-sync red**: red only in `diff`. The `wait`/`next`/`sent` states are neutral.
+9. **§2.4 Glossary**: the v3.1 rows above (쉬는 날, 짧은 날, 밀린 몫, 평일 저녁에 나눠 하기, 시험 일정 살펴보기, tags 지금/추천).
+
+Kept unchanged: no debt across Monday (`FREED_NOTE`), no red for backlog, the score never falls by itself, `sp.first`/`rev`/`rvd` are never written by these features, `computePlan`/`buildMap`/D-day/week map, the backup format and storage keys, `PLAN_V` 2, render never writes state, one primary per screen, the exam-week rules.

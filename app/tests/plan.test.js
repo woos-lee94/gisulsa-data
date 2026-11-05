@@ -1725,6 +1725,8 @@ function runWeek(W, sets, st) {
       const fc = x => { click(`.drow[data-act="day-cap"][data-d="${x}"]`); const t = [...mw().querySelectorAll('.ds.fore')].map(T_)[0]; return t; };
       const f1 = fc(FR2); click('#modal-wrap [data-act="sheet-close"]'); await sleep(10); const f2 = fc(SA2); click('#modal-wrap [data-act="sheet-close"]'); await sleep(10); const f3 = fc(SU2);
       ok(f1 === '이날 쉬면 → 주말 +1시간 24분' && f2 === '이날 쉬면 → 일 +3시간 16분' && f3 === '이날 쉬면 → 토 +10분' && mw().querySelectorAll('[data-act="day-set"]').length === 4 && !mw().querySelectorAll('.btn:not(.sec):not(.ghost)').length, `52-1. 금 "${f1}" · 토 "${f2}" · 일 "${f3}"`);
+      { const nt = [...mw().querySelectorAll('.msheet p.note')], nb = nt[nt.length - 1];
+        ok(nb && T_(nb) === '출장·야근처럼 미리 아는 날은 설정에서 한꺼번에 정해요.' && nb.nextElementSibling && nb.nextElementSibling.classList.contains('btns'), `52-1. 날마다 창 맨 아래(닫기 위) 알림 "${T_(nb)}"`); }
       click('#modal-wrap [data-act="sheet-close"]'); await sleep(10); const r0 = pe.S().today.rows.map(r => r.id).join();
       click(`.drow[data-act="day-cap"][data-d="${FR2}"]`); click(`#modal-wrap [data-act="day-set"][data-m="0"]`); await sleep(30);
       const fr = V$().querySelector(`.drow[data-d="${FR2}"]`), g5 = V$().querySelectorAll('.wkstrip .wg')[4];
@@ -1898,6 +1900,16 @@ function runWeek(W, sets, st) {
       runW2({ until: WE2 }); pe.planToday(WE2); await show('#today'); click('[data-act="cap"]'); await sleep(10); click('#modal-wrap [data-act="cap-off"]'); await sleep(30); await show('#week');
       { const p1 = prim().map(T_).join(); runW2({ skip: [TU2], until: WE2 }); pe.planToday(WE2); await show('#today'); click('[data-act="cap"]'); await sleep(10); click('#modal-wrap [data-act="cap-off"]'); await sleep(30); await show('#week'); const p2 = prim().map(T_).join();
         ok(prim().length === 1 && !/11\/4\(수\)/.test(p1) && p2 === '다음: 11/3(화) 용어', `61-10. 수요일 쉬는 날 이번 주 파란 버튼 "${p1}" · 화요일을 건너뛴 주 "${p2}"`); }
+      // 61-12. 쉬는 날의 이번 주 줄(오늘 화면 이번 주 칸 · #week 일요일까지 끝낼 것)도 "다음 하나"로 오늘 세트를 이름 대지 않음(지난 세트가 비었으면 그것, 누르면 그 세트)
+      { const off = async skip => { runW2({ skip, until: WE2 }); pe.planToday(WE2); await show('#today'); click('[data-act="cap"]'); await sleep(10); click('#modal-wrap [data-act="cap-off"]'); await sleep(30); };
+        const ql = sel => [...V$().querySelectorAll(sel)].map(T_), core = () => T_(V$().querySelector('#ql-core'));
+        await off([]); await show('#today'); const t1 = ql('.wksec .qline'); await show('#week'); const w1 = ql('.qline'), c1 = core();
+        ok(t1.length && !t1.some(x => /11\/4\(수\)/.test(x)) && t1.some(x => /^세트 핵심 2\/5$/.test(x)) && !w1.some(x => /다음 하나: 11\/4\(수\)/.test(x)) && !/다음 하나|06:21/.test(c1),
+          `61-12. 수요일 쉬는 날(월·화 다 함): 오늘 이번 주 칸 "${t1.filter(x => /핵심/.test(x)).join()}", #week 핵심 줄 "${c1}"`);
+        await off([TU2]); await show('#week'); const w2 = ql('.qline'), c2 = core(), h2 = w2.filter(x => /^단답 손글씨/.test(x)).join();
+        click('#ql-core'); await sleep(40); const hs = w.location.hash;
+        ok(/다음 하나: 11\/3\(화\) 용어$/.test(c2) && /다음 하나: 11\/3\(화\) 세트$/.test(h2) && !w2.some(x => /다음 하나: 11\/4\(수\)/.test(x)) && hs === '#set/' + TU2, `61-12. 화요일을 건너뛴 주: 핵심 "${c2}", 단답 "${h2}", 핵심 줄을 누르면 ${hs}`);
+        await show('#week'); }
       // 61-11. 새 누르는 칸은 44px(오늘 시간·날마다 창의 칸, 밀린 몫 줄)
       { const css = fs.readFileSync(path.join(SITE, 'styles.css'), 'utf8'); ok(/\.capseg button\{[^}]*min-height:44px/.test(css) && /\.wkline\.catch\{[^}]*min-height:44px/.test(css), '61-11. .capseg button · .wkline.catch 높이 44px'); } }
     pe.goTab('today'); await sleep(40); }

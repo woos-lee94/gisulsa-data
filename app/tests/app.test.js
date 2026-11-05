@@ -1568,6 +1568,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
         ok(fut.every(x => view().querySelector(`.drow[data-act="day-cap"][data-d="${x}"]`)) && view().querySelectorAll('.drow[data-act="day-cap"]').length === fut.length, `이번 주 날마다: 앞날 ${fut.length}줄만 공부 시간 창(day-cap)`);
         if (fut.length) { click(`.drow[data-act="day-cap"][data-d="${fut[0]}"]`); await sleep(10);
           ok(mw().querySelectorAll('[data-act="day-set"]').length >= 3 && /이날 쉬면 → /.test(mw().textContent) && !mw().querySelectorAll('.btn:not(.sec):not(.ghost)').length && /공부 시간/.test(mw().textContent), '날마다 앞날 창: 쉬어요 · 짧은 날 · 평소대로, "이날 쉬면 → …", 파란 버튼 없음');
+          ok([...mw().querySelectorAll('p.note')].some(p => p.textContent.trim() === '출장·야근처럼 미리 아는 날은 설정에서 한꺼번에 정해요.'), '날마다 앞날 창: "출장·야근처럼 미리 아는 날은 설정에서 한꺼번에 정해요."');
           click('#modal-wrap [data-act="sheet-close"]'); await sleep(10); } }
     } else ok(view().querySelector('.norows') && view().querySelectorAll('.btn:not(.sec):not(.ghost)').length === 1 && !view().querySelector('.score'), `${T0}: 시험 뒤라 이번 주 화면은 카드 하나(파란 버튼 하나)`);
     // 손으로 친 일(이번 주 목표): S.tk에 남고, 그것 하나뿐인 날도 연속 학습으로 센다(touchDay). 목표 줄이 없는 주(시험 뒤)는 같은 동작(data-act="tk")의 버튼으로
