@@ -106,8 +106,9 @@ button.row:active,a.row:active{background:var(--rule2)}
 .steps{margin:14px 0 4px;padding:0;list-style:none}
 .steps li{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px dashed var(--rule)}
 .steps li:first-child{border-top:0}
-.steps .k{flex:1;font-weight:600}
-.steps .v{color:var(--ink2);font-size:.92rem;font-variant-numeric:tabular-nums}
+.steps .k{flex:1 0 auto;max-width:100%;font-weight:600}
+.steps .v{margin-left:auto;text-align:right;color:var(--ink2);font-size:.92rem;font-variant-numeric:tabular-nums}
+.steps li{flex-wrap:wrap}.steps li.two .v{flex:1 1 100%;margin-left:28px;text-align:left}   /* 아주 크게에서 이름이 한 글자씩 꺾이지 않게: 값이 길면 다음 줄로(바뀌는 날의 주차 틀은 이름 아래) */
 .steps .done .k{color:var(--ink3);text-decoration:line-through;text-decoration-color:var(--ink3)}
 .dot{flex:0 0 auto;width:20px;height:20px;border-radius:50%;border:2px solid var(--rule)}
 .dot.on{border-color:var(--ok);background:var(--ok);position:relative}
@@ -587,6 +588,10 @@ details.pf>.note{margin:8px 16px 0;padding-bottom:12px}
 .qline.two .tkc{margin:9px 14px 0 8px}   /* 글 끝과 동그라미 사이 12px 이상(틈 4 + 8) */
 .qline.two .chev{display:none}   /* 화살표(›)와 동그라미(○)가 한 글자처럼 붙어 보이던 것: 줄 가운데는 그대로 시험 일정으로 가고, 오늘의 .prow.two처럼 화살표 없이 */
 .schk{margin-top:12px}.schk .row .btn.sm{flex:none}.schk .pdn{flex:none;font-size:.86rem;font-weight:700;color:var(--ok)}
+/* 시험 일정 살펴보기(v3.1): 기다리는 바꾸기·되돌리기 줄, 회차 견주기(회색 · 지금/추천은 .tag), 미리 보기에 더한 줄. 빨강 없음 */
+.schpend{margin-top:12px}.schln{margin:2px 0 0}.schln .lnk{min-height:44px;margin-left:2px}
+.schwhy{margin:0 4px 8px;color:var(--ink)}.schcmp .in-d .group{margin-top:0}.schopt .tt .tag{margin-left:8px}
+.ds.schl{margin:6px 0 0}.ds.schl .lnk{font-size:.86rem;padding:6px 2px}
 .note.warn{color:var(--amber);font-weight:600}
 .v3l{margin:0 0 12px;font-size:1rem;font-weight:600;line-height:1.55}
 .sc4.lwp{margin:2px 0 0}

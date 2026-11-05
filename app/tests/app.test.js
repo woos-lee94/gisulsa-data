@@ -400,6 +400,10 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   ok(/29주, 약 6\.7개월/.test(txt()) && /제141회 1\/30\(예상\), 14주차/.test(txt()), '지금 일정 요약');
   ok(/설 연휴/.test(txt()), '141회 설 연휴 메모');
   ok(/아직 확인하지 못했어요/.test(txt()), '저장소 일정 없음 → 확인 전');
+  // 시험 일정 살펴보기(v3.1): 새로 설치한 기록에는 "시험을 미룰지 살펴봐요" 칸이 없고, 닫힌 "다음 회차와 비교"에 회차 줄 2개 이상(지금 · 다음 회차)
+  { const cf = d.querySelector('details.schcmp'), hs = [...d.querySelectorAll('section.sec h2')].map(x => x.textContent);
+    ok(!hs.includes('시험을 미룰지 살펴봐요') && cf && !cf.open && /다음 회차와 비교/.test(cf.querySelector('summary').textContent) && cf.querySelectorAll('.schopt .row').length >= 2 && cf.querySelector('.schopt .row .tag') && cf.querySelector('[data-act="sch-pick"]'),
+      `시험 일정: 닫힌 "다음 회차와 비교"(회차 줄 ${cf ? cf.querySelectorAll('.schopt .row').length : 0}개), 미룰지 묻는 칸 없음`); }
   // 시작일 변경 → 미리보기 → 저장
   const se = d.querySelector('#schStart'); se.value = '2026-12-01'; se.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(20);
   ok(/바꾸면 이렇게 돼요/.test(txt()) && /제143회 필기/.test(txt()) && d.querySelector('[data-act="sch-save"]'), '미리보기: 12/1 시작 → 제143회');
@@ -407,7 +411,8 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   click('[data-act="sch-save"]'); await sleep(20);
   ok(pe.S().settings.start === '2026-12-01' && pe.PLAN().target.r === 143 && pe.S().settings.exam === '2027-08-28', '저장 → 제143회 2027-08-28');
   ok(pe.PLAN().mock && pe.PLAN().mock.r === 142, '실전 모의 제142회');
-  // 목표 회차 직접 고르기
+  // 목표 회차 직접 고르기(시작일도 같은 초안에서 바꿔, 어느 날 돌려도 바로 바뀌는 시작일 바꾸기 길로. 목표만 바꾸면 이번 주가 달라질 때 다음 월요일까지 기다린다)
+  const se1 = d.querySelector('#schStart'); se1.value = '2026-12-07'; se1.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(20);
   const tg = d.querySelector('#schTarget'); tg.value = '144'; tg.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(20);
   click('[data-act="sch-save"]'); await sleep(20);
   ok(pe.PLAN().target.r === 144 && pe.S().settings.target === 144, '목표 제144회 선택');
@@ -435,6 +440,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   const tg3 = d.querySelector('#schTarget'); tg3.value = 'auto'; tg3.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(20);
   click('[data-act="sch-save"]'); await sleep(20);
   ok(pe.PLAN().target.r === 142 && /예약 작업도 같은 일정이에요/.test(txt()), '원래 일정 → 저장소와 같음');
+  { const st = pe.S().settings; delete st.schSent; delete st.schUndo; delete st.nextTarget; delete st.slipNo; }   /* 되돌리기 줄·복사 기록·기다리는 바꾸기를 지워 다음 검사가 처음 상태로 */
 
   // 설정: 글자 크기·테마
   await go('#settings');

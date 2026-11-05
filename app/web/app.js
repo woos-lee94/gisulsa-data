@@ -14,7 +14,7 @@ const INTERVALS=[0,1,3,7,14,30,60];
 const REVIEW_STEPS=[1,3,7,14,30];
 const KEY='pe_state_v1', SKEY='pe_sets_v1';
 const DATA_DEFAULT='https://raw.githubusercontent.com/woos-lee94/gisulsa-data/main/data/';
-const APP_VER='3.0.1';
+const APP_VER='3.1.0';
 const MOCK_GRADE_SINCE='2026-11-01';            /* v3.0.0을 내는 날. 이 날짜 전 모의고사는 "채점 받았어요"를 묻지 않는다 */
 const BUDGET_DEF={wd:180,sat:300,sun:240};       /* 하루 공부 시간(분) 기본값: 평일·토요일·일요일과 공휴일(S.settings.budget, budgetOf) */
 const PLAN_START=(window.PE_EXAM&&PE_EXAM.defaults.start)||'2026-10-19';
@@ -103,28 +103,34 @@ function computePlan(start,target){const el=eligibleRounds(start);const tg=(targ
 let PLAN=null;
 function recalcPlan(){PLN++;PLAN=computePlan(S.settings.start,S.settings.target);S.settings.exam=PLAN.target.d;S.settings.mock=PLAN.mock?PLAN.mock.d:'';}
 function guideText(){const G=window.PE_GUIDE;if(!G)return'';return`[답안 형식 점검표(모범 답안 기준)]\n${G.check.map((c,i)=>`${i+1}. ${c}`).join('\n')}\n[모범 답안 뼈대(제2교시 25점형 2번, 4면)]\n${G.skeleton.join('\n')}`;}
-function fillT(x){return String(x==null?'':x).replace(/\{답안형식\}/g,guideText).replace(/\{본시험\}/g,'제'+PLAN.target.r+'회').replace(/\{모의문장\}/g,PLAN.mock?', 제'+PLAN.mock.r+'회는 실전 모의 응시':'').replace(/\{모의\}/g,PLAN.mock?'제'+PLAN.mock.r+'회':'정기시험');}
+/* P: 다른 계획(시험 일정 미리 보기·바꾸기 전 계획). 없으면 지금 계획(PLAN) — fillT·planSig·phaseKey·phaseObj·fillW·weekObj 모두 같다 */
+function fillT(x,P){P=P||PLAN;return String(x==null?'':x).replace(/\{답안형식\}/g,guideText).replace(/\{본시험\}/g,'제'+P.target.r+'회').replace(/\{모의문장\}/g,P.mock?', 제'+P.mock.r+'회는 실전 모의 응시':'').replace(/\{모의\}/g,P.mock?'제'+P.mock.r+'회':'정기시험');}
 function estTag(x){return x&&x.est?'(예상)':x&&x.user?'(직접 입력)':'';}
 function milestones(){const P=PLAN,K=PE_SCHED,out=[{d:addDays(P.start,6),t:'준비 주 마무리, 진단 모의 응시',k:'prep'}];
   const add=(x,main)=>{out.push({d:addDays(x.d,-K.annBefore),t:`제${x.r}회 원서접수 무렵(시험 4~5주 전 4일간, 첫날 오전 10시)`,k:'apply'});
     out.push({d:x.d,t:main?`제${x.r}회 필기, 본 목표${estTag(x)}`:`제${x.r}회 필기 = 실전 모의 응시${estTag(x)}`,k:main?'exam':'mock'});
     out.push({d:addDays(x.d,K.resultAfter),t:main?`제${x.r}회 발표 무렵 → 응시자격 서류 제출, 면접 접수`:`제${x.r}회 발표 무렵, 교시별 성적 확인`,k:'score'});};
   if(P.mock)add(P.mock,false);add(P.target,true);return out.sort((a,b)=>a.d<b.d?-1:1);}
-function planSig(){return{start:S.settings.start,target:PLAN.target.r,exam:PLAN.target.d,mock:PLAN.mock?PLAN.mock.r:null,mockDate:PLAN.mock?PLAN.mock.d:null};}
-function repoPlanState(){const r=SETS.plan;if(!r)return'unknown';const l=planSig();return(r.start===l.start&&Number(r.target)===l.target&&r.exam===l.exam&&(r.mockDate||null)===l.mockDate)?'same':'diff';}
+function planSig(P){P=P||PLAN;return{start:P.start,target:P.target.r,exam:P.target.d,mock:P.mock?P.mock.r:null,mockDate:P.mock?P.mock.d:null};}
+/* 예약 작업(저장소) 일정과 견주기: unknown 받아 온 적 없음 · same 같음 · wait 바꾸기를 기다리는 중(저장소는 지금 일정) · next 기다리는 새 일정이 이미 저장소에 ·
+   sent 다르지만 변경 요청을 복사한 지 7일 안(복사·바꾼 날 중 늦은 날부터) · diff 그 밖(빨강). 앞의 넷과 sent는 빨강이 아니다 */
+const sigEq=(r,l)=>r.start===l.start&&Number(r.target)===l.target&&r.exam===l.exam&&(r.mockDate||null)===l.mockDate;
+function repoPlanState(t){const r=SETS.plan;if(!r)return'unknown';const st=S.settings,N=st.nextTarget,cur=sigEq(r,planSig());
+  if(cur)return N?'wait':'same';if(N&&sigEq(r,planSig(computePlan(st.start,N.r))))return'next';
+  const u=st.schUndo,last=[st.schSent,u&&u.at].filter(Boolean).sort().pop();return st.schSent&&(t||todayStr())<=addDays(last,7)?'sent':'diff';}
 function weekRange(w){const a=addDays(S.settings.start,w*7);return[a,addDays(a,6)];}
 function md(s){const d=parse(s);return(d.getMonth()+1)+'/'+d.getDate();}
 function korDateY(s,withDow){return parse(s).getFullYear()+'년 '+korDate(s,withDow);}
 function korDate(s,withDow){const d=parse(s);return(d.getMonth()+1)+'월 '+d.getDate()+'일'+(withDow?' '+DAYK[d.getDay()]+'요일':'');}
 function dayType(ds){const dw=parse(ds).getDay();return dw===0?'sun':dw===6?'sat':'wd';}
-function phaseKey(w){if(w<=0)return'prep';if(w>=PLAN.E)return'exam';const m=PLAN.map[w];const ph=m?m.ph:1;return ph===0?'prep':ph===5?'exam':ph;}
-function phaseObj(w){const k=phaseKey(w);const id=k==='prep'?0:k==='exam'?5:k;return PE_PHASES.find(p=>p.id===id)||PE_PHASES[0];}
+function phaseKey(w,P){P=P||PLAN;if(w<=0)return'prep';if(w>=P.E)return'exam';const m=P.map[w];const ph=m?m.ph:1;return ph===0?'prep':ph===5?'exam':ph;}
+function phaseObj(w,P){const k=phaseKey(w,P);const id=k==='prep'?0:k==='exam'?5:k;return PE_PHASES.find(p=>p.id===id)||PE_PHASES[0];}
 /* 예전 탭 이름을 지금 이름으로(PE_WEEKS는 pipeline/curriculum.json과 같게 두고, 보여 줄 때 바꾼다) */
 const tabWords=s=>String(s==null?'':s).replace(/(앱 )?테스트 탭/g,'연습 탭').replace(/암기 탭/g,'연습 탭').replace(/플랜 탭/g,'이번 주 탭').replace(/테스트 → 기출 회차/g,'연습 → 기출 문제은행(회차별)').replace(/테스트 → 기출 단원별/g,'연습 → 기출 문제은행(단원별)').replace(/다시 볼 세트/g,'세트 복습').replace(/복습 대기/g,'카드 복습').replace(/목차 회상/g,'목차 떠올리기');
-const fillW=x=>tabWords(fillT(x));
-function weekObj(w){const a=Math.max(0,Math.min(PLAN.E,w));const m=PLAN.map[a]||{t:0,ph:0};const Ts=(m.ts||[m.t]).map(t=>PE_WEEKS.find(x=>x.w===t)||PE_WEEKS[0]);const T=Ts[0];
-  if(Ts.length>1)return preWeek({w:a,t:Ts.map(x=>fillW(x.t)).join(' + ')+' (압축)',u:[...new Set(Ts.flatMap(x=>x.u||[]))],goals:Ts.flatMap(x=>(x.goals||[]).slice(0,2)).map(fillW),out:Ts.map(x=>fillW(x.out||'')).filter(Boolean).join(' / '),ph:m.ph,tpl:m.t,mock:false,rep:false},m);
-  return preWeek({w:a,t:fillW(T.t)+(m.rep?' (이어서)':''),u:T.u,goals:(T.goals||[]).map(fillW),out:fillW(T.out||''),ph:m.ph,tpl:m.t,mock:!!m.mock,rep:!!m.rep},m);}
+const fillW=(x,P)=>tabWords(fillT(x,P));
+function weekObj(w,P){P=P||PLAN;const a=Math.max(0,Math.min(P.E,w));const m=P.map[a]||{t:0,ph:0};const Ts=(m.ts||[m.t]).map(t=>PE_WEEKS.find(x=>x.w===t)||PE_WEEKS[0]);const T=Ts[0],fw=x=>fillW(x,P);
+  if(Ts.length>1)return preWeek({w:a,t:Ts.map(x=>fw(x.t)).join(' + ')+' (압축)',u:[...new Set(Ts.flatMap(x=>x.u||[]))],goals:Ts.flatMap(x=>(x.goals||[]).slice(0,2)).map(fw),out:Ts.map(x=>fw(x.out||'')).filter(Boolean).join(' / '),ph:m.ph,tpl:m.t,mock:false,rep:false},m);
+  return preWeek({w:a,t:fw(T.t)+(m.rep?' (이어서)':''),u:T.u,goals:(T.goals||[]).map(fw),out:fw(T.out||''),ph:m.ph,tpl:m.t,mock:!!m.mock,rep:!!m.rep},m);}
 function weekLabel(w){return w<0?'시작 전':w===0?'준비 주':w>PLAN.E?'시험 후':w+'주차';}
 function hhmm(ts){const d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 
@@ -344,7 +350,7 @@ async function sync(force){
     SETS.index={updated:idx.updated||'',sets:(idx.sets||[]).length,mocks:(idx.mocks||[]).length};SETS.plan=idx.plan||null;saveSets();
     S.sync={last:now,ok:true,updated:idx.updated||''};
   }catch(e){S.sync={last:now,ok:false,err:String(e&&e.message||e),updated:(S.sync&&S.sync.updated)||''};}
-  save();syncing=false;
+  save();syncing=false;nextApply(todayStr());   /* 받아 오는 동안 기다린 시험 일정 바꾸기(복원한 기록의 지난 바꾸기도) */
   if(got.k&&!got.sets&&!got.mocks)invalidate();
   if(got.sets||got.mocks){invalidate();toast(got.sets&&got.mocks?`세트 ${got.sets}개, 모의고사 ${got.mocks}개를 받았어요`:got.sets?`새 세트 ${got.sets}개를 받았어요`:`모의고사 ${got.mocks}개를 받았어요`);}
   softRender();}
@@ -541,7 +547,9 @@ function estMock(w){const r=weekRange(w),inW=d=>!!d&&d>=r[0]&&d<=r[1];
   if(t<=10)return 180;if([11,12,16,25].includes(t))return 130;if([13,14,15,17,26].includes(t))return 230;
   if((t>=18&&t<=24)||t===27)return 430;if(t===28)return 130;return 0;}
 /* 세트 숙제의 필수 칸 수(그 세트 주차의 단계, PE_HW 횟수보다 크지 않게) */
-function hwMin(d){const s=SETS.sets[d],w=s&&s.week!=null?s.week:weekIndex(d),R=hwRule(d),M=Object.assign({},PE_HW_MIN[1],PE_HW_MIN[phaseObj(w).id]||{});for(const k in M)M[k]=Math.min(M[k],R[k]||0);return M;}
+/* 세트 숙제의 단계: 그 세트 주에 산 단계(시험 일정을 바꿔 계획을 갈아 끼울 때 지난 주마다 적어 둔 S.wk[주].ph). 없으면 지금 계획의 그 세트 주차 단계 */
+function setPh(d){const x=(S.wk||{})[wkStart(d)],s=SETS.sets[d];return x&&x.ph!=null?x.ph:phaseObj(s&&s.week!=null?s.week:weekIndex(d)).id;}
+function hwMin(d){const R=hwRule(d),M=Object.assign({},PE_HW_MIN[1],PE_HW_MIN[setPh(d)]||{});for(const k in M)M[k]=Math.min(M[k],R[k]||0);return M;}
 /* 세트 숙제를 할 일 단위로: n 필수 칸, N 학원 횟수 칸, k·K 한 칸(필수·전체까지만), u 칸당 분, f·F 낱말마다 필수·전체 횟수.
    restMin: 오늘 몫 밖의 나머지(복습 용어·그림·앞글자·세트만의 과제. 실전 쓰기는 essay 한 줄이 갖는다). 시험 전 3일 세트는 숙제가 없다 */
 function hwParts(d){return pm('h'+d,()=>{const o={restMin:0};if(!SETS.sets[d]||dayKind(d)==='pre3')return o;
@@ -788,7 +796,7 @@ function depInsert(t,F){let ch=0;const T=taskList(t);F.rows.slice().forEach(r=>{
    → 다시 고름: 끝낸 줄은 그 자리 그대로, 나머지만 새로(오늘 한 분은 이어 셈). 새 날·PLAN_V·복원·초기화 → 새로 */
 function planToday(t,o){o=o||{};t=t||todayStr();const now=o.now!=null?o.now:nowMin(),W=wkStart(t),sig=daySig(t);S.wk=S.wk||{};S.tk=S.tk||{};
   if(UI.d!==t){UI.d=t;UI.later={};UI.act=null;UI.open={};}if(o.replan==='reset')UI.later={};
-  weekSnap(t);let F=S.today;if(F&&(F.d!==t||F.v!==PLAN_V))F=S.today=null;
+  nextApply(t);weekSnap(t);let F=S.today;   /* 기다리던 시험 일정이 이번 월요일부터면 지난주를 지금 계획으로 고정한 뒤 넣는다(오늘 몫을 고정해 두었으면 다시 고름) */if(F&&(F.d!==t||F.v!==PLAN_V))F=S.today=null;
   if(!F){/* "오늘 시간"을 고르면 자료를 기다리지 않고 바로 고정(고른 시간을 S.today.user에 둔다) */
     const user=o.replan==='cap'&&o.user||null,P=dayPlan(t,{now,user});if(!user&&!dayOff(t)&&!canFreeze(t,now))return planView(t,P,null,now);   /* 쉬는 날은 자료를 기다리지 않고 바로 고정 */
     F=S.today={d:t,at:hmOf(now),v:PLAN_V,lv:P.lv,cap:P.capLeft,user,sig,dm:0,rows:P.rows.map(rowRec)};ratchet(t,P.lv,user);save(1);}
@@ -1241,11 +1249,55 @@ function noticeHTML(x){return`<div class="notice"><span>${esc(x.label)}</span><b
 function monNotice(t){const dw=parse(t).getDay(),W=wkStart(t),w=wkIdx(t),LW=addDays(W,-7),x=S.wk&&S.wk[LW];
   if(dw!==1&&dw!==2||(S.tk||{})['wkline:'+W]||w<1||t>PLAN.target.d||!x||!x.at||addDays(LW,6)<(S.created||''))return null;
   const T=taskList(t),cs=T.find(r=>r.k==='carry.sets'),cm=T.find(r=>r.k==='carry.mock');
-  return{W,LW,head:`${weekLabel(w)} 시작 · ${weekObj(w).t}`,car:[cs?`지난주 세트 ${cs.ds.length}개(권장)`:'',cm?'지난주 모의고사':''].filter(Boolean)};}
+  const u=S.settings.schUndo,sch=u&&u.at&&wkStart(u.at)===W?`새 일정 · 제${PLAN.target.r}회 ${korDate(PLAN.target.d)}(${DAYK[parse(PLAN.target.d).getDay()]}) 목표`:'';   /* 시험 일정이 바뀐 월요일 */
+  return{W,LW,head:`${weekLabel(w)} 시작 · ${weekObj(w).t}`,sch,car:[cs?`지난주 세트 ${cs.ds.length}개(권장)`:'',cm?'지난주 모의고사':''].filter(Boolean)};}
 /* 단계가 바뀐 월요일은 단계 안내(ph)를 같은 칸에 넣는다(×는 둘 다 지움) */
-function monNoticeHTML(n,ph){return n?`<div class="notice mon"><span><b>${esc(n.head)}</b>${ph?`<small>${esc(ph.label)}</small>`:''}${n.car.length?`<small>넘어온 것: ${esc(n.car.join(' · '))}</small>`:''}<button class="btn ghost sm" data-act="wk-last" data-w="${n.LW}">지난주 기록<i class="chev"></i></button></span><button class="nx" data-act="wk-dismiss" data-k="wkline:${n.W}${ph?' '+esc(ph.id):''}" aria-label="안내 닫기">×</button></div>`:'';}
+function monNoticeHTML(n,ph){return n?`<div class="notice mon"><span><b>${esc(n.head)}</b>${n.sch?`<small>${esc(n.sch)}</small>`:''}${ph?`<small>${esc(ph.label)}</small>`:''}${n.car.length?`<small>넘어온 것: ${esc(n.car.join(' · '))}</small>`:''}<button class="btn ghost sm" data-act="wk-last" data-w="${n.LW}">지난주 기록<i class="chev"></i></button></span><button class="nx" data-act="wk-dismiss" data-k="wkline:${n.W}${ph?' '+esc(ph.id):''}" aria-label="안내 닫기">×</button></div>`:'';}
 /* 60% 넘은 주가 이어진 수(W 전 주부터 거꾸로, 고정한 지난 주들) */
 function wkRun(W){let n=0;for(const k of Object.keys(S.wk||{}).filter(k=>k<W&&S.wk[k]&&S.wk[k].at&&S.wk[k].p!=null).sort().reverse()){if(S.wk[k].p>=60)n++;else break;}return n;}
+/* ── 시험 일정 살펴보기(읽기만): 미룰지 묻는 때(slipCheck), 회차 견주기(roundRows), 바뀌는 날(schFrom). 쓰는 것은 lockLived·nextApply(시험 일정 저장·바꾸는 월요일)뿐 ── */
+/* 지난 한 주 점수: 고정한 기록(S.wk[주].p), 없으면 그 일요일 기준으로 센다(앱을 열지 않은 주는 0에 가깝게). S.wk에 적지 않는다 */
+function weekP(Wk){const x=(S.wk||{})[Wk];return x&&x.at&&x.p!=null?x.p:weekBoard(addDays(Wk,6)).pct;}
+/* 시험을 미룰지 살펴볼 때: pace 최근 4주 가운데 3주가 60% 아래(앱을 열지 않은 주 포함), off 3단계 전에 쉬는 날 14일 이상, apply 원서접수 기간이 지났는데 "접수했어요" 없음.
+   "지금 일정대로 할게요"(slipNo)는 4주 동안 묻지 않음(평균이 10점 넘게 떨어지면 다시). 바꾸기를 기다리는 동안·시험이 든 주·2주차 전에는 묻지 않는다 */
+function slipCheck(t){t=t||todayStr();const st=S.settings;if(wkIdx(t)<1||t>PLAN.target.d||st.nextTarget)return null;
+  const T0=PLAN.target,ap=addDays(T0.d,-PE_SCHED.annBefore),ae=addDays(ap,3),nx=eligibleRounds(st.start).find(x=>x.r>T0.r);if(!nx)return null;
+  const o={why:null,ps:[],low:0,avg:null,offN:0,nx,T0,ap,ae};
+  if(t>ae&&!(S.tk||{})['apply:'+T0.r])return Object.assign(o,{why:'apply'});
+  if(t>ae||exWeek(t))return null;
+  const W=wkStart(t),c0=wkStart(S.created||t),ps=[];
+  for(let k=1;k<=8&&ps.length<4;k++){const Wk=addDays(W,-7*k);if(Wk<c0||weekIndex(Wk)<1)break;const p=weekP(Wk);if(p!=null)ps.unshift(p);}
+  const low=ps.filter(p=>p<60).length,avg=ps.length?Math.round(ps.reduce((a,p)=>a+p,0)/ps.length):null,pace=ps.length>=3&&low>=3;
+  const P3=addDays(st.start,7*(PLAN.E-11)),offN=Object.keys(S.days||{}).filter(d=>d>=t&&d<P3&&S.days[d]&&S.days[d].m===0).length;
+  if(!pace&&offN<14)return null;
+  const no=st.slipNo;if(no&&diffDays(no.at,t)<28&&!(avg!=null&&no.avg!=null&&avg<=no.avg-10))return null;
+  return Object.assign(o,{why:pace?'pace':'off',ps,low,avg,offN});}
+/* 회차 견주기: 지금 목표와 그다음 두 회차(computePlan, 읽기만). 시험까지 주, 1·2단계 남은 주, 단원마다 주(1·2단계 칸 ÷ 주차 틀), 3단계 시작, 실전 모의, 원서접수 */
+function roundRows(t){t=t||todayStr();const st=S.settings.start,w=Math.max(0,wkIdx(t)),T0=PLAN.target;
+  return[T0].concat(eligibleRounds(st).filter(x=>x.r>T0.r).slice(0,2)).map(x=>{const P=x.r===T0.r?PLAN:computePlan(st,x.r);let sl=0;for(let a=1;a<=P.E-12;a++)if(a!==P.M)sl++;
+    const ap=addDays(P.target.d,-PE_SCHED.annBefore);
+    return{r:P.target.r,P,cur:x.r===T0.r,wk:Math.ceil(diffDays(t,P.target.d)/7),p12:Math.max(0,P.E-12-w+1),per:Math.max(1,Math.round(sl/(sl>=16?16:15))),p3:addDays(st,7*(P.E-11)),ap,ae:addDays(ap,3)};});}
+/* 바꾸기 전 계획의 시험 가운데 새 계획에서 빠지는데 "접수했어요"로 친 것(그 시험의 48시간 복기까지는 지금 계획대로) */
+function schKeep(P0,P1,t){const tk=S.tk||{};return[P0.mock,P0.target].filter(x=>x&&![P1.mock,P1.target].some(y=>y&&y.r===x.r)&&t<=addDays(x.d,2)&&!!tk['apply:'+x.r]);}
+/* 목표만 바꿀 때 새 계획이 언제부터인지: null 바로(이번 주 주차 틀·이번·다음 주 시험 날·시험 주 여부가 같을 때), 다음 월요일, 접수한 시험이 빠지면 그 복기 다음 월요일 */
+function schFrom(P0,P1,t){t=t||todayStr();const w=wkIdx(t);if(w<0)return null;const W=wkStart(t),E7=addDays(W,13);
+  const ex=P=>[P.mock,P.target].filter(x=>x&&x.d>=W&&x.d<=E7).map(x=>x.d).join();
+  const same=JSON.stringify(P0.map[w])===JSON.stringify(P1.map[w])&&ex(P0)===ex(P1)&&(w>=P0.E)===(w>=P1.E),keep=schKeep(P0,P1,t);
+  return keep.length?keep.map(x=>addDays(wkStart(addDays(x.d,2)),7)).sort().pop():same?null:addDays(W,7);}
+/* 계획을 갈아 끼우기 전에 지난 주마다 산 단계를 적어 둔다(S.wk[월요일].ph, 이미 있으면 그대로): 지난 세트의 숙제 필수(setPh)·지난주 기록 배점이 바뀌지 않게.
+   wf 주차 전까지(그 주는 빼고). at은 적지 않아 weekSnap은 그대로 그 주를 고정한다 */
+function lockLived(P0,wf){S.wk=S.wk||{};for(let a=1;a<wf;a++){const W=wkStart(addDays(P0.start,7*a+6)),x=S.wk[W]||(S.wk[W]={});if(x.ph==null)x.ph=phaseObj(a,P0).id;}}
+/* 단계 안내를 다시 보이게: 새 계획의 지금 단계보다 높은 단계의 "지움"(S.tk['phase:n'])을 지운다 */
+function phaseReset(t){const id=phaseObj(wkIdx(t)).id,tk=S.tk||{};Object.keys(tk).forEach(k=>{const m=/^phase:(\d+)$/.exec(k);if(m&&Number(m[1])>id)delete tk[k];});}
+/* 기다리던 시험 일정(S.settings.nextTarget)을 그 월요일에 넣는다. 오늘 몫을 고정할 때(planToday)·받아 오기 끝·앱이 앞으로 올 때만, 받아 오는 중에는 기다림.
+   바꾸는 주가 이번 주면 지난주를 먼저 지금 계획으로 고정, 이미 지났으면 넣은 뒤 새 계획으로. 넣으면 true */
+function nextApply(t){t=t||todayStr();const st=S.settings,N=st.nextTarget;if(!N||!N.from||N.from>t||syncing)return false;
+  S.wk=S.wk||{};if(N.from===wkStart(t))weekSnap(t);
+  const pre=planPre();lockLived(PLAN,wkIdx(N.from));
+  st.target=N.r||'auto';st.schUndo={r:N.prev||'auto',at:t};delete st.nextTarget;delete st.slipNo;recalcPlan();phaseReset(t);save();
+  if(pre)planChanged('sched',pre);return true;}
+/* 기다리는 새 목표의 회차 번호('auto'면 그 시작일의 가장 빠른 회차) */
+const nextR=N=>computePlan(S.settings.start,N.r).target.r;
 /* 지난주 기록(월요일 안내의 창): 지난주 점수와 부분(그 주를 고정한 S.wk[LW]), 넘어온 것, 놓아준 것(이름), 60% 넘은 주 연속 */
 /* 점수 칸을 반올림해도 합이 머리 숫자(t, 없으면 합을 반올림)와 같게: 내림한 뒤 남는 점은 소수 부분이 큰 칸부터 1씩 */
 function rParts(vs,t){const v=vs.map(x=>+x||0),f=v.map(Math.floor);if(t==null)t=Math.round(v.reduce((a,x)=>a+x,0));let r=t-f.reduce((a,x)=>a+x,0);const o=v.map((x,i)=>[x-f[i],i]).sort((a,b)=>b[0]-a[0]);
@@ -1258,7 +1310,7 @@ function lastWeekSheet(LW){const x=(S.wk||{})[LW]||{},w=wkIdx(LW),sc=PE_SCORE[Ma
   const car=(cs?row({t:esc(`지난주 세트 읽기·퀴즈 ${cs.ds.length}개`),d:esc(cs.sub+' · 이번 일요일까지(권장)')}):'')+(cm?row({t:esc(`지난주 모의고사(${md(cm.d)})`),d:'토요일 새 모의 전까지'}):'');
   return`<p class="sheet-k">지난주 기록 · ${md(LW)}~${md(addDays(LW,6))}</p><h3 class="cmh">지난주(${esc(weekLabel(w))}) ${x.p==null?'· 시험 주라 점수 대신 체크':x.p+'%'}</h3>${x.lv?`<p class="ds">${esc(LV_TXT[x.lv].split(' · ')[0])}</p>`:''}
   ${parts?`<p class="sc4 lwp">${parts}</p>`:''}${x.off?`<p class="note">쉬는 날 ${x.off}일</p>`:''}${car?sec('넘어온 것','',`<div class="group">${car}</div>`):''}${rel.length?sec('놓아준 것',rel.length+'개',`<div class="group">${rel.map(l=>row({t:esc(l)})).join('')}</div>`):''}
-  ${run||rel.length?`<p class="note">${[run?`60% 넘은 주 ${run}주 연속.`:'',rel.length?FREED_NOTE:''].filter(Boolean).join(' ')}</p>`:''}<div class="btns"><button class="btn sec" data-act="sheet-close">닫기</button></div>`;}   /* 놓아준 것 안내는 놓아준 것이 있을 때만 */
+  ${run||rel.length?`<p class="note">${[run?`60% 넘은 주 ${run}주 연속.`:'',rel.length?FREED_NOTE:''].filter(Boolean).join(' ')}</p>`:''}${(sx=>sx?`<div class="group" style="margin-top:12px">${slipRow(sx)}</div>`:'')(slipTxt(slipCheck(todayStr())))}<div class="btns"><button class="btn sec" data-act="sheet-close">닫기</button></div>`;}   /* 놓아준 것 안내는 놓아준 것이 있을 때만 */
 /* 시험 날 카드(본시험·실전 모의 날): 그날 체크리스트(ex:날짜:i), 준비물 한 줄, 파란 버튼 "응시했어요"(ex:날짜:a). 점수·오늘 시간·블록은 없다 */
 function examHTML(t){const L=taskList(t).filter(x=>x.k==='ex'),a=L.find(x=>/:a$/.test(x.id)),mock=!!PLAN.mock&&PLAN.mock.d===t,kit=((((PE_EXTRA.pre3||{}).wd)||[]).find(x=>x.k==='kit')||{}).t||'';
   return`<div class="dcard exam"><h3>문제 고르기 3분 → 시간 엄수 → 공란 금지</h3>${kit?`<p class="ds">${esc(kit.replace(/^준비물 점검: /,'준비물: '))}</p>`:''}
@@ -1318,12 +1370,12 @@ function foldHTML(F,c,open,FD){FD=FD||[];if(!F.length&&!FD.length)return'';const
 /* 달력의 할 일 한 줄 "오늘 몫 7/11"(고정한 날, 끝낸 수가 바뀔 때만 적는다) */
 function planCal(t,V,its,nd){if(!V.frozen)return;const c=S.cal[t],cur=c&&c.x&&c.x['plan:'+t],txt=`오늘 몫 ${nd}/${its.length}`;
   if(nd&&(!cur||cur[1]!==txt)){calDay().x['plan:'+t]=['todo',txt];save(1);}else if(!nd&&cur){delete c.x['plan:'+t];save(1);}}
-function vToday(){const t=todayStr(),w=wkIdx(t),de=Math.max(0,diffDays(t,S.settings.exam)),kind=dayKind(t),sun=kind==='sun',post=t>PLAN.target.d,oop=w<0||t>addDays(PLAN.target.d,2);
-  const V=planToday(t),b=V.wb,its=planItems(V),act=V.active,ai=act&&!act.fold?its.find(i=>i.ids.includes(act.id))||null:null,src=resumeSrc(t),nd=its.filter(i=>i.done).length,all=its.length>0&&nd===its.length;
+function vToday(){const t=todayStr(),V=planToday(t),w=wkIdx(t),de=Math.max(0,diffDays(t,S.settings.exam)),kind=dayKind(t),sun=kind==='sun',post=t>PLAN.target.d,oop=w<0||t>addDays(PLAN.target.d,2);   /* 오늘 몫을 먼저(기다리던 시험 일정이 오늘 들어가면 D-day도 새 일정으로) */
+  const b=V.wb,its=planItems(V),act=V.active,ai=act&&!act.fold?its.find(i=>i.ids.includes(act.id))||null:null,src=resumeSrc(t),nd=its.filter(i=>i.done).length,all=its.length>0&&nd===its.length;
   const c={V,ai,act,src,its,revIn:its.some(i=>i.rows.some(r=>/^rev:/.test(r.id)))},F=foldItems(V),FD=foldDone(V),norows=!its.length&&!act;
   /* 머리: 시험 날은 "오늘 제141회 시험(실전 응시)", 공휴일은 날짜 뒤에 이름("12월 25일 금요일 · 성탄절"). 단계 이름이 주차와 같으면 한 번만, 본시험 뒤 D-day 자리는 "시험 후" */
   const ex=kind==='exam'?[PLAN.mock,PLAN.target].find(x=>x&&x.d===t):null,hol=KR_HOLI[t],mn=monNotice(t),ph=V.info.find(x=>x.k==='phase');
-  const sub=ex?korDate(t,true)+' · '+weekLabel(w):w<0||post?weekLabel(w):uniq([weekLabel(w),sun?'주간 마감일':phaseObj(w).n]).join(' · ');
+  const NT=S.settings.nextTarget,sub=(ex?korDate(t,true)+' · '+weekLabel(w):w<0||post?weekLabel(w):uniq([weekLabel(w),sun?'주간 마감일':phaseObj(w).n]).join(' · '))+(NT&&!post?` · ${md(NT.from)}부터 제${nextR(NT)}회`:'');   /* 바꾸기를 기다리는 시험 일정 */
   const top=`<div class="ltitle today"><div class="ltl">${calIconHTML()}<div><h1>${esc(ex?`오늘 제${ex.r}회 시험${ex===PLAN.mock?'(실전 응시)':''}`:korDate(t,true))}${!ex&&hol?`<span class="hol"><span class="vh"> · </span>${esc(hol)}</span>`:''}</h1><p class="lsub">${esc(sub)}</p></div></div><div class="dday"><span>제${PLAN.target.r}회${post?'':'까지'}</span><b class="num">${post?'시험 후':'D-'+de}</b></div></div>
   ${V.rows.filter(r=>r.blk==='pin').map(pinHTML).join('')}${mn?monNoticeHTML(mn,ph):ph?noticeHTML(ph):''}`;
   if(oop)return top+norowsHTML(V,t);   /* 준비 시작 전·본시험 뒤(복기 이틀 뒤부터): 머리와 카드 하나뿐(오늘 시간·다시 짜기 없음) */
@@ -1494,7 +1546,7 @@ function vWeek(){const t=todayStr(),V=planToday(t),b=V.wb,w=wkIdx(t),its=planIte
   const head=sub=>`<div class="ltitle"><div><h1>이번 주</h1>${sub?`<p class="lsub">${sub}</p>`:''}</div></div>`;
   if(b.w<0||t>PLAN.target.d&&b.W>PLAN.target.d)return head('')+norowsHTML(V,t)+weekRecHTML();   /* 본시험이 든 주의 시험 뒤 날은 이번 주(체크·48시간 복기)를 그대로 */
   const L=wkLines(V,b,t),Ls=L.filter(l=>!l.done).concat(L.filter(l=>l.done)),wk=weekObj(Math.max(0,w)),tk=S.tk||{},gs=wk.goals||[],gd=gs.filter((_,i)=>tk['goal:'+b.W+':'+i]).length;
-  const cs=(V.fold||[]).filter(x=>x.k==='carry.sets'),fr=V.freed||[],ms=milestones().find(m=>m.d>=t);
+  const cs=(V.fold||[]).filter(x=>x.k==='carry.sets'),fr=V.freed||[],ms=milestones().find(m=>m.d>=t),sx=slipTxt(slipCheck(t));   /* sx: 시험 일정 살펴보기 줄(다음 일정 바로 위) */
   return head(`${esc(weekLabel(w))} · ${md(b.W)}~${md(b.E)} · ${esc(wk.t)} · ${sun?'오늘 밤까지':'일요일까지 '+diffDays(t,b.E)+'일'}`)+`
   ${scoreHTML(b,c,L)}
   ${sec('날마다','',`${(cx=>cx?`<p class="note wkc">${esc(cx.note)}</p>`:'')(catchLine(t))}<div class="group">${dayRowsHTML(t,b)}</div>${cuHTML(t)}`)}
@@ -1502,13 +1554,13 @@ function vWeek(){const t=todayStr(),V=planToday(t),b=V.wb,w=wkIdx(t),its=planIte
   ${cs.length?sec('넘어온 것','',`<div class="group">${cs.map(x=>row({t:esc(x.label),d:esc(x.sub+' · 이번 일요일까지(권장)'),act:'task',data:{id:x.id}})).join('')}</div>`):''}
   ${fr.length?`<details class="d pf"${foldAt('wfreed')}><summary>놓아준 것 · ${fr.length}</summary><div class="plan">${fr.map(x=>`<div class="prow moved"><span class="pb"><span class="pt">${esc(x.k==='rev'?`세트 복습 ${dlab(x.d)} ${x.step}일 차`:x.label)}</span></span></div>`).join('')}</div><p class="note">${FREED_NOTE}</p></details>`:''}
   ${gs.length?`<details class="d pf" id="wkGoals"${foldAt('goals')}><summary>이번 주 목표 ${gd}/${gs.length} · 권장</summary><div class="plan">${gs.map((g,i)=>{const id='goal:'+b.W+':'+i,on=!!tk[id];return`<button class="prow g${on?' on':''}" data-act="tk" data-id="${esc(id)}"><span class="pb"><span class="pt">${esc(g)}</span></span><span class="tkc${on?' on':''}"></span></button>`;}).join('')}</div>${wk.out?`<p class="note">산출물: ${esc(wk.out)}</p>`:''}</details>`:''}
-  ${ms?`<div class="group" style="margin-top:12px">${row({t:esc(`다음 일정 · ${ms.t.replace(/\(.*?\)/g,'').trim()} ${md(ms.d)}`)+` <span class="nw">(D-${diffDays(t,ms.d)})</span>`,act:'go',data:{h:'plan'}})}</div>`:''}
+  ${sx||ms?`<div class="group" style="margin-top:12px">${sx?slipRow(sx):''}${ms?row({t:esc(`다음 일정 · ${ms.t.replace(/\(.*?\)/g,'').trim()} ${md(ms.d)}`)+` <span class="nw">(D-${diffDays(t,ms.d)})</span>`,act:'go',data:{h:'plan'}}):''}</div>`:''}
   ${weekRecHTML()}`;}
 /* 이번 주 탭 맨 아래 기록(학습 달력 · 세트 보관함 · 통계·주간 리포트 · 로드맵). 통계는 여기서만 들어가므로 준비 시작 전·시험 뒤(할 몫 카드 하나뿐인 화면)에도 둔다 */
 function weekRecHTML(){return sec('기록','',`<div class="group">${row({ic:'caldot',t:'학습 달력',act:'go',data:{h:'cal'}})}${row({ic:'box',tone:'gray',t:'세트 보관함',act:'go',data:{h:'archive'}})}${row({ic:'chart',tone:'gray',t:'통계·주간 리포트',act:'go',data:{h:'stats'}})}${row({ic:'cal',tone:'gray',t:'로드맵',act:'go',data:{h:'plan'}})}</div>`);}
 /* 손으로 치는 일(교재·다시 쓰기·준비물·이번 주 목표·원서접수): 누르면 다 함, 다시 누르면 되돌림. 기록이 하나뿐인 날도 연속 학습으로 센다(touchDay) */
 function tkToggle(id,lab){const t=todayStr(),tk=S.tk||(S.tk={});if(tk[id]){const d0=tk[id];delete tk[id];calUnmark('tk:'+id,d0);save();return render();}   /* 되돌리면 친 날의 달력 글을 지운다 */
-  const g=/^goal:([\d-]+):(\d+)$/.exec(id),x=g?null:taskList(t).find(r=>r.id===id),lb=g?'이번 주 목표: '+((weekObj(Math.max(0,wkIdx(g[1]))).goals||[])[Number(g[2])]||''):(x&&(x.cal||x.label))||lab||id;
+  const g=/^goal:([\d-]+):(\d+)$/.exec(id),x=g?null:taskList(t).find(r=>r.id===id),ap=/^apply:(\d+)$/.exec(id),lb=g?'이번 주 목표: '+((weekObj(Math.max(0,wkIdx(g[1]))).goals||[])[Number(g[2])]||''):(x&&(x.cal||x.label))||lab||(ap?`큐넷 원서접수 · 제${ap[1]}회`:id);   /* 시험 일정에서 친 원서접수(이번 주 줄 밖)도 이름으로 */
   return taskTick(id,lb);}
 /* 주간 리포트 복사: 그 리포트가 다루는 주로 친다(토·일요일에 이번 주, 월요일 "지난주 리포트"는 지난주). 평일에 통계에서 복사하면 치지 않는다 */
 function reportCopy(W){const t=todayStr(),W0=wkStart(t),dw=parse(t).getDay();W=W||W0;const tick=W!==W0||dw===0||dw===6;
@@ -1531,7 +1583,7 @@ const HW_HOW={
 const HW_RULES=[['보고 베끼기보다 덮고 떠올리기','떠올리려고 애쓴 만큼 오래 남아요(인출 연습).'],['손으로 쓰기','시험은 100분 손글씨예요. 쓰는 손이 기억하고 속도도 붙어요.'],['소리 내어 말하기','말로 설명할 수 있어야 답안에 쓸 수 있어요.'],['나눠서 되풀이','한 번에 4번보다 하루에 나눠 1번씩. 앱이 1·3·7·14·30일 뒤에 다시 불러요.'],['빨간 펜에 시간 쓰기','아는 것은 빨리, 틀린 곳에 시간을 써요.'],['매일 끝까지','하루 숙제를 다 하는 날이 쌓이는 것이 합격선이에요.']];
 /* 예약 작업이 세트마다 넣는 공통 과제 3개는 아래 숙제가 대신한다(남는 것만 "세트만의 과제") */
 const HW_GEN=[/새\s*용어.*(소리|설명|말하)/,/논술.*(손글씨|첨삭)/,/퀴즈.*(틀린|오답)/];
-function hwRule(d){const s=SETS.sets[d],w=s&&s.week!=null?s.week:weekIndex(d);return Object.assign({},PE_HW[1],PE_HW[phaseObj(w).id]||{});}
+function hwRule(d){return Object.assign({},PE_HW[1],PE_HW[setPh(d)]||{});}
 function hwItems(d){const s=SETS.sets[d];if(!s)return[];const p=spGet(d),R=hwRule(d),H=p.hw||{},out=[];
   const cs=(s.cards||[]).map((sc,i)=>({i,sc,id:setCardId(d,i)})).filter(x=>x.id),tt=x=>(card(x.id)||x.sc).t||'';
   const fresh=cs.filter(x=>!x.sc.ref),rev=cs.filter(x=>x.sc.ref);
@@ -1615,7 +1667,7 @@ function vHw(d){const s=SETS.sets[d],p=spGet(d),H=p.hw||{},R=hwRule(d),M=hwMin(d
     ${it.input?`<div class="hwin"><input id="hwMn" type="text" maxlength="80" placeholder="예: 원인·문제점·대책·결론 → 원문대결" value="${esc(H.mn||'')}"><button class="btn sm sec" data-act="hw-mn" data-d="${d}">${H.mn?'고치기':'적어 두기'}</button></div>`:''}
     <div class="hwf">${foot.join('')}</div></div>`;};
   return`<div class="hwhd"><b class="hwh2">이 세트 숙제</b><p class="hwcnt">${rq?`<span>${rq}</span>`:''}<span>전체 <b class="num">${sm.done}/${sm.n}</b>${sm.done>=sm.n||!sm.left?'':` · 약 ${sm.left}분`}</span></p>
-    <p class="hwwhy">${esc(phaseObj(w).n)}${fl?` · 새 용어는 ${fl}, 필수는 ${fm}`:''}</p>
+    <p class="hwwhy">${esc((PE_PHASES.find(x=>x.id===setPh(d))||phaseObj(w)).n)}${fl?` · 새 용어는 ${fl}, 필수는 ${fm}`:''}</p>
     <details class="hwrules"${foldAt('hwr')}><summary>숙제 원칙 6가지</summary><ol>${HW_RULES.map(([a,b])=>`<li><b>${esc(a)}</b>: ${esc(b)}</li>`).join('')}</ol>
     <p class="note">이 숙제를 시험 전까지 매일 하면 새 용어 약 ${ah.terms}개를 손과 입으로, 논술 약 ${ah.essays}문제의 목차를 손으로 익혀요(평일 세트 기준 어림).</p></details></div>
   ${split?`<div class="sec-h hwsh"><h2>필수</h2><span class="meta">${ra}/${rp.length}${rm>0?` · 약 ${rm}분`:' ✓'}</span></div>`:''}${req.map((it,i)=>card(it,i+1)).join('')}
@@ -1742,7 +1794,7 @@ const SV={};
 function vSet(){const d=R.a;const s=SETS.sets[d];
   if(!s)return topbar('세트')+`<div class="empty" style="margin-top:20px"><b>${esc(d||'')} 세트가 아직 없어요</b>앱이 저장소에서 받아 오지 못했어요.<div class="btns"><button class="btn" data-act="sync">지금 받아 오기</button></div></div>`;
   const p=sp(d);
-  const tab=SV[d]||'cards',st=setStatus(d),w=s.week!=null?s.week:weekIndex(d),ph=phaseObj(w).id,rp=reqParts(d),ra=rp.filter(x=>x.done).length,ed=!!(p.essay&&p.essay.done);
+  const tab=SV[d]||'cards',st=setStatus(d),w=s.week!=null?s.week:weekIndex(d),ph=setPh(d),rp=reqParts(d),ra=rp.filter(x=>x.done).length,ed=!!(p.essay&&p.essay.done);
   let body='';
   if(tab==='cards'){const fr=resumeAt('flash:'+d),mr=resumeAt('memo:set:'+d);
     body=`<div class="btns stools"><button class="btn sm sec" data-act="set-flash" data-d="${d}">${fr?`카드 넘겨 보기 이어서 (${fr})`:'카드 넘겨 보기'}</button><button class="btn sm sec" data-act="memo-set" data-d="${d}">${mr?`가리며 외우기 이어서 (${mr})`:'가리며 외우기'}</button><button class="lnk" data-act="start-fill" data-d="${d}">빈칸 쓰기</button></div>
@@ -1795,7 +1847,7 @@ function setNext(d){const t=todayStr(),c=setCore(d);if(!c)return null;const F=FL
 function inSetNext(d){const t=todayStr(),c=setCore(d),f=UI.hwf&&UI.hwf.d===d?UI.hwf:null;
   if(f&&f.k){const x=hwStep(d,f.k,'floor');if(x)return x;}   /* 이번 주 "다음 하나"·막대로 펼친 숙제 칸이 먼저(그 칸의 "다 했어요"), 그 칸을 다 했으면 이 세트 순서로 */
   if(c.r)return readStep(d,c);if(c.q)return quizStep(d,c);
-  const s=SETS.sets[d],ph=phaseObj(s.week!=null?s.week:weekIndex(d)).id,P=hwParts(d),miss=k=>!!P[k]&&P[k].n>0&&P[k].k<P[k].n;
+  const ph=setPh(d),P=hwParts(d),miss=k=>!!P[k]&&P[k].n>0&&P[k].k<P[k].n;
   const k=(d===t?['say','qz','write','dd','eo','sl','fg']:[ph<=2&&'write',ph<=4&&'dd',ph<=2&&'eo',ph===3&&'fg'].filter(Boolean)).find(miss);   /* 지난 세트는 이번 주로 넘어가는 칸만 */
   if(k)return{t:`다음: 숙제 필수 · ${PART_LAB[k]}`,go:()=>{UI.hwf={d,k};SV[d]='tasks';SV.scrollTo='.hw.focus';render();scrollDo();}};
   if(P.essay&&P.essay.req&&!P.essay.k)return{t:'다음: 논술 실전 25분',go:()=>{UI.hwf={d,k:'essay'};SV[d]='essay';render();window.scrollTo(0,0);}};
@@ -2388,6 +2440,7 @@ function weeklyReport(W){const t=todayStr(),cs=deck();W=W||wkStart(t);const E=ad
   /* 그 주에 정한 쉬는 날·짧은 날, 고정한 지난 주면 그 일요일에 남은 필수(놓아준 것) */
   const dz=Object.keys(S.days||{}).filter(d=>d>=W&&d<=E).sort();if(dz.length)L.push('쉬는 날·짧은 날: '+dz.map(d=>`${dlab(d)} ${S.days[d].m===0?'쉼':mfmt(S.days[d].m)}`).join(' · '));
   if(snap&&snap.left>0)L.push(`놓아준 필수 약 ${mfmt(snap.left)}`);
+  if(S.settings.nextTarget){const N=S.settings.nextTarget;L.push(`시험 일정: ${dlab(N.from)}부터 제${nextR(N)}회로 바꿔요`);}
   const wk=cs.filter(c=>inW(pget(c.id).last));let ok=0,ng=0;wk.forEach(c=>{const p=pget(c.id);ok+=p.ok;ng+=p.ng;});
   L.push(`카드: 전체 ${cs.length}장 중 학습 ${cs.filter(c=>pget(c.id).seen>0).length}장, 이 주에 다룬 카드 ${wk.length}장, 누적 정답률 ${ok+ng?Math.round(ok/(ok+ng)*100):0}%, 카드 복습 ${cardsOut(t).length}장`);
   const ws=Object.keys(SETS.sets).filter(inW);L.push(`세트 ${ws.length}개 중 핵심 끝 ${ws.filter(d=>setStatus(d).core).length}개, 세트 퀴즈 정답 ${ws.reduce((a,d)=>a+setStatus(d).qok,0)}/${ws.reduce((a,d)=>a+setStatus(d).nq,0)}`);
@@ -2402,11 +2455,11 @@ function weeklyReport(W){const t=todayStr(),cs=deck();W=W||wkStart(t);const E=ad
 
 /* ════════ 17. 화면: 더보기와 하위 화면 ════════ */
 /* 시험 일정 줄: 첫 줄 "10월 19일 시작 · 29주", 둘째 줄 목표 "제142회 · 5월 15일(토, 예상)"(날짜는 모두 "M월 D일", 회차·날짜는 줄 안에서 끊기지 않음) */
-function vMore(){const s=S.sync||{};const rp=repoPlanState();
+function vMore(){const s=S.sync||{};const rp=repoPlanState(),N=S.settings.nextTarget,l3=N?`${dlab(N.from)}부터 제${nextR(N)}회 일정이에요`:slipCheck(todayStr())?'시험 일정을 살펴볼 때예요':'';   /* 셋째 줄(회색): 바꾸기를 기다리는 일정, 미룰지 살펴볼 때 */
   const me=PE_IO.member();
   return`<div class="ltitle"><div><h1>더보기</h1>${me?`<p class="lsub">아이디 ${esc(me.id)}</p>`:''}</div></div>
   ${me&&me.admin?sec('관리','',`<div class="group">${row({ic:'mail',t:'문자함',d:`<span data-ibxn>${ibxTxt()}</span>`,act:'ibx'})}${row({ic:'check',tone:'ok',t:'승인 관리',d:'승인 요청, 회원, 초대 코드',act:'go',data:{h:'admin'}})}</div>`):''}
-  ${sec('시험 일정','',`<div class="group">${row({ic:'flag',tone:rp==='diff'?'red':'',t:'준비 시작일·목표 회차',d:`${esc(korDate(S.settings.start))} 시작 · ${PLAN.E}주<br><span class="nw">제${PLAN.target.r}회</span> · <span class="nw">${esc(korDate(PLAN.target.d))}(${DAYK[parse(PLAN.target.d).getDay()]}${esc(estTag(PLAN.target).replace(/^\((.+)\)$/,', $1'))})</span>${rp==='diff'?'<br><b style="color:var(--red)">예약 작업 일정과 달라요</b>':''}`,act:'go',data:{h:'schedule'}})}</div>`)}
+  ${sec('시험 일정','',`<div class="group">${row({ic:'flag',tone:rp==='diff'?'red':'',t:'준비 시작일·목표 회차',d:`${esc(korDate(S.settings.start))} 시작 · ${PLAN.E}주<br><span class="nw">제${PLAN.target.r}회</span> · <span class="nw">${esc(korDate(PLAN.target.d))}(${DAYK[parse(PLAN.target.d).getDay()]}${esc(estTag(PLAN.target).replace(/^\((.+)\)$/,', $1'))})</span>${rp==='diff'?'<br><b style="color:var(--red)">예약 작업 일정과 달라요</b>':''}${l3?`<br><span class="nw">${esc(l3)}</span>`:''}`,act:'go',data:{h:'schedule'}})}</div>`)}
   ${sec('공부 도구','',`<div class="group">${row({ic:'caldot',t:'학습 달력',d:'접속한 날과 끝낸 공부',act:'go',data:{h:'cal'}})}${row({ic:'cal',t:PLAN.E+'주 로드맵',d:'단계·주차별 목표와 학원 대체표',act:'go',data:{h:'plan'}})}${row({ic:'pen',t:'답안 작성 요령',d:'모범 답안으로 보는 답안지 쓰는 법',act:'go',data:{h:'guide'}})}${row({ic:'timer',t:'교시 타이머',d:'100분, 문제 경계마다 알림',act:'go',data:{h:'timer'}})}${row({ic:'chat',t:'Claude 프롬프트',d:'첨삭·카드 생성·주간 리포트 등 10개',act:'go',data:{h:'prompts'}})}</div>`)}
   ${sec('데이터','',`<div class="group">${row({ic:'sync',t:'지금 받아 오기',d:syncing?'받아 오는 중…':s.last&&!s.ok?'<span class="sfail">받아 오지 못했어요</span>':'',act:'sync'})}${row({ic:'imp',t:'카드·목차 가져오기',d:'Claude가 만든 JSON 붙여넣기',act:'go',data:{h:'imp'}})}${row({ic:'save',t:'백업·복원',d:(S.tk||{}).backup?'마지막 백업 '+md(S.tk.backup):'아직 백업한 적이 없어요',act:'go',data:{h:'backup'}})}</div>`)}
   ${sec('앱','',`<div class="group">${row({ic:'gear',t:'설정',d:'하루 공부 시간, 새 카드 수, 글자 크기, 테마',act:'go',data:{h:'settings'}})}${row({ic:'info',t:'콘텐츠 출처',d:'카드·기출·세트가 어디서 왔는지',act:'go',data:{h:'about'}})}${me&&!me.admin?row({ic:'mail',t:'관리자에게 문자 보내기',d:'궁금한 점·요청을 관리자에게',act:'go',data:{h:'msg'}}):''}</div>`)}
@@ -2486,35 +2539,85 @@ function vPlan(){const t=todayStr(),cw=weekIndex(),E=PLAN.E,ms=milestones();
   ${sec('Claude 활용 순서','',PE_CLAUDE_ROUTINE.map((r,i)=>`<details class="d"><summary>${i+1}. ${esc(r.n)}</summary><div class="in-d"><p style="margin:0;color:var(--ink2)">${esc(r.d)}</p></div></details>`).join(''))}
   ${sec('답안 작성 10계명','',PE_TIPS.map((x,i)=>`<details class="d"><summary>${i+1}. ${esc(x.t)}</summary><div class="in-d"><p style="margin:0;color:var(--ink2)">${esc(x.d)}</p></div></details>`).join(''))}`;}
 let SCH=null;
-function schReq(){const p=planSig();const ov=S.settings.roundDates||{};const rounds=Object.keys(ov).sort().map(r=>` --round ${r}=${ov[r]}`).join('');
-  return`기술사 6개월 앱의 시험 일정을 바꿨어요. 예약 작업 저장소에도 같은 일정을 넣어 주세요.
+/* 변경 요청(Claude Code에 붙여 넣는 글). 바꾸기를 기다리는 중이면 기다리는 새 목표로, 그 월요일 전날 전에는 실행하지 말라는 한 줄을 더한다 */
+function schReq(){const N=S.settings.nextTarget,p=planSig(N?computePlan(S.settings.start,N.r):PLAN);const ov=S.settings.roundDates||{};const rounds=Object.keys(ov).sort().map(r=>` --round ${r}=${ov[r]}`).join('');
+  return`기술사 6개월 앱의 시험 일정을 바꿨어요. 예약 작업 저장소에도 같은 일정을 넣어 주세요.${N?`
+앱은 ${dlab(N.from)}부터 새 일정이에요. ${dlab(addDays(N.from,-1))} 전이면 실행하지 말고 그날 다시 붙여 달라고 답해 주세요.`:''}
 1) add_repo 도구로 woos-lee94/gisulsa-data 를 push 권한으로 붙이고 클론
-2) python3 pipeline/tool.py set-plan --start ${p.start} --target ${S.settings.target||'auto'} --clear-rounds${rounds}
+2) python3 pipeline/tool.py set-plan --start ${p.start} --target ${N?N.r:S.settings.target||'auto'} --clear-rounds${rounds}
    (출력의 목표 ${p.target}회 ${p.exam}, 실전 모의 ${p.mock?p.mock+'회 '+p.mockDate:'없음'}과 같은지 확인)
 3) git add -A && git commit -m "일정 변경: ${p.start} 시작, 제${p.target}회 목표" && git fetch origin main && git rebase origin/main && git push origin HEAD:main`;}
+/* 미룰지 살펴볼 까닭의 글(이번 주·지난주 기록 줄 t·d, 시험 일정 칸 ds·meta) */
+function slipTxt(c){if(!c)return null;
+  if(c.why==='apply'){const pd=`${md(c.ap)}~${md(c.ae)}`;return{t:`제${c.T0.r}회 원서접수를 했나요?`,d:`접수 기간(${pd})이 지났어요`,ds:`제${c.T0.r}회 원서접수 기간(${pd})이 지났어요.`,meta:''};}
+  const n=c.ps.length,d=c.why==='pace'?(c.low>=n?`최근 ${n}주가 모두 60%보다 낮아요`:`최근 ${n}주 가운데 ${c.low}주가 60%보다 낮아요`):`3단계 전에 쉬는 날이 ${c.offN}일이에요`;
+  return{t:'시험 일정 살펴보기',d,ds:d+'.',meta:c.why==='pace'?`최근 ${n}주 ${c.ps.map(p=>p+'%').join(' · ')}`:''};}
+/* 이번 주 탭·지난주 기록 창의 "시험 일정 살펴보기" 줄(회색, 시험 일정으로) */
+const slipRow=x=>row({ic:'flag',tone:'gray',t:esc(x.t),d:esc(x.d),act:'go',data:{h:'schedule'}});
+/* "제143회 · 8월 28일(토, 예상)" */
+const rndT=x=>`제${x.r}회 · ${korDate(x.d)}(${DAYK[parse(x.d).getDay()]}${estTag(x).replace(/^\((.+)\)$/,', $1')})`;
+/* 시험 일정: 지금 회차와 다음 두 회차 견주기. 미룰지 살펴볼 때(slipCheck)는 열린 칸 "시험을 미룰지 살펴봐요"(까닭·추천·지금 일정대로 할게요), 아니면 닫힌 "다음 회차와 비교" */
+function schCmpHTML(t,c){const tx=slipTxt(c),T0=PLAN.target,ap=addDays(T0.d,-PE_SCHED.annBefore),ae=addDays(ap,3),ok=!!(S.tk||{})['apply:'+T0.r];
+  const rs=roundRows(t).map(o=>{const tt=esc(rndT(o.P.target))+(o.cur?'<span class="tag">지금</span>':c&&o.r===c.nx.r?'<span class="tag">추천</span>':''),
+    dd=`${nwTxt(`시험까지 ${o.wk}주 · 1·2단계 ${o.p12}주 남음 · 단원마다 약 ${o.per}주`)}<br>${nwTxt(`3단계 ${dlab(o.p3)}부터 · 실전 모의 ${o.P.mock?`제${o.P.mock.r}회 ${md(o.P.mock.d)}`:'없음'}`)}`;
+    return o.cur?row({t:tt,d:dd}):row({t:tt,d:dd,act:'sch-pick',data:{r:o.r}});}).join('');
+  const notes=['3·4단계(실전 모의·파이널) 12주는 어느 회차든 같아요.','미루면 1·2단계가 길어져 단원마다 (이어서) 주가 생겨요.',
+    ok?`접수한 제${T0.r}회는 실전 모의로 봐요.`:t<=ae?`제${T0.r}회 원서접수는 ${md(ap)}~${md(ae)}${T0.est?'(예상)':''}이에요. 그 전에 정해요.`:''].filter(Boolean);
+  const body=`${tx?`<p class="ds schwhy">${esc(tx.ds)}</p>`:''}<div class="group schopt">${rs}</div>${notes.map(n=>`<p class="note">${esc(n)}</p>`).join('')}
+    ${!c?'':c.why==='apply'?`<div class="btns"><button class="btn sec" data-act="tk" data-id="apply:${T0.r}">제${T0.r}회 접수했어요</button></div>`:'<div class="schln"><button class="lnk" data-act="slip-no">지금 일정대로 할게요</button></div>'}`;
+  return c?sec('시험을 미룰지 살펴봐요',tx.meta?esc(tx.meta):'',body):`<details class="d schcmp"${foldAt('schcmp')}><summary>다음 회차와 비교</summary><div class="in-d">${body}</div></details>`;}
+/* 시험 일정 맨 위: 바꾸기를 기다리는 줄("2/8(월)부터 제143회 일정이에요" · 바꾸지 않기), 바꾼 뒤 7일 동안 되돌리기 줄(같은 미리 보기·바뀌는 날 규칙) */
+function schTopHTML(t){const st=S.settings,N=st.nextTarget,u=st.schUndo;
+  if(N){const P1=computePlan(st.start,N.r),kp=schKeep(PLAN,P1,t);
+    return`<div class="group schpend">${row({ic:'cal',tone:'gray',t:esc(`${dlab(N.from)}부터 제${P1.target.r}회 일정이에요`),d:esc(kp.length?kp.map(x=>`제${x.r}회(${md(x.d)})`).join('·')+'는 지금 일정대로 봐요':'이번 주는 지금 일정 그대로예요')})}</div><div class="schln"><button class="lnk" data-act="sch-next-cancel">바꾸지 않기</button></div>`;}
+  if(u&&u.at&&t<=addDays(u.at,7)){const r0=computePlan(st.start,u.r).target.r;
+    return`<div class="group schpend">${row({ic:'redo',tone:'gray',t:esc(`제${r0}회로 되돌리기`),d:esc(`${md(u.at)}에 바꿨어요 · ${md(addDays(u.at,7))}까지`),act:'sch-pick',data:{r:u.r}})}</div>`;}
+  return'';}
+/* 바꾸면 이렇게 돼요(미리 보기)에 더하는 줄: 바뀌는 날의 주차 틀·단계, 이번 주 그대로·접수한 시험·단계가 돌아감·실전 모의·빠지는 시험·남는 실전 모의·공휴일·변경 요청 복사 */
+function schPrevHTML(P,from,stCh,t){const nm=addDays(wkStart(t),7),eff=from||nm,wf=Math.floor(diffDays(P.start,eff)/7),tk=S.tk||{},o=[],q=x=>`제${x.r}회(${md(x.d)})`;
+  const li=wf>=0&&wf<=P.E?`<li class="two"><span class="dot half"></span><span class="k">${from&&from>nm?md(from)+'부터':'다음 주'}</span><span class="v">${esc(weekObj(wf,P).t)} · <span class="nw">${esc(phaseObj(wf,P).n)}</span></span></li>`:'';
+  const kp=stCh?[]:schKeep(PLAN,P,t),w0=wkIdx(t),ph0=w0>=1?phaseObj(w0).id:0,ph1=wf>=0?phaseObj(wf,P).id:0;
+  if(from&&from===nm)o.push('이번 주는 지금 일정 그대로예요.');
+  if(kp.length)o.push(`${kp.map(q).join('·')}는 지금 일정대로 보고 ${dlab(from)}부터 바뀌어요.`);
+  if(ph1>=1&&ph1<5&&ph1<ph0&&ph0<5)o.push(`${md(eff)}부터 ${ph1}단계로 돌아가요(지금은 ${ph0}단계).`);
+  const mk=x=>x?`제${x.r}회 ${md(x.d)}`:'없음';if((PLAN.mock&&PLAN.mock.r)!==(P.mock&&P.mock.r))o.push(`실전 모의: ${mk(PLAN.mock)} → ${mk(P.mock)}`);
+  const rs1=[P.mock,P.target].filter(Boolean).map(x=>x.r),drop=[PLAN.mock,PLAN.target].filter(x=>x&&!rs1.includes(x.r)&&x.d>=t&&t>=addDays(x.d,-PE_SCHED.annBefore)&&!tk['apply:'+x.r]);
+  const hy=Math.max(...Object.keys(KR_HOLI).map(d=>+d.slice(0,4))),ln=o.map(x=>`<p class="ds schl">${esc(x)}</p>`).join('');
+  const dr=drop.map(x=>`<p class="ds schl">${esc(q(x))}는 일정에서 빠져요. <button class="lnk" data-act="tk" data-id="apply:${x.r}">제${x.r}회 접수했어요</button></p>`).join('');
+  const o2=[];if(P.mock&&P.mock.r===PLAN.target.r&&P.target.r!==PLAN.target.r&&!tk['apply:'+PLAN.target.r])o2.push(`${q(PLAN.target)}는 실전 모의 날로 남아요.`);
+  if(+P.target.d.slice(0,4)>hy)o2.push(`${hy+1}년 공휴일은 아직 넣지 않았어요.`);if(SETS.plan)o2.push('저장하면 예약 작업에 보낼 변경 요청을 복사해요.');
+  return{li,lines:ln+dr+o2.map(x=>`<p class="ds schl">${esc(x)}</p>`).join('')};}
 function vSchedule(){const ed=SCH||{start:S.settings.start,target:S.settings.target||'auto'};const changed=!!SCH&&(ed.start!==S.settings.start||String(ed.target)!==String(S.settings.target||'auto'));
   let P;try{P=computePlan(ed.start,ed.target);}catch(e){P=PLAN;}
-  const el=eligibleRounds(ed.start).slice(0,6);const t=todayStr();const rp=repoPlanState(),R0=SETS.plan;
+  const el=eligibleRounds(ed.start).slice(0,6);const t=todayStr();const rp=repoPlanState(t),R0=SETS.plan,N=S.settings.nextTarget;
+  const stCh=changed&&ed.start!==S.settings.start,from=changed&&!stCh?schFrom(PLAN,P,t):null,pv=changed?schPrevHTML(P,from,stCh,t):null;
   const mo=(P.E/4.345).toFixed(1);const a1=P.E-12;
   const list=roundList().filter(x=>x.d>=addDays(t,-40)).slice(0,9);
   /* 이번 주 줄의 원서접수 날짜 확인·시행계획 공고 확인: 여기서 큐넷 공고와 맞춰 보고 "확인했어요" */
   const ck=taskList(t).filter(x=>x.k==='applychk'||x.k==='notice');
   return topbar('시험 일정')+`<h1 class="ptitle">시험 일정</h1><p class="lsub">준비 시작일을 정하면 정기시험 가운데 ${PE_SCHED.minMonths}개월 이상 남은 가장 빠른 회차를 목표로 잡아요.</p>
   ${ck.length?`<div class="group schk">${ck.map(x=>`<div class="row noic"><span class="tx"><span class="tt">${esc(x.label)}</span><span class="ds">${x.k==='notice'?'공고된 시험일이 아래 일정과 다르면 고쳐요':'큐넷에서 접수 날짜와 시험일을 확인해요'}</span></span>${x.done?'<span class="pdn">✓ 확인했어요</span>':`<button class="btn sm sec" data-act="tk" data-id="${esc(x.id)}">확인했어요</button>`}</div>`).join('')}</div>`:''}
+  ${schTopHTML(t)}${schCmpHTML(t,slipCheck(t))}
   <label class="f" for="schStart">준비 시작일</label><input class="in" type="date" id="schStart" value="${esc(ed.start)}">${parse(ed.start).getDay()!==1?'<p class="note warn">주가 월요일에 시작해야 이번 주 계산이 맞아요</p>':''}
   <label class="f" for="schTarget">목표 회차</label><select class="select" id="schTarget"><option value="auto"${ed.target==='auto'?' selected':''}>자동: 가장 빠른 회차(제${el[0].r}회)</option>${el.map(x=>`<option value="${x.r}"${String(ed.target)===String(x.r)?' selected':''}>제${x.r}회, ${x.d}${estTag(x)}, ${Math.floor(diffDays(ed.start,x.d)/7)}주</option>`).join('')}</select>
-  <div class="sheet" style="margin-top:16px"><p class="sheet-k">${changed?'바꾸면 이렇게 돼요':'지금 일정'}</p><h3>제${P.target.r}회 필기 ${esc(korDateY(P.target.d,true))}${P.target.est?' <span class="tag-new">예상</span>':''}</h3>
+  <div class="sheet" id="schPrev" style="margin-top:16px"><p class="sheet-k">${changed?'바꾸면 이렇게 돼요':'지금 일정'}</p><h3>제${P.target.r}회 필기 ${esc(korDateY(P.target.d,true))}${P.target.est?' <span class="tag-new">예상</span>':''}</h3>
     <ul class="steps">
       <li><span class="dot on"></span><span class="k">준비 기간</span><span class="v">${P.E}주, 약 ${mo}개월</span></li>
       <li><span class="dot ${P.mock?'on':''}"></span><span class="k">실전 모의</span><span class="v">${P.mock?`제${P.mock.r}회 ${md(P.mock.d)}${P.mock.est?'(예상)':''}, ${P.M}주차`:'없음'}</span></li>
       <li><span class="dot half"></span><span class="k">1회독·2회독</span><span class="v">1~${a1}주차</span></li>
-      <li><span class="dot half"></span><span class="k">실전 모의 → 파이널</span><span class="v">${a1+1}~${P.E-1}주차</span></li>
+      <li><span class="dot half"></span><span class="k">실전 모의 → 파이널</span><span class="v">${a1+1}~${P.E-1}주차</span></li>${pv?pv.li:''}
     </ul>
     ${P.mock?'':`<p class="ds" style="margin:4px 0 0">시작 ${PE_SCHED.mockMinWeeks}주 뒤부터 목표 전까지 열리는 정기시험이 없어 주말 모의고사로 대신해요.</p>`}
     ${P.target.note||(P.mock&&P.mock.note)?`<p class="ds" style="margin:6px 0 0">${esc([P.mock&&P.mock.note?`제${P.mock.r}회: ${P.mock.note}`:'',P.target.note?`제${P.target.r}회: ${P.target.note}`:''].filter(Boolean).join(' / '))}</p>`:''}
-    ${changed?`<div class="btns" style="margin-top:14px"><button class="btn" data-act="sch-save">이 일정으로 저장</button><button class="btn ghost" data-act="sch-cancel">취소</button></div><p class="ds" style="margin:8px 0 0">오늘 화면, 로드맵, 주차와 단계가 새 일정으로 바뀌어요. 카드·오답 기록은 그대로예요.</p>`:''}</div>
+    ${pv?pv.lines:''}
+    ${changed?`<div class="btns" style="margin-top:14px"><button class="btn" data-act="sch-save">${from?esc(dlab(from))+'부터 이 일정으로':'이 일정으로 저장'}</button><button class="btn ghost" data-act="sch-cancel">취소</button></div><p class="ds" style="margin:8px 0 0">오늘 화면, 로드맵, 주차와 단계가 새 일정으로 바뀌어요. 카드·오답 기록은 그대로예요.</p>`:''}</div>
   ${sec('예약 작업 일정','',rp==='same'?`<div class="group">${row({ic:'check',tone:'ok',t:'예약 작업도 같은 일정이에요',d:'매일 세트와 주간 모의고사가 이 일정의 주차·단원으로 만들어져요'})}</div>`
     :rp==='unknown'?`<div class="group">${row({ic:'sync',tone:'gray',t:'아직 확인하지 못했어요',d:'받아 오기를 하면 저장소의 일정과 비교해요',act:'sync'})}</div>`
+    :rp==='wait'?`<div class="group">${row({ic:'cal',tone:'gray',t:esc(`예약 작업은 ${dlab(N.from)}부터 바꿔요`),d:esc(`${dlab(addDays(N.from,-1))}에 변경 요청을 붙여 넣어요`)})}</div>
+      <div class="btns"><button class="btn sec" data-act="sch-copy">변경 요청 복사</button></div><p class="note">그 전에 붙여 넣으면 이번 주 남은 세트가 새 일정으로 와요.</p>`
+    :rp==='next'?`<div class="group">${row({ic:'check',tone:'ok',t:'예약 작업은 이미 새 일정이에요',d:esc(`앱은 ${dlab(N.from)}부터 새 일정이에요`)})}</div>`
+    :rp==='sent'?`<div class="group">${row({ic:'sync',tone:'gray',t:'변경 요청을 복사해 두었어요',d:'Claude Code에 붙여 넣으면 다음 받아 오기 때 맞춰져요'})}</div>
+      <div class="btns"><button class="btn sec" data-act="sch-copy">다시 복사</button></div>`
     :`<div class="group">${row({ic:'x',tone:'red',t:'예약 작업은 아직 이전 일정이에요',d:`저장소: ${esc(R0.start)} 시작, 제${esc(R0.target)}회 ${esc(R0.exam)}. 바꾸기 전까지 매일 세트의 주차·단원이 앱과 어긋날 수 있어요`})}</div>
       <div class="btns"><button class="btn sec" data-act="sch-copy">변경 요청 복사</button></div><p class="note">서버가 없어 앱이 저장소를 직접 고칠 수 없어요. 복사한 요청을 Claude Code에 붙여 넣으면 저장소 일정이 바뀌고, 다음 받아 오기 때 이 표시가 사라져요.</p>`)}
   ${sec('정기시험 일정','기술사 필기, 해마다 3회',`<div class="group">${list.map(x=>row({ic:'cal',tone:x.r===P.target.r?'red':P.mock&&x.r===P.mock.r?'amber':'gray',t:`제${x.r}회 ${esc(korDateY(x.d,true))}`,d:esc([x.est?'예상':x.user?'직접 입력':'확정',x.r===P.target.r?'목표':P.mock&&x.r===P.mock.r?'실전 모의':'',x.d<t?'지남':'',x.note].filter(Boolean).join(', '))})).join('')}</div>
@@ -3114,11 +3217,24 @@ document.addEventListener('click',e=>{
   case'gloss':S.settings.gloss=D.v==='off'?'off':'on';save();return render();
   case'save-settings':{const np=Number($('#sNew').value),du=($('#sData')||{}).value;S.settings.newPerDay=Math.min(60,Math.max(1,np||10));if(du!==undefined)S.settings.dataUrl=du.trim();save();toast('저장했어요');return render();}
   /* 시험 일정 */
-  case'sch-save':{if(!SCH)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(SCH.start||''))return toast('준비 시작일을 확인하세요');const pre=planPre();S.settings.start=SCH.start;S.settings.target=SCH.target||'auto';SCH=null;recalcPlan();save();planChanged('sched',pre);toast(repoPlanState()==='diff'?'시험 일정을 바꿨어요. 예약 작업에도 알려 주세요':'시험 일정을 바꿨어요');return render();}
+  /* 저장: 시작일을 바꾸면 바로(지금 주까지 산 단계를 적어 두고 기다리던 바꾸기·되돌리기는 지움). 목표만 바꾸면 이번 주가 그대로일 때 바로, 아니면 바뀌는 월요일까지 기다림(nextTarget).
+     어느 쪽이든 "지금 일정대로 할게요"는 지우고, 예약 작업 일정이 다르면(diff·wait) 변경 요청을 같은 탭에서 복사(schSent) */
+  case'sch-save':{if(!SCH)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(SCH.start||''))return toast('준비 시작일을 확인하세요');
+    const t=todayStr(),st=S.settings,pre=planPre(),prev=st.target||'auto',tg=SCH.target||'auto',stCh=SCH.start!==st.start,from=stCh?null:schFrom(PLAN,computePlan(st.start,tg),t);
+    delete st.slipNo;
+    if(from){st.nextTarget={r:tg,from,prev,at:t};SCH=null;save();}
+    else{lockLived(PLAN,wkIdx(t)+(stCh?1:0));if(stCh){st.start=SCH.start;delete st.schUndo;}else st.schUndo={r:prev,at:t};st.target=tg;delete st.nextTarget;SCH=null;recalcPlan();phaseReset(t);save();planChanged('sched',pre);}
+    const rp=repoPlanState(t),msg=from?`${dlab(from)}부터 제${nextR(st.nextTarget)}회 일정이에요`:'시험 일정을 바꿨어요';
+    if(rp==='diff'||rp==='wait'){st.schSent=t;save();const m2=from||stCh?msg:`제${PLAN.target.r}회로 바꿨어요`;PE_IO.copy(schReq()).then(()=>toast(m2+'. 변경 요청을 복사했어요'),()=>{delete S.settings.schSent;save();toast(m2+'. 변경 요청은 복사하지 못했어요');render();});}
+    else toast(msg);
+    return render();}
   case'sch-cancel':SCH=null;return render();
-  case'sch-copy':return copy(schReq(),'변경 요청을 복사했어요. Claude Code에 붙여 넣으세요');
-  case'sch-round-set':{const r=Number($('#schRound').value),d=$('#schRoundDate').value;if(!r||!/^\d{4}-\d{2}-\d{2}$/.test(d))return toast('회차와 날짜를 고르세요');const pre=planPre();S.settings.roundDates[r]=d;recalcPlan();save();planChanged('sched',pre);toast(`제${r}회를 ${d}로 고쳤어요`);return render();}
-  case'sch-round-reset':{const r=Number($('#schRound').value);if(!r)return;const pre=planPre();delete S.settings.roundDates[r];recalcPlan();save();planChanged('sched',pre);toast(`제${r}회를 예상일로 되돌렸어요`);return render();}
+  case'sch-pick':SCH={start:S.settings.start,target:D.r==='auto'?'auto':Number(D.r)};SV.scrollTo='#schPrev';render();return scrollDo();   /* 회차 견주기·되돌리기 줄 → 미리 보기 */
+  case'sch-next-cancel':delete S.settings.nextTarget;save();toast('지금 일정 그대로 둬요');return render();
+  case'slip-no':{const t=todayStr(),c=slipCheck(t);S.settings.slipNo={at:t,avg:c&&c.avg!=null?c.avg:null};save();toast('4주 동안 다시 묻지 않을게요');return render();}
+  case'sch-copy':return PE_IO.copy(schReq()).then(()=>{S.settings.schSent=todayStr();save();toast('변경 요청을 복사했어요. Claude Code에 붙여 넣으세요');render();},()=>toast('복사하지 못했어요'));
+  case'sch-round-set':{const r=Number($('#schRound').value),d=$('#schRoundDate').value;if(!r||!/^\d{4}-\d{2}-\d{2}$/.test(d))return toast('회차와 날짜를 고르세요');const pre=planPre();S.settings.roundDates[r]=d;delete S.settings.slipNo;recalcPlan();save();planChanged('sched',pre);toast(`제${r}회를 ${d}로 고쳤어요`);return render();}
+  case'sch-round-reset':{const r=Number($('#schRound').value);if(!r)return;const pre=planPre();delete S.settings.roundDates[r];delete S.settings.slipNo;recalcPlan();save();planChanged('sched',pre);toast(`제${r}회를 예상일로 되돌렸어요`);return render();}
   case'backup-copy':{const[j,undo]=backupJSON();return PE_IO.copy(j).then(()=>{backupDone();toast('백업을 복사했어요. 메모 앱에 붙여 두세요');},()=>{undo();toast('복사하지 못했어요');});}
   case'backup-dl':{const[j,undo]=backupJSON();PE_IO.saveFile('gisulsa-backup-'+todayStr()+'.json',j).then(backupDone,()=>{undo();toast('파일로 저장하지 못했어요');});return;}
   case'restore':return restoreFrom($('#restoreText').value);
@@ -3140,7 +3256,7 @@ document.addEventListener('keydown',e=>{const t=e.target;if(e.key!=='Enter'||!t.
   const all=Array.from(document.querySelectorAll('.fill-in'));const k=all.indexOf(t);if(k<all.length-1)all[k+1].focus();else fillCheck(false);});
 $('#nav').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b)goTab(b.dataset.tab);});
 let calHid=0;
-document.addEventListener('visibilitychange',()=>{if(document.hidden){memoPause();calHid=Date.now();}if(!document.hidden){if(Date.now()-calHid>10*60000)calOpen();sync(false);IBX.at=0;if(!R.page)render();}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){memoPause();calHid=Date.now();}if(!document.hidden){if(Date.now()-calHid>10*60000)calOpen();sync(false);IBX.at=0;nextApply(todayStr());if(!R.page)render();}});
 /* 관리자에게 보낼 말은 다시 그려도 남게 */
 document.addEventListener('input',e=>{if(e.target&&e.target.id==='msgText')SV.msgDraft=e.target.value;});
 window.addEventListener('online',()=>sync(true));
@@ -3163,5 +3279,7 @@ window.__pe={S:()=>S,rParts,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS
   /* 특별한 날·달력(검사용) */
   calFwd:fresh2(calFwd),monNotice:fresh2(monNotice),S_NEW:()=>S_NEW,
   /* 쉬는 날·앞날(검사용) */
-  wkAhead:fresh2(wkAhead),offDelta:fresh2(offDelta),catchLine:fresh2(catchLine),dayOff,pinMin,placeTxt,outTxt,lvTxt,todayOnlyTxt,cuOn,cuPreview:fresh2(cuPreview),dayRuns};
+  wkAhead:fresh2(wkAhead),offDelta:fresh2(offDelta),catchLine:fresh2(catchLine),dayOff,pinMin,placeTxt,outTxt,lvTxt,todayOnlyTxt,cuOn,cuPreview:fresh2(cuPreview),dayRuns,
+  /* 시험 일정 살펴보기(검사용) */
+  slipCheck:fresh2(slipCheck),weekP:fresh2(weekP),roundRows:fresh2(roundRows),schFrom:fresh2(schFrom),nextApply:fresh2(nextApply),repoPlanState:fresh2(repoPlanState),schReq:fresh2(schReq),setPh,lockLived,planSig,monNoticeHTML};
 })();
