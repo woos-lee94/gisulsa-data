@@ -661,6 +661,8 @@ button.drow:active{background:var(--rule2)}
 .wkline.catch{display:flex;align-items:center;gap:6px;width:calc(100% - 8px);min-height:44px;text-align:left;color:var(--blue);font-weight:700}
 .wkline.catch .chev{margin:0 0 0 auto}.wkline.catch .chev::before{border-color:var(--blue)}
 .note.wkc{margin:0 4px 8px}
+.capseg.c3 button{flex:1 1 28%}   /* 설정 기간 창: 쉬어요 · 1시간 · 2시간 한 줄 */
+.wkcu{margin:10px 4px 0}.wkcu .note{margin:0}.wkcu .btns{margin-top:8px}.wkcu .lnk{min-height:44px;margin-left:-2px}   /* 평일 저녁에 나눠 하기(이번 주 날마다 아래) */
 .nw{white-space:nowrap}
 .fs{display:flex;flex-direction:column;min-width:0}
 .fs small{display:block;margin-top:1px;font-size:.86rem;font-weight:400;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

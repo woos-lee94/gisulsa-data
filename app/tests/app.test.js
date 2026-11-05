@@ -1632,6 +1632,14 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(view().querySelectorAll('[data-act="budget"]').length === 12 && !view().querySelector('[data-h="schedule"]') && /오늘 몫과 '이번 주' 계산이 이 시간을 써요/.test(txt()), '설정: 하루 공부 시간 3줄, 시험 일정 줄 없음');
     click('[data-act="budget"][data-k="wd"][data-v="150"]'); await sleep(10);
     ok(S().settings.budget.wd === 150 && S().settings.budget.sat === 300 && S().tk.budget === T0 && view().querySelector('[data-act="budget"][data-k="wd"][data-v="150"].on') && pe.budgetOf('2026-11-02') === 150, '하루 공부 시간 평일 2시간 30분 → S.settings.budget, S.tk.budget, 계산에 바로');
+    // 설정 → 쉬는 날·짧은 날(내일이 시험 전날 이전일 때): 정한 날이 없으면 "정한 날이 없어요", 날짜 정하기(보조 버튼) → 기간 창(시작·끝, 쉬어요 · 1시간 · 2시간, 파란 버튼 없음)
+    { const tm = (x => { x.setDate(x.getDate() + 1); return ymdOf(x); })(new w.Date(T0 + 'T12:00:00')), lt = (x => { x.setDate(x.getDate() - 1); return ymdOf(x); })(new w.Date(pe.PLAN().target.d + 'T12:00:00'));
+      if (tm <= lt) { const fut = Object.keys(S().days || {}).filter(x => x > T0);
+        ok([...view().querySelectorAll('label.f')].some(l => l.textContent.trim() === '쉬는 날·짧은 날') && (fut.length ? view().querySelector('[data-act="days-del"]') : /정한 날이 없어요/.test(txt())) && view().querySelector('.btn.sec[data-act="days-sheet"]'), '설정: "쉬는 날·짧은 날"(정한 날이 없어요), 날짜 정하기');
+        click('[data-act="days-sheet"]'); await sleep(10); const fi = mw().querySelector('#offFrom');
+        ok(fi && fi.type === 'date' && fi.min === tm && fi.max === lt && mw().querySelector('#offTo') && mw().querySelectorAll('[data-act="days-set"]').length === 3 && !mw().querySelectorAll('.btn:not(.sec):not(.ghost)').length && /한 번에 31일까지 정할 수 있어요/.test(mw().textContent), '설정 기간 창: 시작·끝(내일 ~ 시험 전날), 쉬어요 · 1시간 · 2시간');
+        click('#modal-wrap [data-act="days-set"][data-m="0"]'); await sleep(10); ok(/시작과 끝 날짜를 고르세요/.test(toastTxt()) && Object.keys(S().days || {}).filter(x => x > T0).length === fut.length, '설정 기간 창: 날짜 없이 고르면 "시작과 끝 날짜를 고르세요"');
+        click('#modal-wrap [data-act="sheet-close"]'); await sleep(10); } }
     // 다음 주 단원 기출(토·일요일에 열면 이번 주 "다음 주 단원 기출 훑기"로 친다, 그리는 것만으로는 쓰지 않음)
     { const nu = (pe.weekObj(pe.weekIndex(pe.wkStart(T0)) + 1).u || [])[0], kk = 'kichul:' + W; delete S().tk[kk];
       if (nu) { await go('#kichul/u/' + nu); ok((dw === 0 || dw === 6) ? S().tk[kk] === T0 : !S().tk[kk], `다음 주 단원(${nu}) 기출을 ${dw === 0 || dw === 6 ? '주말에 열면 침' : '평일에 열면 치지 않음'}`); pe.render(); ok(((dw === 0 || dw === 6) ? S().tk[kk] === T0 : !S().tk[kk]), '같은 화면을 다시 그려도 그대로'); } }
