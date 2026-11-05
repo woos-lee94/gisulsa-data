@@ -1773,6 +1773,54 @@ function runWeek(W, sets, st) {
       runW2({ skip: [D3[1], D3[2]], hook: x => { const S = pe.S(); if (x === D3[1]) S.days = { [D3[1]]: { m: 0 }, [D3[2]]: { m: 0 } }; if (x === D3[3]) { (S.wk[W3] = S.wk[W3] || {}).cu = x; pe.invalidate(); } }, until: D3[4] }, X3, W3, BLANK);
       const P = pe.dayPlan(D3[4], { now: 420, user: 30 }), fq = P.moved.filter(x => x.quota);
       ok(fq.length && fq.every(x => x.dest === '토요일 따라잡기'), `55-5. 금요일(나눠 하기, 30분)에 못 넣은 몫은 토요일 따라잡기: ${fq.map(x => x.id.split(':')[0] + '→' + x.dest).join(', ')}`); }
+    // 63. Slice 2 고침(리뷰): 나눠 넣는 줄(두 번째 밀린 세트·손글씨 몫)은 그날 필수(세트 복습 포함)를 다 넣고 남은 시간에만(오늘 숙제는 필수 칸 먼저, 더 하기는 뒤에).
+    //     미리 보기 "나눠 하면 → …" = 오늘 몫 계산(날마다 필수 분의 차이, ±5분), 켜고 계획대로 하면 그 주 점수가 켜지 않은 주보다 낮지 않고, 켠 날 필수 세트 복습을 밀어내지 않음
+    { const reqF = V => V.rows.reduce((a, r) => { const x = r.task; if (x && x.hw) return a + Math.min(r.m, x.minFloor != null ? x.minFloor : r.m); return a + (x && x.need === '필수' || /^(q\.|late|mock|report|x\.)/.test(r.id) ? r.m : 0); }, 0);
+      const cuHook = (W, day, h0) => x => { if (h0) h0(x); if (x === day) { (pe.S().wk[W] = pe.S().wk[W] || {}).cu = x; pe.invalidate(); } };
+      const revMv = V => V.moved.filter(x => x.k === 'rev' && x.need === '필수').length, sh = x => x.slice(8), [MO2, TU2] = DAYS;
+      const shadow = (nm, skip, on, txt, X, W, st) => { W = W || W2; const D = [0, 1, 2, 3, 4, 5, 6].map(i => add(W, i)), ds = D.filter(x => x >= on);
+        runW2({ skip, until: on }, X, W, st); pe.planToday(on); const pv = pe.cuPreview(on) || {}, R0 = runW2({ skip }, X, W, st), R1 = runW2({ skip, hook: cuHook(W, on) }, X, W, st);
+        const pd = ds.map(x => reqF(R1[x].V) - reqF(R0[x].V)), jd = ds.map(x => (pv.dl || {})[x] || 0), bad = ds.filter((x, i) => Math.abs(pd[i] - jd[i]) > 5);
+        ok(pv.txt === txt && !bad.length && R1.snap.p >= R0.snap.p && revMv(R1[on].V) <= revMv(R0[on].V),
+          `63-${nm}. 미리 보기 "${pv.txt}" · 날마다 ${ds.map((x, i) => sh(x) + ' ' + jd[i]).join(' · ')} = 계산 ${ds.map((x, i) => sh(x) + ' ' + pd[i]).join(' · ')}, 그 주 ${R0.snap.p}% → ${R1.snap.p}%, 켠 날 밀린 필수 세트 복습 ${revMv(R0[on].V)} → ${revMv(R1[on].V)}`);
+        return { pv, R0, R1 }; };
+      // 63-1. 수·목 건너뛰고 금요일에 켬(리뷰 A5: 금 +57분이라더니 +10분, 7·14일 차 세트 복습 5개를 밀어냄)
+      { const { R1 } = shadow(1, [WE2, TH2], FR2, '금 +45분 · 주말 −45분'), F = R1[FR2].V, rw = id => F.rows.find(r => r.id === id) || {};
+        ok(rw('q.dd:' + W2).m === 30 && rw('late:' + TH2).m && !F.moved.some(x => x.k === 'rev') && ['hw.write', 'hw.eo'].every(k => (F.rows.find(r => r.id === k + ':' + FR2) || {}).tgt === 'floor'),
+          `63-1. 금요일: 손글씨 몫 ${F.rows.filter(r => /^(q\.|late:)/.test(r.id)).map(r => r.id.split(':')[0] + ' ' + r.m).join(', ')} · 오늘 숙제는 필수 칸(${F.rows.filter(r => /^hw\./.test(r.id)).map(r => r.id.split(':')[0] + ' ' + r.tgt).join(', ')}) · 옮긴 세트 복습 없음`); }
+      shadow(2, [MO2, TU2], WE2, '평일 +1시간 14분 · 주말 −1시간 14분');   // 리뷰 A4(수요일에 켜면 필수 세트 복습 6개가 밀렸음)
+      shadow(3, [TU2, WE2], TH2, '목 +55분 · 금 +27분 · 주말 −1시간 14분');   // 리뷰: 목 +1시간 5분 · 금 +17분이라더니 목 +18 · 금 +41
+      // 63-4. 2단계 주(2027-01-11, 지난주부터 이어서, 논술 실전): 화·수 건너뛰고 목요일에 켬(리뷰: 토가 오히려 늘었음)
+      { const W = '2027-01-11', D = [0, 1, 2, 3, 4, 5, 6].map(i => add(W, i)), X = { sets: clone(FIX.sets), mocks: clone(FIX.mocks) }, Wp = add(W, -7);
+        D.slice(0, 5).forEach(x => X.sets[x] = cloneSet(x, 12, refsFor(2))); X.mocks[D[5]] = cloneMock(D[5], { p1: clone(MOCK0.p1), p2: P2_2 });
+        [0, 1, 2, 3, 4].forEach(i => X.sets[add(Wp, i)] = cloneSet(add(Wp, i), 11, refsFor(2))); X.mocks[add(Wp, 5)] = cloneMock(add(Wp, 5), { p1: clone(MOCK0.p1), p2: P2_2 });
+        runW2({}, X, Wp, BLANK); const st = clone(pe.S()); shadow(4, [D[1], D[2]], D[3], '목 +35분 · 금 +43분 · 주말 −1시간 10분', X, W, st); }
+      // 63-5. 3단계 주: 화·수 쉬는 날이면 나눠도 줄인 목표가 풀려 뒷날이 늘기만 해서 미리 보기를 띄우지 않음(켜면 그 주 93% → 92%였음)
+      const W3 = '2027-02-22', D3 = [0, 1, 2, 3, 4, 5, 6].map(i => add(W3, i)), X3 = { sets: clone(FIX.sets), mocks: clone(FIX.mocks) };
+      D3.slice(0, 5).forEach(x => X3.sets[x] = cloneSet(x, 18, refsFor(3))); X3.mocks[D3[5]] = cloneMock(D3[5], { p1: clone(MOCK0.p1), p2: P6(2), p3: P6(3), p4: P6(4) });
+      runW2({ skip: [D3[1], D3[2]], until: D3[3], hook: x => { if (x === D3[1]) pe.S().days = { [D3[1]]: { m: 0 }, [D3[2]]: { m: 0 } }; } }, X3, W3, BLANK); pe.planToday(D3[3]);
+      { const a = pe.wkAhead(D3[3], { fix: 1 }), c = pe.wkAhead(D3[3], { cu: 1 }), dl = c.out.map((x, i) => x.load - a.out[i].load);
+        ok(!pe.cuPreview(D3[3]) && a.handBack > 0 && dl.every(v => v > -5), `63-5. 3단계 화·수 쉬는 날, 목요일: 나누면 날마다 ${dl.join(' · ')}(덜어지는 날 없음) → 미리 보기 없음`); }
+      // 63-6. 3단계 주에 나눠 하기를 켠 화요일(월 건너뜀)에 오늘 쉬면: 다시 쓰기는 평일 줄 그대로·토요일 몫, 놓아주지 않음(리뷰: "약 25분은 다음 주로 놓아줘요(다시 쓰기)"), 날마다 = 계산
+      { const cuT = cuHook(W3, D3[1]); runW2({ skip: [D3[0]], until: D3[1], hook: cuT }, X3, W3, BLANK); pe.planToday(D3[1]); const od = pe.offDelta(D3[1], D3[1]);
+        const R0 = runW2({ skip: [D3[0]], hook: cuT }, X3, W3, BLANK), R1 = runW2({ skip: [D3[0], D3[1]], hook: x => { cuT(x); if (x === D3[1]) { pe.S().days = { [x]: { m: 0 } }; pe.invalidate(); } } }, X3, W3, BLANK);
+        const ds = D3.slice(2), pd = ds.map(x => reqF(R1[x].V) - reqF(R0[x].V)), bad = ds.filter((x, i) => Math.abs(pd[i] - (od.dl[x] || 0)) > 5);
+        ok(!od.ds.redo && !od.sp && pe.outTxt(od) === '이번 주 안에 다 따라잡아요 · 시험 일정은 그대로예요' && pe.lvTxt(od) === '일요일부터 핵심만 해요' && !bad.length && R1[D3[6]].lv === 3 && !R1.snap.rel.length && R1[D3[5]].V.rows.some(r => r.id === 'q.redo:' + W3),
+          `63-6. "${pe.placeTxt(od.dl, D3[1])} / ${pe.outTxt(od)} / ${pe.lvTxt(od)}" = 계산 ${ds.map((x, i) => sh(x) + ' ' + pd[i]).join(' · ')}, 일 단계 ${R1[D3[6]].lv}, 놓아준 것 ${R1.snap.rel.length}`); }
+      // 63-7. 9시 바닥 단답 1문을 끝낸 뒤 나눠 하기를 켜면: 남은 단답 몫은 오늘 밤 같은 줄에 이어서(내일로 미루지 않음)
+      { const X = clone(SETS2); delete X.sets[TH2]; runW2({ skip: [TU2, WE2], until: TH2 }, X); at(TH2 + 'T09:30:00'); const V0 = pe.planToday(TH2), fl = V0.rows.find(r => r.id === 'q.dd:' + W2);
+        applyRows([fl], TH2); pe.invalidate(); pe.planToday(TH2); await show('#week'); click('[data-act="cu-on"]'); await sleep(30); const V = pe.planToday(TH2), r = V.rows.find(r => r.id === 'q.dd:' + W2);
+        ok(fl && JSON.stringify(fl.q) === '[["2026-11-03",1]]' && r && JSON.stringify(r.q) === '[["2026-11-03",1],["2026-11-04",1]]' && r.m === 30 && !r.done && r.left === 15 && !V.moved.some(x => x.k === 'q.dd') && new Set(V.rows.map(r => r.id)).size === V.rows.length && V.doneMin >= 15,
+          `63-7. 바닥 ${fl && JSON.stringify(fl.q)} 끝 → 켜면 ${r && r.id + ' ' + JSON.stringify(r.q) + ' ' + r.m + '분(남은 ' + r.left + '분)'}, 옮긴 단답 ${V.moved.filter(x => x.k === 'q.dd').length}개`);
+        await go('#today'); }
+      // 63-8. 다른 날로 옮긴 것: 손글씨 몫은 세트 날짜까지(같은 이름의 오늘 숙제 줄과 둘로 보이지 않게)
+      { runW2({ skip: [D3[0]], until: D3[1], hook: cuHook(W3, D3[1]) }, X3, W3, BLANK); pe.planToday(D3[1]); pe.planToday(D3[1], { replan: 'cap', user: 30 }); await show('#today');
+        const L = [...V$().querySelectorAll('.prow.moved')].map(T_), fg = L.filter(x => /^그림·표 그리기/.test(x));
+        ok(fg.length === 2 && new Set(L).size === L.length && fg.some(x => /2\/22\(월\) · 2분 → 내일 따라잡기/.test(x)), `63-8. 옮긴 것 ${L.length}줄(같은 줄 없음): ${fg.join(' / ')}`); }
+      // 63-9. 알림은 내용 폭(화면 반에서 꺾이지 않게), 나눠 하기 버튼은 날마다 칸과 같은 폭
+      { const css = fs.readFileSync(path.join(SITE, 'styles.css'), 'utf8');
+        ok(/\.toast\{[^}]*width:max-content;max-width:88vw/.test(css) && /\.wkcu\{margin:10px 0 0\}/.test(css) && /\.wkcu \.note\{margin:0 4px\}/.test(css), '63-9. .toast width:max-content, .wkcu 버튼은 옆 여백 없이'); }
+      pe.goTab('today'); await sleep(40); }
     pe.goTab('today'); await sleep(40);
 
     // 61. Slice 1 고침(리뷰): 미리 보기 = 오늘 몫 계산 = 쉬는 날 카드, 갈 곳은 쉬는 날·시험 날을 건너뜀
@@ -1910,6 +1958,9 @@ function runWeek(W, sets, st) {
       ok(dz.join() === '2027-01-28,2027-01-29,2027-01-31,2027-02-01' && !pe.S().days['2027-01-30'] && /1\/28\(목\)~1\/29\(금\) · 쉬어요/.test(T_(V$())) && /1\/31\(일\)~2\/1\(월\) · 쉬어요/.test(T_(V$())), `62-6. 시험 날(1/30)은 빼요: ${dz.join(', ')}`);
       const b0 = V$().querySelector('[data-act="days-del"][data-a="2027-01-28"]'); b0.dispatchEvent(new w.MouseEvent('click', { bubbles: true })); await sleep(30);
       ok(Object.keys(pe.S().days).sort().join() === '2027-01-31,2027-02-01' && toastT() === '1/28(목)~1/29(금)은 평소대로예요' && rows().length === 1 && T_(b0) === '지우기', `62-7. 지우기: 남은 ${Object.keys(pe.S().days).join(', ')}, 알림 "${toastT()}"`);
+      // 62-8. 시험 날만 고르면 "시작과 끝 날짜를 고르세요"가 아니라 시험 날은 정할 수 없다고(창은 그대로, 기록 없음)
+      { const d0 = JSON.stringify(pe.S().days); click('[data-act="days-sheet"]'); await sleep(10); mw().querySelector('#offFrom').value = '2027-01-30'; mw().querySelector('#offTo').value = '2027-01-30'; click('#modal-wrap [data-act="days-set"][data-m="0"]'); await sleep(30);
+        ok(toastT() === '시험 날은 정할 수 없어요' && JSON.stringify(pe.S().days) === d0 && mw().querySelector('#offFrom'), `62-8. 시험 날(1/30)만: "${toastT()}"`); click('#modal-wrap [data-act="sheet-close"]'); await sleep(10); }
       pe.goTab('today'); await sleep(40); }
     pe.goTab('today'); await sleep(40); }
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));

@@ -429,7 +429,7 @@ body.focus nav.tabs{display:none}
    바로 앞도 버튼 줄인 창(카드 창의 "이 카드 숨기기", 시간 끝 창)은 붙이지 않는다: 카드가 여러 장인 창에서 마지막 카드의 숨기기가 첫 카드 위에 떠 있지 않게 */
 .msheet>:not(.btns)+.btns:last-child{position:sticky;bottom:calc(-20px - var(--sab));z-index:2;margin:12px -16px calc(-20px - var(--sab));padding:10px 16px calc(20px + var(--sab));background:var(--paper)}
 @keyframes up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
-.toast{position:fixed;left:50%;bottom:calc(var(--tab-h) + var(--sab) + 16px);transform:translateX(-50%) translateY(8px);z-index:70;max-width:88vw;
+.toast{position:fixed;left:50%;bottom:calc(var(--tab-h) + var(--sab) + 16px);transform:translateX(-50%) translateY(8px);z-index:70;width:max-content;max-width:88vw;   /* left 50%라 내용 폭으로(화면 반에서 꺾이지 않게) */
   background:var(--ink);color:var(--paper);padding:11px 16px;border-radius:12px;font-weight:600;font-size:.94rem;opacity:0;pointer-events:none;transition:.2s;text-align:center}
 .toast.on{opacity:1;transform:translateX(-50%)}
 .empty{padding:28px 18px;text-align:center;color:var(--ink2);background:var(--sheet);border-radius:var(--r-md)}
@@ -662,7 +662,7 @@ button.drow:active{background:var(--rule2)}
 .wkline.catch .chev{margin:0 0 0 auto}.wkline.catch .chev::before{border-color:var(--blue)}
 .note.wkc{margin:0 4px 8px}
 .capseg.c3 button{flex:1 1 28%}   /* 설정 기간 창: 쉬어요 · 1시간 · 2시간 한 줄 */
-.wkcu{margin:10px 4px 0}.wkcu .note{margin:0}.wkcu .btns{margin-top:8px}.wkcu .lnk{min-height:44px;margin-left:-2px}   /* 평일 저녁에 나눠 하기(이번 주 날마다 아래) */
+.wkcu{margin:10px 0 0}.wkcu .note{margin:0 4px}.wkcu .btns{margin-top:8px}.wkcu .lnk{min-height:44px;margin-left:2px}   /* 평일 저녁에 나눠 하기(이번 주 날마다 아래) */
 .nw{white-space:nowrap}
 .fs{display:flex;flex-direction:column;min-width:0}
 .fs small{display:block;margin-top:1px;font-size:.86rem;font-weight:400;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
