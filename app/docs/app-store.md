@@ -250,7 +250,7 @@ The app is an independent study aid and is not affiliated with HRD Korea or any 
 ## 3.1.0 심사 제출 순서
 
 1. 빌드: `npm test`가 네 파일 모두 "모두 통과"인지 본 뒤 `eas build -p ios --profile production --auto-submit`.
-2. App Store Connect: 버전 추가 → `3.1.0` → 3.1.0 빌드. 이 버전의 새로운 기능은 위 3.1.0 문구. 프로모션 텍스트·설명·스크린샷·심사 메모·App Privacy는 3.0.1 그대로(쉬는 날·시험 일정 기록도 기기에만 둔다, `docs/privacy.md`도 그대로).
+2. App Store Connect: 버전 추가 → `3.1.0` → 3.1.0 빌드. 이 버전의 새로운 기능은 위 3.1.0 문구. 프로모션 텍스트·설명·스크린샷·심사 메모·App Privacy는 3.0.1 그대로(쉬는 날·시험 일정 기록도 기기에만 둔다). `docs/privacy.md`는 클립보드 한 줄만 고쳤다(시험 일정을 저장할 때 변경 요청을 복사, 시행일 2026년 11월 5일). main에 올라가면 같은 주소에서 보인다.
 3. 심사 정보와 초대 코드는 3.0.1 때와 같이 새로 만든다. 끝나면 `apple_review`와 초대 코드를 정리한다.
 
 ## 3.0.1 심사 제출 순서

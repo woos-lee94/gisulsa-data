@@ -2075,6 +2075,73 @@ function runWeek(W, sets, st) {
       ok(lr && lr.dataset.act === 'go' && !box.querySelector('.ic.red') && !/var\(--red\)/.test(box.innerHTML) && box.querySelectorAll('.btn:not(.sec):not(.ghost)').length <= 1, '60-9. 지난주 기록 창의 "시험 일정 살펴보기" 줄(회색), 빨강 없음');
       await show('#schedule'); const n0 = prim().length; click('[data-act="sch-pick"][data-r="143"]'); await sleep(20);
       ok(n0 === 0 && prim().length === 1 && !red(), `60-9. 시험 일정: 파란 버튼 ${n0} → 미리 보기 ${prim().length}, 빨강 없음`); click('[data-act="sch-cancel"]'); await sleep(10); }
+    // 64. 시험 일정 고침: 변경 요청은 저장한 일정의 것인지(schSig)로 sent, 7일 안의 두 번째 바꾸기·되돌리기·바꾸지 않기, 같은 계획은 저장 없음, 바꾼 뒤 다시 묻지 않음, 바꾸는 월요일의 받아 오기
+    { const repoSec = () => [...V$().querySelectorAll('section.sec')].find(x => /예약 작업 일정/.test(T_(x.querySelector('h2')))), pick = async r => { const tg = d.querySelector('#schTarget'); tg.value = String(r); tg.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(20); };
+      const CP = '저장하면 예약 작업에 보낼 변경 요청을 복사해요.', setLine = () => copied.split('\n').find(l => /set-plan/.test(l)) || '';
+      // 64-1. 11/5 제143회로 바로(복사) → 11/6 제144회(11/9부터): 첫 요청은 143이라 다시 복사, 144 요청과 "11/8(일) 전이면 실행하지 말고"
+      scene('2026-11-05T07:40:00', ST); pe.planToday('2026-11-05'); pe.SETS().plan = sig(142); await show('#schedule'); await pick(143); copied = ''; click('[data-act="sch-save"]'); await sleep(30);
+      const c1 = setLine(); at('2026-11-06T07:40:00'); await show('#schedule'); await pick(144); const pv1 = pds();
+      copied = ''; click('[data-act="sch-save"]'); await sleep(30); const st1 = pe.S().settings;
+      ok(/--target 143/.test(c1) && pv1.includes(CP) && /--target 144/.test(setLine()) && /11\/8\(일\) 전이면 실행하지 말고/.test(copied) && toastT() === '11/9(월)부터 제144회 일정이에요. 변경 요청을 복사했어요'
+        && st1.schSent === '2026-11-06' && st1.schSig && st1.schSig.target === 144 && pe.repoPlanState('2026-11-06') === 'sent' && /변경 요청을 복사해 두었어요/.test(T_(repoSec())),
+        `64-1. 7일 안에 두 번째 바꾸기(제144회, 11/9부터)도 같은 탭에서 복사: "${setLine()}", 알림 "${toastT()}", 상태 ${pe.repoPlanState('2026-11-06')}`);
+      // 64-2. 11/5 제143회(복사) → 붙여 넣어 저장소 143(same) → 11/6 되돌리기: 미리 보기에 복사 줄, 저장하면 제142회 요청을 복사(sent는 그 요청)
+      scene('2026-11-05T07:40:00', ST); pe.planToday('2026-11-05'); pe.SETS().plan = sig(142); await show('#schedule'); await pick(143); click('[data-act="sch-save"]'); await sleep(30);
+      pe.SETS().plan = sig(143); at('2026-11-06T07:40:00'); const rp2 = pe.repoPlanState('2026-11-06'); await show('#schedule'); click('.schpend [data-act="sch-pick"]'); await sleep(20); const pv2 = pds();
+      copied = ''; click('[data-act="sch-save"]'); await sleep(30);
+      ok(rp2 === 'same' && pv2.includes(CP) && pe.PLAN().target.r === 142 && /--target auto/.test(setLine()) && /목표 142회/.test(copied) && toastT() === '제142회로 바꿨어요. 변경 요청을 복사했어요'
+        && pe.repoPlanState('2026-11-06') === 'sent' && pe.S().settings.schSig.target === 142, `64-2. 저장소가 제143회일 때 되돌리기 → 제142회 요청 복사 "${setLine()}", 알림 "${toastT()}"`);
+      pe.SETS().plan = sig(143); pe.S().settings.schSig = sig(143);
+      ok(pe.repoPlanState('2026-11-06') === 'diff', '64-2. 복사해 둔 요청이 지금 일정(제142회)의 것이 아니면 sent가 아니라 diff(빨강)');
+      // 64-3. 저장소로 돌아가는 되돌리기는 복사하지 않음(미리 보기에도 복사 줄 없음), 복사 기록을 지움
+      scene('2026-11-05T07:40:00', ST); pe.planToday('2026-11-05'); pe.SETS().plan = sig(142); await show('#schedule'); await pick(143); click('[data-act="sch-save"]'); await sleep(30);
+      at('2026-11-05T07:50:00'); await show('#schedule'); click('.schpend [data-act="sch-pick"]'); await sleep(20); const pv3 = pds(); copied = ''; click('[data-act="sch-save"]'); await sleep(30);
+      ok(!pv3.includes(CP) && copied === '' && toastT() === '시험 일정을 바꿨어요' && pe.repoPlanState('2026-11-05') === 'same' && pe.S().settings.schSent === undefined && pe.S().settings.schSig === undefined,
+        `64-3. 저장소 일정으로 되돌리기: 복사 줄 ${pv3.includes(CP)}, 알림 "${toastT()}", 상태 ${pe.repoPlanState('2026-11-05')}`);
+      // 64-4. 다를 때(diff) "변경 요청 복사"를 누른 뒤 제143회로 바꿔도 새 요청을 복사
+      scene('2026-11-05T07:40:00', ST); pe.planToday('2026-11-05'); pe.SETS().plan = sig(144); await show('#schedule'); const r4 = pe.repoPlanState('2026-11-05'); click('[data-act="sch-copy"]'); await sleep(30); const r4b = pe.repoPlanState('2026-11-05');
+      await pick(143); copied = ''; click('[data-act="sch-save"]'); await sleep(30);
+      ok(r4 === 'diff' && r4b === 'sent' && /--target 143/.test(setLine()) && toastT() === '제143회로 바꿨어요. 변경 요청을 복사했어요' && pe.repoPlanState('2026-11-05') === 'sent', `64-4. diff → 복사(sent) → 제143회 저장: 다시 복사 "${setLine()}"`);
+      // 64-5. 기다리는 새 일정(제143회, 1/18부터)을 미리 붙여 넣었는데(next) 바꾸지 않기 → 저장소가 지금 일정과 달라 diff(빨강, 변경 요청 복사)
+      scene('2027-01-12T07:00:00', BLANK, X57); pe.SETS().plan = sig(142); await show('#schedule'); click('[data-act="sch-pick"][data-r="143"]'); await sleep(20); click('[data-act="sch-save"]'); await sleep(30);
+      pe.SETS().plan = sig(143); const r5 = pe.repoPlanState(T57); at('2027-01-14T07:00:00'); await show('#schedule'); click('[data-act="sch-next-cancel"]'); await sleep(20);
+      ok(r5 === 'next' && pe.repoPlanState('2027-01-14') === 'diff' && /예약 작업은 아직 이전 일정이에요/.test(T_(repoSec())) && repoSec().querySelector('.ic.red') && T_(repoSec().querySelector('[data-act="sch-copy"]')) === '변경 요청 복사',
+        `64-5. 미리 붙여 넣은 뒤 바꾸지 않기: ${r5} → ${pe.repoPlanState('2027-01-14')}`);
+      // 64-6. 지금과 같은 계획(자동 = 제142회 → "제142회")은 바꾸지 않음: 미리 보기·저장 버튼·되돌리기 없음
+      scene('2026-11-05T07:40:00', ST); pe.planToday('2026-11-05'); await show('#schedule'); await pick(142);
+      ok(T_(d.querySelector('#schPrev .sheet-k')) === '지금 일정' && !d.querySelector('[data-act="sch-save"]') && !d.querySelector('[data-act="sch-cancel"]') && !pds().length && pe.S().settings.schUndo === undefined, '64-6. 자동(제142회)에서 제142회를 골라도 "지금 일정"(저장·취소 버튼 없음)');
+      await pick('auto');
+      // 64-7. 1/11 pace(52·58·71·49%)로 제143회(1/18부터) → 1/18 바꾼 월요일: 바꾼 주부터 세어 묻지 않음(이번 주 줄·시험 일정 칸·더보기 없음), 새 일정 3주(2/8)가 지나면 다시
+      scene('2027-01-11T07:00:00', B56); pe.SETS().plan = null; await show('#schedule'); click('[data-act="sch-pick"][data-r="143"]'); await sleep(20); click('[data-act="sch-save"]'); await sleep(30);
+      at('2027-01-18T07:00:00'); pe.planToday('2027-01-18'); const tr7 = pe.PLAN().target.r, c7 = pe.slipCheck('2027-01-18');
+      await show('#week'); const w7 = [...V$().querySelectorAll('.row .tt')].some(x => T_(x) === '시험 일정 살펴보기'); await show('#schedule'); const s7 = [...V$().querySelectorAll('section.sec h2')].some(x => T_(x) === '시험을 미룰지 살펴봐요');
+      await show('#more'); const m7 = /시험 일정을 살펴볼 때예요/.test(T_(V$()));
+      at('2027-02-01T07:00:00'); const c7b = pe.slipCheck('2027-02-01'); at('2027-02-08T07:00:00'); const c7c = pe.slipCheck('2027-02-08');
+      ok(tr7 === 143 && c7 === null && !w7 && !s7 && !m7 && c7b === null && c7c && c7c.why === 'pace' && c7c.ps.length === 3,
+        `64-7. 바꾼 월요일(1/18)에는 다시 묻지 않음(이번 주 ${w7} · 시험 일정 ${s7} · 더보기 ${m7}), 2/1 ${c7b && c7b.why}, 2/8 ${c7c && c7c.why} ${c7c && JSON.stringify(c7c.ps)}`);
+      // 64-8. 바꾸는 월요일(11/9)에 앱을 열면: 받아 오는 동안 그린 화면이 금요일 세트 전의 캐시를 남겨도 지난주는 받은 세트로 고정(모든 세트가 있을 때와 같음)
+      { const X = clone(FIX); ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06'].forEach(x => X.sets[x] = cloneSet(x, 2, refsFor(1))); X.mocks['2026-11-07'] = cloneMock('2026-11-07', { p1: clone(MOCK0.p1), p2: P2_2 }); X.sets['2026-11-09'] = cloneSet('2026-11-09', 3, refsFor(1));
+        const upto = dd => { const Y = { sets: {}, mocks: {} }; Object.keys(X.sets).filter(x => x <= dd).forEach(x => Y.sets[x] = clone(X.sets[x])); Object.keys(X.mocks).filter(x => x <= dd).forEach(x => Y.mocks[x] = clone(X.mocks[x])); return Y; };
+        scene('2026-11-02T07:00:00', ST, upto('2026-11-01'));
+        for (const day of ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05']) { at(day + 'T07:00:00'); pe.SETS().sets[day] = clone(X.sets[day]); pe.invalidate(); const V = pe.planToday(day); applyRows(V.rows, day); at(day + 'T22:00:00'); pe.planToday(day); }
+        const S1 = clone(pe.S()), SETS1 = clone(pe.SETS()), f0 = w.fetch; SERVER = X; w.fetch = async u => { await sleep(15); return f0(u); };
+        scene('2026-11-09T07:00:00', S1, SETS1); pe.S().sync = {}; pe.S().settings.nextTarget = { r: 144, from: '2026-11-09', prev: 'auto', at: '2026-11-05' }; pe.SETS().plan = sig(142);
+        const pr = pe.sync(true); await go('#today'); pe.render(); await pr;   /* 앱을 열 때 순서(sync(true) → route()): 받아 오는 동안 그린 화면이 캐시를 채운다 */ await sleep(30); pe.render(); await sleep(10); const g = clone(pe.S().wk['2026-11-02'] || {}), tg8 = pe.PLAN().target.r;
+        w.fetch = f0; SERVER = null; scene('2026-11-09T07:00:00', S1, upto('2026-11-09')); pe.planToday('2026-11-09'); const o = pe.S().wk['2026-11-02'];
+        ok(tg8 === 144 && g.at === '2026-11-09' && g.p === o.p && JSON.stringify(g.parts) === JSON.stringify(o.parts) && JSON.stringify(g.rel) === JSON.stringify(o.rel),
+          `64-8. 바꾸는 월요일 받아 오기: 지난주 ${g.p}% ${JSON.stringify(g.rel)} = 모든 세트로 ${o.p}% ${JSON.stringify(o.rel)}`); }
+      // 64-9. 접수한 목표 시험(제142회) 뒤 기다리는 제144회(5/24부터): 시험 뒤에도 오늘 머리 줄 끝에 "· 5/24부터 제144회"(한 덩이)
+      { const B9 = Object.assign(clone(BLANK), { tk: { 'apply:142': '2027-04-14' } }); B9.settings.nextTarget = { r: 144, from: '2027-05-24', prev: 'auto', at: '2027-04-20' }; const sb = [];
+        for (const x of ['2027-05-10', '2027-05-16', '2027-05-20']) { scene(x + 'T07:00:00', B9); await show('#today'); const ls = V$().querySelector('.ltitle .lsub'); sb.push(ls && / · 5\/24부터 제144회$/.test(T_(ls)) && T_(ls.querySelector('.nw')) === '5/24부터 제144회'); }
+        ok(sb.every(Boolean), `64-9. 오늘 머리 줄의 기다리는 바꾸기(5/10 · 5/16 · 5/20): ${sb.join(', ')}`); }
+      // 64-10. 3단계 뒤(4/20) 지금 회차 줄: 단원마다·지난 3단계 시작·지난 실전 모의는 쓰지 않음. 미리 보기의 기다리는 버튼은 "이 일정으로"가 한 덩이, 아래 문장도 그날부터
+      scene('2027-04-20T07:00:00', BLANK); await show('#schedule'); const op10 = [...V$().querySelectorAll('.schopt .row')], cur10 = T_(op10[0].querySelector('.ds'));
+      click('[data-act="sch-pick"][data-r="143"]'); await sleep(20); const b10 = prim()[0], sv10 = [...pv().querySelectorAll('p.ds')].map(T_).find(x => /오늘 화면, 로드맵/.test(x));
+      ok(/^시험까지 4주 · 1·2단계 0주 남음$/.test(cur10) && !/단원마다|3단계|실전 모의 제141회/.test(cur10) && T_(b10) === '4/26(월)부터 이 일정으로' && T_(b10.querySelector('.nw')) === '이 일정으로' && b10.closest('.btns.schsv')
+        && sv10 === '4/26(월)부터 오늘 화면, 로드맵, 주차와 단계가 새 일정으로 바뀌어요. 카드·오답 기록은 그대로예요.', `64-10. 지금 회차 줄 "${cur10}", 버튼 "${T_(b10)}", 문장 "${sv10}"`);
+      // 64-11. 시험 일정에서 "제142회 접수했어요"를 치면 알림(칸이 접혀 사라짐)
+      click('[data-act="sch-cancel"]'); await sleep(10); click('.btn.sec[data-id="apply:142"]'); await sleep(20);
+      ok(toastT() === '제142회 원서접수를 적어 두었어요' && pe.S().tk['apply:142'] === '2027-04-20', `64-11. 접수했어요 알림 "${toastT()}"`); }
     w.PE_IO.copy = cp0; pe.goTab('today'); await sleep(40); }
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
