@@ -653,6 +653,14 @@ button.drow:active{background:var(--rule2)}
 .drow .dy{flex:none;padding:1px 7px;border-radius:6px;background:var(--blue-soft);color:var(--blue-ink);font-size:.8rem;font-weight:700}
 .capseg{flex-wrap:wrap;overflow:visible;margin:12px 0 4px}
 .capseg button{flex:1 1 40%;text-align:center}
+/* 쉬는 날·앞날(v3.1): 모두 회색·파랑, 빨강 없음 */
+.capseg.off{margin-top:6px}.capseg.off button{flex:1 1 100%}
+.ds.fore{margin-top:6px;color:var(--ink)}.ds.fore+.ds.fore{margin-top:2px}   /* 미리 보기 줄(명세의 .fc는 카드 넘겨 보기 .fc와 이름이 겹쳐 .fore) */
+.dcard.off .ds+.ds{margin-top:2px}
+.wg.off{border:2px dashed var(--ink3);background:none}
+.wkline.catch{display:flex;align-items:center;gap:6px;width:calc(100% - 8px);min-height:32px;text-align:left;color:var(--blue);font-weight:700}
+.wkline.catch .chev{margin:0 0 0 auto}.wkline.catch .chev::before{border-color:var(--blue)}
+.note.wkc{margin:0 4px 8px}
 .nw{white-space:nowrap}
 .fs{display:flex;flex-direction:column;min-width:0}
 .fs small{display:block;margin-top:1px;font-size:.86rem;font-weight:400;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

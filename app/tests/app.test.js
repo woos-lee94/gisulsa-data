@@ -1554,6 +1554,12 @@ const go = async h => { w.location.hash = h; await sleep(30); };
       const pins = pe.taskList(T0).filter(x => x.blk === 'pin');
       ok(pins.every(x => view().querySelector(`.qline.tkl[data-act="tk"][data-id="${x.id}"]`)) && view().querySelectorAll('.qline.tkl:not(.done)').length >= pe.navBadgeN(), `이번 주: 오늘의 날짜 일 핀 ${pins.length}개가 모두 줄로(배지 ${pe.navBadgeN()})`);
       ok(view().querySelectorAll('.drow').length === 7 && view().querySelectorAll('.btn:not(.sec):not(.ghost)').length === 1 && !d.querySelector('.topbar') && d.querySelector('#nav button.on').dataset.tab === 'week', '이번 주: 날마다 7줄, 파란 버튼 하나(다음), 탭 첫 화면(위쪽 막대 없음, 아래 탭 이번 주)');
+      // 날마다: 오늘 뒤의 날(시험 날 빼고)만 누르면 그날 공부 시간 창(쉬어요 · 짧은 날 · 평소대로)
+      { const wd = i => { const x = new w.Date(W + 'T12:00:00'); x.setDate(x.getDate() + i); return ymdOf(x); }, fut = [0, 1, 2, 3, 4, 5, 6].map(wd).filter(x => x > T0 && pe.dayKind(x) !== 'exam');
+        ok(fut.every(x => view().querySelector(`.drow[data-act="day-cap"][data-d="${x}"]`)) && view().querySelectorAll('.drow[data-act="day-cap"]').length === fut.length, `이번 주 날마다: 앞날 ${fut.length}줄만 공부 시간 창(day-cap)`);
+        if (fut.length) { click(`.drow[data-act="day-cap"][data-d="${fut[0]}"]`); await sleep(10);
+          ok(mw().querySelectorAll('[data-act="day-set"]').length >= 3 && /이날 쉬면 → /.test(mw().textContent) && !mw().querySelectorAll('.btn:not(.sec):not(.ghost)').length && /공부 시간/.test(mw().textContent), '날마다 앞날 창: 쉬어요 · 짧은 날 · 평소대로, "이날 쉬면 → …", 파란 버튼 없음');
+          click('#modal-wrap [data-act="sheet-close"]'); await sleep(10); } }
     } else ok(view().querySelector('.norows') && view().querySelectorAll('.btn:not(.sec):not(.ghost)').length === 1 && !view().querySelector('.score'), `${T0}: 시험 뒤라 이번 주 화면은 카드 하나(파란 버튼 하나)`);
     // 손으로 친 일(이번 주 목표): S.tk에 남고, 그것 하나뿐인 날도 연속 학습으로 센다(touchDay). 목표 줄이 없는 주(시험 뒤)는 같은 동작(data-act="tk")의 버튼으로
     const gid = 'goal:' + W + ':0', dl0 = S().daily[T0], ck0 = S().checks[T0]; delete S().tk[gid]; delete S().daily[T0]; delete S().checks[T0]; pe.render();
@@ -1573,12 +1579,19 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     click('[data-act="cap"]'); await sleep(10);
     ok(mw().querySelectorAll('[data-act="cap-set"]').length === 4 && /30분 · 최소 몫/.test(mw().textContent) && /평소대로 · /.test(mw().textContent) && /최소 몫\(용어 읽기 · 세트 퀴즈 · 단답 1문 · 자기 전 5분\)은 늘 남아요/.test(mw().textContent), '오늘 시간 창: 30분 · 최소 몫 / 1시간 / 1시간 30분 / 평소대로');
     ok(mw().querySelector('.msheet>:not(.btns)+.btns:last-child [data-act="sheet-close"]'), '4-4. 오늘 시간 창의 맨 아래 "닫기" 줄이 창 아래에 붙는 줄(.msheet>:not(.btns)+.btns:last-child)');
+    ok(mw().querySelectorAll('[data-act="cap-off"]').length === 1 && /오늘은 쉬어요/.test(mw().textContent) && !mw().querySelectorAll('.btn:not(.sec):not(.ghost)').length && !/뺀 것은/.test(mw().textContent), '오늘 시간 창: "오늘은 쉬어요" 한 칸, 파란 버튼 없음');
     click('#modal-wrap [data-act="cap-set"][data-m="60"]'); await sleep(30);
     const late = (x => x.getHours() * 60 + x.getMinutes() >= 22 * 60 + 30)(new w.Date()), ds1 = view().querySelector('.daysum').textContent;
     ok(S().today && S().today.d === T0 && S().today.user === 60 && !mw().innerHTML && (ds1 !== ds0 || late) && /오늘 시간 (1시간|\d+분)/.test(ds1), `오늘 시간 1시간: S.today.user = 60, 상태 줄이 바뀜(${ds1.trim()})`);
     click('[data-act="cap"]'); await sleep(10); click('#modal-wrap [data-act="cap-set"][data-m="0"]'); await sleep(30);
     ok(S().today && S().today.user === null, '평소대로: S.today.user = null');
-    { const sh = todayShape(); ok((sh.pr > 0 || sh.nr) && sh.np === 1, '다시 짜도 파란 버튼은 하나'); } }
+    { const sh = todayShape(); ok((sh.pr > 0 || sh.nr) && sh.np === 1, '다시 짜도 파란 버튼은 하나'); }
+    // 오늘은 쉬어요 → 쉬는 날 카드(파란 버튼은 "다시 공부할래요" 하나) → 다시 공부할래요(시작 전·시험 뒤는 오늘 시간이 없다)
+    if (view().querySelector('[data-act="cap"]')) { click('[data-act="cap"]'); await sleep(10); click('#modal-wrap [data-act="cap-off"]'); await sleep(30);
+      const pr = [...view().querySelectorAll('.btn:not(.sec):not(.ghost)')];
+      ok(view().querySelector('.dcard.off') && pr.length === 1 && pr[0].dataset.act === 'off-clear' && S().days[T0] && S().days[T0].m === 0 && /오늘은 쉬는 날/.test(view().querySelector('.daysum').textContent), '오늘은 쉬어요: 쉬는 날 카드, 파란 버튼 하나("다시 공부할래요")');
+      click('[data-act="off-clear"]'); await sleep(30); ok(!S().days[T0] && !view().querySelector('.dcard.off'), '다시 공부할래요: 쉬는 날을 지우고 오늘 몫으로');
+      delete S().days[T0]; S().today = null; pe.render(); } }
     // 통계·주간 리포트: "이번 주 필수 n%"(이번 주 화면과 같은 수), 이번 주 월요일부터. 토·일요일에 복사해야 이번 주 리포트로 친다
     let copied = ''; const cp0 = w.PE_IO.copy; w.PE_IO.copy = x => { copied = x; return Promise.resolve(); };
     await go('#stats');
