@@ -531,10 +531,11 @@ function runWeek(W, sets, st) {
     scene('2026-11-02T07:00:00', ST); w.__cnt = [0, 0, 0]; pe.planToday(MON); const c = w.__cnt.slice();
     ok(c[0] <= 7 && c[1] === 1 && c[2] === 1, `24. 월요일 첫 계산(지난주 고정 포함): ${c.join('·')}`); }
 
-  // 25. 시작일이 월요일이 아니어도(2026-10-21 수) 한 달력 주 안에서 단계·약속 줄이 바뀌지 않음(계획 주차 = 그 주 월요일의 주차). 시작 전 날은 비어 있음
+  // 25. 시작일이 월요일이 아니어도(2026-10-21 수) 주는 그 주 월요일(10/19)부터 센다: 한 달력 주 안에서 주차·단계·약속 줄이 바뀌지 않고, 주차는 10/19(월) 시작과 같다. 시작 전 날은 비어 있음
   { const st = clone(BLANK); st.settings.start = '2026-10-21'; scene('2027-01-04T07:00:00', st);
     const sig = t => { at(t + 'T07:00:00'); const B = pe.weekBoard(t); return B.ph + '|' + B.lines.map(l => l.k).join(',') + '|' + line(B, 'mock').b; }, S7 = [0, 1, 2, 3, 4, 5, 6].map(i => sig(add('2027-01-04', i)));
-    ok(pe.weekIndex('2027-01-04') !== pe.weekIndex('2027-01-06') && S7.every(x => x === S7[0]) && S7[0].indexOf('1|') === 0, `25. 시작 10/21(수): 1/4~1/10 한 주 내내 같은 단계·같은 약속 줄(${S7[0]})`);
+    const st0 = clone(BLANK); scene('2027-01-04T07:00:00', st0); const s0 = sig('2027-01-04'); scene('2027-01-04T07:00:00', st);
+    ok(pe.weekIndex('2027-01-04') === 11 && pe.weekIndex('2027-01-10') === 11 && S7.every(x => x === S7[0]) && S7[0] === s0, `25. 시작 10/21(수): 1/4~1/10 한 주 내내 11주차·같은 단계·같은 약속 줄(${S7[0]}), 10/19(월) 시작과 같음(${s0})`);
     at('2026-10-22T07:00:00'); const a = pe.taskList('2026-10-22'); at('2026-10-20T07:00:00'); const b = pe.taskList('2026-10-20');
     ok(a.some(x => x.id === 'set.read:2026-10-22') && b.length === 0, '25. 첫 달력 주: 시작 뒤(10/22)는 할 일이 있고 시작 전(10/20)은 없음'); }
 
@@ -1163,13 +1164,13 @@ function runWeek(W, sets, st) {
       ok(/앞으로\(이번 주\): 주간 모의고사/.test(T_(mw())), '42. 그날 창: 앞으로(이번 주): 주간 모의고사');
       click('[data-act="cal-close"]'); await sleep(10);
       pe.S().tk['report:2026-10-26'] = '2026-10-29'; ok(!(pe.calFwd('2026-10-29')['2026-11-01'] || {}).close, '42. 리포트를 내면 일요일 보라 점 없음'); }
-    // 시험 일정: 시작일이 월요일이 아니면 한 줄 경고
+    // 시험 일정: 시작일이 월요일이 아니면 경고 대신 첫 주 안내 한 줄(어느 요일에 시작해도 된다, 3.1.1)
     scene('2026-10-29T07:40:00', ST); await show('#schedule');
-    const warn = () => V$().querySelector('.note.warn');
-    ok(!warn(), '42. 시작일 10/19(월): 경고 없음');
+    const fw = () => [...V$().querySelectorAll('.note')].find(n => /^첫 주\(준비 주\)/.test(T_(n))), warn = () => V$().querySelector('.note.warn');
+    ok(!fw() && !warn(), '42. 시작일 10/19(월): 첫 주 안내·경고 없음');
     { const i = V$().querySelector('#schStart'); i.value = '2026-10-21'; i.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(10); }
-    ok(warn() && T_(warn()) === '주가 월요일에 시작해야 이번 주 계산이 맞아요', '42. 10/21(수)로 바꾸면 "주가 월요일에 시작해야 이번 주 계산이 맞아요"');
-    click('[data-act="sch-cancel"]'); await sleep(10); ok(!warn(), '42. 취소하면 경고 없음');
+    ok(fw() && !warn() && T_(fw()) === '첫 주(준비 주)는 10/21(수)~10/25(일) 5일이고, 10/26(월)부터 1주차예요. 한 주는 늘 월요일부터 일요일까지예요(토요일 모의고사, 일요일 마감).', `42. 10/21(수)로 바꾸면 경고 없이 첫 주 안내 "${T_(fw())}"`);
+    click('[data-act="sch-cancel"]'); await sleep(10); ok(!fw(), '42. 취소하면 첫 주 안내 없음');
     await go('#today');
   }
 
@@ -2155,6 +2156,42 @@ function runWeek(W, sets, st) {
       click('[data-act="sch-cancel"]'); await sleep(10); click('.btn.sec[data-id="apply:142"]'); await sleep(20);
       ok(toastT() === '제142회 원서접수를 적어 두었어요' && pe.S().tk['apply:142'] === '2027-04-20', `64-11. 접수했어요 알림 "${toastT()}"`); }
     w.PE_IO.copy = cp0; pe.goTab('today'); await sleep(40); }
+
+  // 65. 어느 요일에 시작해도(3.1.1): 주는 시작일이 든 주의 월요일부터 센다(한 주는 늘 월~일, 첫 주 = 준비 주는 시작일~일요일로 짧다).
+  //     시작 전 날의 세트·모의는 첫 주 몫(밀린 세트·세트 핵심·모의·넘어온 것·점수)이 아니고, 예약 작업에는 그 월요일을 --start로 보낸다. 월요일 시작은 예전과 같다
+  { const T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), V$ = () => d.querySelector('#view'), show = async h => { await go(h); pe.render(); await sleep(10); };
+    const stM = clone(BLANK); scene('2026-10-22T07:00:00', stM); const P0 = pe.PLAN();
+    ok(P0.start === '2026-10-19' && P0.begin === '2026-10-19' && pe.firstWeekTxt('2026-10-19') === '' && pe.wkFrom('2026-10-19') === '2026-10-19', '65-1. 월요일(10/19) 시작: 기준 월요일 = 시작일, 첫 주 안내 없음');
+    const st = clone(BLANK); st.settings.start = '2026-10-22'; scene('2026-10-22T07:00:00', st); const P = pe.PLAN();
+    ok(P.start === '2026-10-19' && P.begin === '2026-10-22' && P.E === P0.E && P.M === P0.M && P.target.r === P0.target.r && pe.planSig().start === '2026-10-19' && pe.wkFrom('2026-10-19') === '2026-10-22',
+      `65-2. 목요일(10/22) 시작: 주는 10/19(월)부터(E ${P.E} = ${P0.E}, 예약 작업 start ${pe.planSig().start})`);
+    ok(pe.wkIdx('2026-10-21') === -1 && pe.wkIdx('2026-10-22') === 0 && pe.wkIdx('2026-10-25') === 0 && pe.wkIdx('2026-10-26') === 1 && pe.weekIndex('2026-10-26') === 1,
+      '65-3. 10/21(수)은 시작 전, 10/22~10/25는 준비 주(0주), 10/26(월)부터 1주차');
+    const T = pe.taskList('2026-10-22'), B = pe.weekBoard('2026-10-22'), core = line(B, 'core'), pre = x => [x.d, x.set].concat(x.ds || []).some(v => v && v < '2026-10-22') || /2026-10-2[01]/.test(JSON.stringify(x));   /* 10/19는 주 키(report:2026-10-19 등)라 날짜 칸으로 본다 */
+    ok(!T.some(x => /^late:/.test(x.id)) && !T.some(pre) && core.b === 2 && !core.gaps.some(x => x < '2026-10-22') && T.some(x => x.id === 'set.read:2026-10-22'),
+      `65-4. 첫날: 시작 전 세트(10/19~10/21)는 밀린 세트도 할 일도 아니고, 세트 핵심은 10/22·10/23 두 개(${core.b})`);
+    at('2026-10-23T21:00:00'); const A = pe.wkAhead('2026-10-23'), T2 = pe.taskList('2026-10-23');
+    ok(!T2.some(pre) && !JSON.stringify(A).match(/2026-10-(19|20|21)/), '65-5. 다음 날(10/23) 오늘 몫·앞날 셈에도 시작 전 세트 없음');
+    await show('#week'); const sub = T_(V$().querySelector('.ltitle .lsub')), rows = [...V$().querySelectorAll('.drow')].map(T_);
+    ok(/^준비 주 · 10\/22~10\/25 · /.test(sub) && rows.slice(0, 3).every(r => /준비 시작 전/.test(r)) && !/준비 시작 전/.test(rows[3]) && V$().querySelectorAll('.drow')[0].tagName === 'DIV',
+      `65-6. 이번 주: 머리 "${sub}", 월~수 줄은 "준비 시작 전"(누를 수 없음)`);
+    pe.S().settings.target = 'auto'; const rq = pe.schReq();
+    ok(/--start 2026-10-19 /.test(rq) && /앱의 준비 시작일은 10\/22\(목\)이에요/.test(rq), '65-7. 변경 요청: --start는 그 주 월요일(10/19), 앱의 시작일 한 줄');
+    await show('#schedule'); const fn = [...V$().querySelectorAll('.note')].map(T_).find(x => /^첫 주/.test(x));
+    ok(fn === '첫 주(준비 주)는 10/22(목)~10/25(일) 4일이고, 10/26(월)부터 1주차예요. 한 주는 늘 월요일부터 일요일까지예요(토요일 모의고사, 일요일 마감).' && !V$().querySelector('.note.warn'), `65-8. 시험 일정 첫 주 안내 "${fn}"`);
+    await show('#plan'); const lw = T_(V$().querySelector('.lsub')), w0 = [...V$().querySelectorAll('.wk')].find(x => /^0주차/.test(T_(x.querySelector('h4'))));
+    ok(/^10월 22일 시작/.test(lw) && w0 && /^10\/22~10\/25/.test(T_(w0.querySelector('.dt'))), `65-9. 로드맵 "${lw}", 0주차 ${w0 && T_(w0.querySelector('.dt'))}`);
+    // 다음 월요일: 지난주(첫 주) 넘어온 세트는 시작 뒤 세트만, 지난주 고정도 같음
+    st.created = '2026-10-22'; scene('2026-10-26T07:00:00', st); const T3 = pe.taskList('2026-10-26'), cs = T3.find(x => x.k === 'carry.sets'), sn = pe.weekSnap('2026-10-26');
+    ok(cs && cs.ds.join() === '2026-10-23,2026-10-22' && sn && sn.at && !JSON.stringify(sn).match(/10\/(19|20|21)/), `65-10. 10/26(월): 넘어온 세트 ${cs && cs.ds.join()}, 지난주 고정 ${sn && sn.p}%`);
+    // 일요일 시작: 첫 주는 그날 하루, 시작 전 토요일 모의는 첫 주 몫이 아님
+    const su = clone(BLANK); su.settings.start = '2026-10-25'; scene('2026-10-25T07:00:00', su); const B4 = pe.weekBoard('2026-10-25'), T4 = pe.taskList('2026-10-25');
+    ok(pe.PLAN().start === '2026-10-19' && !line(B4, 'mock') && line(B4, 'core').b === 0 && !T4.some(x => [x.d, x.set].concat(x.ds || []).some(v => v && v < '2026-10-25') || /2026-10-2[0-4]/.test(JSON.stringify(x))) && pe.firstWeekTxt('2026-10-25') === '첫 주(준비 주)는 10/25(일) 하루이고, 10/26(월)부터 1주차예요. 한 주는 늘 월요일부터 일요일까지예요(토요일 모의고사, 일요일 마감).',
+      `65-11. 일요일(10/25) 시작: 모의 줄 없음, 세트 핵심 0, 시작 전 할 일 없음`);
+    // 시작 전(같은 주 월요일): 오늘은 카드 하나뿐
+    const st2 = clone(BLANK); st2.settings.start = '2026-10-22'; scene('2026-10-19T08:00:00', st2); await show('#today');
+    ok(/준비 시작 전 · 10월 22일부터/.test(T_(V$())) && pe.taskList('2026-10-19').length === 0, '65-12. 같은 주 시작 전 날(10/19): "준비 시작 전 · 10월 22일부터", 할 일 없음');
+    pe.goTab('today'); await sleep(40); }
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);
