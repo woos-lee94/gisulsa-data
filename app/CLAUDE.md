@@ -21,9 +21,10 @@
   - `data_cards.js` 기본 카드, `data_cards_k.js` 기출 보강 카드 98장, `data_essays.js` 논술 모범 목차
   - `data_kichul.js` 기출 제116~140회 775문항 요지와 카드 연결표
   - `data_plan.js` 단계·주차 틀 30개·정기시험 규칙(`PE_SCHED`)·요일별 루틴·Claude 프롬프트
-- 학습 기록 저장: `localStorage` 두 키
+- 학습 기록 저장: `localStorage` 세 키
   - `pe_state_v1`: 학습 기록 `S` (settings, cards 간격반복 상태, wrong 오답 노트, sp 세트 진행(rev 세트 복습 단계마다 마지막으로 한 날, rvd 그 단계를 처음 끝낸 날), tk 손으로 친 일·표시, today 그날 고정한 오늘 몫, wk 주마다 기록, days 날마다 정한 공부 시간(쉬는 날·짧은 날, v3.1), checks 예전 할 일 체크(읽기만) 등. settings에는 v3.1부터 nextTarget·schUndo·schSent·schSig·slipNo(아래 "시험 일정 살펴보기"))
   - `pe_sets_v1`: 받아 온 세트·모의고사·새 기출·저장소 일정(plan)
+  - `pe_state_prev`: 준비 시작일을 다시 정하며 지운 기록 `{at, state}`(3.1.3, 7일 동안 되돌리기. 지난 것은 앱을 열 때 비운다). 앱 쪽 `host.js`의 `STORE_KEYS`에도 있다
 - 자료 받아 오기: 앱을 열 때 `https://raw.githubusercontent.com/woos-lee94/gisulsa-data/main/data/index.json`을 읽고, 새로 올라온 `sets/YYYY-MM-DD.json`, `mocks/YYYY-MM-DD.json`, `kichul.json`을 받는다.
   이 저장소에는 Claude Code 예약 작업이 평일 06:21에 세트를, 토요일 06:21에 모의고사를 올린다. 파일 형식은 `../pipeline/spec_set.md`, `../pipeline/spec_mock.md`, 실제 파일은 `../data/`.
 - 시험 일정: `data_plan.js`의 `PE_SCHED`와 `app.js`의 `computePlan()`이 준비 시작일에서 6개월 이상 남은 정기시험을 목표로 잡고 주차를 배분한다. 준비 시작일은 어느 요일이어도 된다(3.1.1, 아래 "어느 요일에 시작해도"). 저장소 `data/index.json`의 `plan`과 비교해 다르면 시험 일정 화면에 경고와 "변경 요청 복사"를 띄운다. 목표만 바꿀 때 이번 주가 달라지면 다음 월요일부터 바꾼다(v3.1, 아래 "시험 일정 살펴보기").
@@ -103,7 +104,7 @@
 
 ## 앱 폴더
 
-- `web/`: 앱 화면 원본(v3.1.2, 네이티브 다리 포함). `index.html`의 `?v=N`(지금 9)은 `tests/app.test.js`가 스크립트를 찾는 표시라 남겨 둔다. 버전은 `app.js`의 `APP_VER`, `app.json`의 `expo.version`, `package.json`의 `version`(과 `package-lock.json`의 앱 줄 두 곳)을 함께 올린다(`tests/native.test.js`가 확인)
+- `web/`: 앱 화면 원본(v3.1.3, 네이티브 다리 포함). `index.html`의 `?v=N`(지금 9)은 `tests/app.test.js`가 스크립트를 찾는 표시라 남겨 둔다. 버전은 `app.js`의 `APP_VER`, `app.json`의 `expo.version`, `package.json`의 `version`(과 `package-lock.json`의 앱 줄 두 곳)을 함께 올린다(`tests/native.test.js`가 확인)
 - `tests/`: jsdom 회귀 검사와 가짜 저장소(`tests/fake/data`)
 - 확대 막기: `index.html` viewport에 `maximum-scale=1, user-scalable=no`(WKWebView는 이것을 따른다. 글자 칸을 누를 때 16px보다 작은 칸이 확대되던 것도 막는다), `styles.css`의 `html{touch-action:manipulation}`(두 번 눌러 확대)
 - `assets/icon-1024.png`: iOS 앱 아이콘
@@ -179,6 +180,7 @@
 - 창 닫기: 사용자가 닫는 길(닫기 `sheet-close` · 바깥 `modal-close` · 가장자리 밀기)만 `dismissModal`(= `closeModal` + "바뀐 점"이면 본 것으로 + 그 창 아래서 모의 교시 시간이 끝났으면 다시 그려 시간 끝 창). `closeModal`은 그대로(여러 동작이 시작할 때 부른다). 교시 시간이 창 아래서 끝나면 아래 화면만 다시 그리고(집중 모드 끔) 알림, 점수 칸을 쓰는 중이면 다시 그리지 않고 집중 모드 표시만 끈다(`focusPaint`).
 - 복원·초기화는 메모리의 흐름을 비운다(`flowReset`: 하던 세션·가리며 외우기·`FLOW`·`RET`·`SCR`·펼친 줄·나중에, 그 기록에 묶인 타이머, 모의의 고른 교시·연 키워드·목차 `SV['mkw:'·'mk:']`). 복원은 받은 세트를 이 휴대폰 것과 합치고(`setsMerge`: 같은 날짜는 `_rev`가 큰 것, 백업에만 있는 세트도 더함, 받아 오기 상태는 이 휴대폰 것) 곧바로 다시 받아 온다(초기화도). 지운 기록의 "이어서"가 남지 않는다. 백업(복사·파일)에는 그 백업의 날짜(`S.tk.backup`)를 넣고 만든다(`backupJSON`, 실패하면 전 날짜로).
 - 검사: `tests/app.test.js`·`plan.test.js`가 걸음마다 주소와 `history.length`가 그대로인지 본다.
+- 새로 시작(3.1.3, `restartRec`): 공부 기록이 있을 때(`hasRec`: cards·sp·wrong·mockp·daily·qp·log, 달력에 공부가 적힌 날. 앱을 연 것만으로 생기는 달력 접속·`wk`·`days`는 세지 않음) 시험 일정에서 준비 시작일을 바꿔 저장하면 확인 뒤 이전 기록을 지우고 새 시작일로 다시 시작한다. 미리 보기에 `.schwipe` 한 줄과 "기록은 그대로 두기"(`sch-keep`, 그러면 날짜만 바꾸는 예전 길). 남기는 것: 설정(하루 공부 시간 등, 시험 일정의 기다리는 바꾸기·되돌리기·복사 기록은 지움)·내일부터 정해 둔 `days`·내 카드·내 목차·숨긴 카드·가리며 외우기 표시·받아 오기 상태·`tk`의 `seen:v3`·`backup`·`budget`. 지우기 전 기록은 `pe_state_prev`에 두고 더보기 → 백업에 "m/d에 지운 공부 기록 되돌리기"(`rec-undo`, 7일, 그 뒤 기록은 없어짐). 이미 시작일을 바꿔 둔 휴대폰은 시작일 전 날짜의 공부 기록(`recBefore`: 달력 공부·daily·세트 처음 연 날)이 있으면 오늘 카드(준비 시작 전)와 시험 일정 맨 위에 "지우고 새로 시작"(`rec-wipe`). 변경 요청이 필요하면 지운 뒤 함께 복사. 복원·되돌리기는 `adoptState`(빠진 칸은 새 기록 값, 이 휴대폰의 "바뀐 점"·받아 오기 상태는 그대로). 검사: `plan.test.js` 67.
 
 ## 지금 구현(Expo SDK 58, react-native-webview)
 
@@ -213,11 +215,11 @@
 - 스토어 문구: `docs/app-store.md`(부제·프로모션·설명·키워드·카테고리·심사 메모·App Privacy). Firebase 설정·관리자 지정·심사용 초대 코드는 `docs/firebase-setup.md`. 지원·개인정보 처리방침 URL은 `docs/support.md`·`docs/privacy.md`의 GitHub 주소(저장소가 공개일 때만 열린다). 문구를 고치면 이 파일들도 함께 고친다.
 - 회원 승인(`native/member.js`, `native/Gate.js`, `firebase/firestore.rules`)
   - 휴대폰 구분은 IP가 아니라 Firebase 익명 계정. 그 refresh token을 expo-secure-store 키체인(`AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY`)에 둔다. 토큰이 무효(400)일 때만 새 계정을 만든다.
-  - Firestore: `members/{uid}`(id·status·createdAt·code), `ids/{아이디}`(uid, 중복 방지), `codes/{코드}`(바로 승인), `admins/{uid}`(콘솔에서만 만든다), `msgs/{자동 ID}`(3.0.1, 관리자에게 보낸 문자: uid·id·text 500자·from join|wait|app·dev "iOS 18.1 · 앱 3.0.1"·at 서버 시각·read). members의 `hasOnly` 칸은 늘리지 않는다(예전 앱과 규칙이 같이 돌게 새 컬렉션으로). 문자는 아이디를 만든 뒤 따로 보낸다(규칙 게시 전이면 문자만 실패). 관리자는 모두 읽고 read만 바꾸며, 본인은 자기 것만 읽고 지운다(아이디 지우기 때 함께). 아이디 만들기는 members·ids를 commit 한 번으로 만들고, 규칙이 `getAfter`로 둘을 묶는다. commit 본문의 문서 이름은 인코딩하지 않는다(한글 아이디).
+  - Firestore: `members/{uid}`(id·status·createdAt·code), `ids/{아이디}`(uid, 중복 방지), `codes/{코드}`(바로 승인), `admins/{uid}`(콘솔에서만 만든다), `msgs/{자동 ID}`(3.0.1, 관리자에게 보낸 문자: uid·id·text 500자·from join|wait|app·dev "iOS 18.1 · 앱 3.0.1"·at 서버 시각·read), `replies/{rid}`(3.1.3, 관리자 답장: uid·id(그 회원 문서의 아이디와 같아야)·text 1~500자·dec approved|rejected(승인·거절과 함께 보냈을 때)·at 서버 시각·read. 관리자만 만들고, 받은 사람은 자기 것만 읽고 read만 true로 바꾸고 지운다). members의 `hasOnly` 칸은 늘리지 않는다(예전 앱과 규칙이 같이 돌게 새 컬렉션으로). 문자는 아이디를 만든 뒤 따로 보낸다(규칙 게시 전이면 문자만 실패). 관리자는 모두 읽고 read만 바꾸며, 본인은 자기 것만 읽고 지운다(아이디 지우기 때 함께). 아이디 만들기는 members·ids를 commit 한 번으로 만들고, 규칙이 `getAfter`로 둘을 묶는다. commit 본문의 문서 이름은 인코딩하지 않는다(한글 아이디).
   - 승인 전에는 WebView 대신 `Gate` 화면만 띄운다. 승인된 상태는 키체인에 캐시해 인터넷 없이도 열고, 앱이 앞으로 올 때 다시 확인한다. 대기 중에는 15초마다 확인.
-  - 웹 쪽: `PE_NATIVE.member`({id, admin, uid}) → 더보기에 아이디, 관리자면 "문자함"·"승인 관리"(`#admin`, `vAdmin`), 회원이면 "관리자에게 문자 보내기"(`#msg`, `vMsg`), 설정에 "아이디 지우기"(애플 5.1.1(v) 앱 안 계정 삭제). 요청은 `PE_IO.memberCall(op)` → `host.js`의 `member`(`MEMBER_OPS`: list·set·del·code-add·code-del·remove·unread·msg-read·msg-del·msg-send만).
-  - 관리자 문자함(`#inbox`, `#inbox/uid`, `vInbox`): 탭 첫 화면(다섯 탭) 맨 위 오른쪽 `.ibxrow .ibx` 단추에 안 읽은 수(`.bdg`, 99+). 수는 `unread`(Firestore 세기 요청, 문서를 읽지 않음)로 탭 첫 화면을 그릴 때 1분에 한 번·앱으로 돌아올 때 센다(`IBX`, `ibxPoll`). 목록·문자는 `list`의 `msgs`(ADM과 함께, 규칙 게시 전이면 null → 안내). 사람을 열면(`onEnter`·목록을 받은 뒤) `ibxSeen`이 읽음으로. 승인 대기 줄에 마지막 문자, 문자 화면에서 바로 승인·거절.
-  - `Gate`: 아이디 만들기에 "관리자에게 보낼 말"(초대 코드 없이 승인을 기다릴 때는 꼭 적는다), 승인 대기·거절 화면에서 더 보내기. `App.js`의 `DEV`가 iOS·앱 버전(기기 이름·위치는 넣지 않는다).
+  - 웹 쪽: `PE_NATIVE.member`({id, admin, uid}) → 더보기에 아이디, 관리자면 "문자함"·"승인 관리"(`#admin`, `vAdmin`), 회원이면 "관리자와 문자"(`#msg`, `vMsg`: 보내기 + 주고받은 말, 새 답장은 탭 첫 화면 오른쪽 위 `.ibx.mt` 단추와 더보기 줄에 "새 답장 n개". 답장은 `thread`로 5분에 한 번·앱으로 돌아올 때·`#msg`를 열 때 받아 오고, 화면을 연 뒤 `reply-read`로 읽음), 설정에 "아이디 지우기"(애플 5.1.1(v) 앱 안 계정 삭제). 요청은 `PE_IO.memberCall(op)` → `host.js`의 `member`(`MEMBER_OPS`: list·set·del·code-add·code-del·remove·unread·msg-read·msg-del·msg-send·reply·thread·reply-read만).
+  - 관리자 문자함(`#inbox`, `#inbox/uid`, `vInbox`): 탭 첫 화면(다섯 탭) 맨 위 오른쪽 `.ibxrow .ibx` 단추에 안 읽은 수(`.bdg`, 99+). 수는 `unread`(Firestore 세기 요청, 문서를 읽지 않음)로 탭 첫 화면을 그릴 때 1분에 한 번·앱으로 돌아올 때 센다(`IBX`, `ibxPoll`). 목록·문자는 `list`의 `msgs`(ADM과 함께, 규칙 게시 전이면 null → 안내). 사람을 열면(`onEnter`·목록을 받은 뒤) `ibxSeen`이 읽음으로. 승인 대기 줄에 마지막 문자. 사람 화면에 답장 칸(`#rpText`, 쓰던 답장은 `SV['rp:'+uid]`)과 "승인하고 보내기"·"답장만 보내기"·"거절하고 보내기"(`ibx-reply`, 상태에 맞는 두세 개. 답장 없이 승인·거절을 누르면 상태만 바꾼다. 상태는 members 갱신, 답장은 `replies`), 문자와 보낸 답장(`.msg.rp`)을 새것부터 섞어 보인다. 아이디를 지운 사람에게는 답장할 수 없다. 지우기는 그 사람의 문자와 보낸 답장을 함께.
+  - `Gate`: 아이디 만들기에 "관리자에게 보낼 말"(초대 코드 없이 승인을 기다릴 때는 꼭 적는다), 승인 대기·거절 화면에서 더 보내기와 "관리자와 주고받은 말"(새것 5개, 관리자 답장·승인과 함께·새 답장 표시. `member.thread()`를 확인할 때마다 받아 오고 새 답장은 읽음으로). `App.js`의 `DEV`가 iOS·앱 버전(기기 이름·위치는 넣지 않는다).
   - Firebase 값은 EAS 환경 변수 `EXPO_PUBLIC_FIREBASE_API_KEY`·`EXPO_PUBLIC_FIREBASE_PROJECT_ID`(production)로만 넣는다. 없으면 "설정이 빠진 빌드" 화면.
-  - 검사: `npm run test:firebase`(Firebase 에뮬레이터, Java 21)가 실제 규칙으로 승인·거절·초대 코드·남의 아이디·스스로 승인 막기·지우기·문자(남의 아이디·읽음·시각·501자 꾸미기 막기, 안 읽은 수, 아이디 지우기 때 함께 지움)를 돈다. `tests/native.test.js`는 관리자 화면·문자함·회원 문자 보내기·백업 파일 불러오기·아이디 지우기를 가짜 회원 서버로 본다.
+  - 검사: `npm run test:firebase`(Firebase 에뮬레이터, Java 21)가 실제 규칙으로 승인·거절·초대 코드·남의 아이디·스스로 승인 막기·지우기·문자(남의 아이디·읽음·시각·501자 꾸미기 막기, 안 읽은 수, 아이디 지우기 때 함께 지움)·답장(관리자만 보냄, 남의 답장 못 읽음, 회원이 답장·스스로 승인 못 함, 읽음만 바꿈, 승인·거절과 함께, 아이디 지우기 때 함께 지움)을 돈다. `tests/native.test.js`는 관리자 화면·문자함·회원 문자 보내기·백업 파일 불러오기·아이디 지우기를 가짜 회원 서버로 본다.
 - 실기기에서 아직 확인할 것: 위 "받아들이는 기준 2". 특히 무음 모드에서 타이머 알림음(웹 오디오는 무음 스위치를 따른다), 알림 권한 묻기, 공유 시트의 "파일에 저장".

@@ -476,7 +476,7 @@ function runWeek(W, sets, st) {
     const st = clone(ST); st.settings.budget = { sat: 200 }; scene('2026-10-31T08:00:00', st); const dm0 = pe.planToday(SAT).doneMin;
     ok(pe.S().wk['2026-10-26'].cut && pe.S().wk['2026-10-26'].cph === 1, '20. (준비) 토요일 단계 2 고정, 줄인 목표 1단계에 걸림');
     pe.S().settings.budget = {}; await go('#schedule'); const inp = d.querySelector('#schStart'); inp.value = '2026-10-26'; inp.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(30);
-    click('[data-act="sch-save"]'); await sleep(30);
+    click('[data-act="sch-keep"]'); await sleep(10); click('[data-act="sch-save"]'); await sleep(30);   // 기록은 그대로 두기(지우는 길은 67)
     const T = pe.taskList(SAT), F = pe.S().today, V = pe.planToday(SAT);
     ok(pe.S().settings.start === '2026-10-26' && pe.weekIndex(SAT) === 0 && !pe.S().wk['2026-10-26'].cut, '20. 시험 일정 저장: 이번 주가 준비 주(0단계)가 되어 줄인 목표를 풂');
     ok(V.rows.filter(r => !r.done).every(r => T.some(x => x.id === r.id)) && F.rows.length === V.rows.length && line(pe.weekBoard(SAT), 'dd').b === 5 && V.lv === 1, '20. 다시 고른 줄은 모두 새 후보(옛 id 없음), 단계 1, 단답 목표는 줄이지 않은 5문');
@@ -2206,7 +2206,53 @@ function runWeek(W, sets, st) {
     pe.SETS().plan = pe.planSig(pe.computePlan('2026-10-26')); pe.SV()[D9] = 'cards'; pe.render(); await sleep(10);
     ok(note() && !note().querySelector('button') && T_(note()) === '예약 작업이 예전 일정의 1주차로 만든 세트예요.', `66-3. 저장소도 새 일정이면 예전 세트에는 안내만 "${note() && T_(note())}"`);
     pe.goTab('today'); await sleep(40); }
+  // 67. 준비 시작일을 다시 정하면 이전 공부 기록을 지우고 새로 시작(3.1.3): 확인 → 지움(설정·내 카드·바뀐 점은 그대로), "기록은 그대로 두기"는 날짜만,
+  //     이미 정한 시작일 전 기록이 있으면 오늘 카드·시험 일정에서 한 번에 지우기, 지운 기록은 7일 동안 백업 화면에서 되돌리기
+  { const T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), V$ = () => d.querySelector('#view'), show = async h => { await go(h); pe.render(); await sleep(10); };
+    const asked = [], c0 = w.confirm; w.confirm = m => { asked.push(m); return true; };
+    const base = () => { const st = clone(ST); st.userCards = [{ id: 'U1', t: '내 카드', d: '내가 만든 카드' }]; st.settings.budget = { wd: 200, sat: 300, sun: 240 }; st.tk['seen:v3'] = '2026-10-31'; st.cal = Object.assign({}, st.cal, { '2026-11-06': { in: ['09:00'], x: { 'plan:2026-11-06': ['todo', '오늘 몫 3/5'] } } }); st.days = { '2026-11-03': { m: 0 }, '2026-12-24': { m: 60 } }; return st; };
+    w.localStorage.removeItem('pe_state_prev');
+    scene('2026-11-09T09:00:00', base());
+    ok(pe.hasRec() && !pe.recBefore() && !pe.prevRec(), '67-1. 예시 기록: 공부 기록 있음, 10/19 시작이라 시작 전 기록은 없음');
+    await show('#schedule');
+    { const i = V$().querySelector('#schStart'); i.value = '2026-11-10'; i.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(10); }
+    const wl = V$().querySelector('.schwipe');
+    ok(wl && /저장하면 이전 공부 기록\(카드 진도·오답·세트 진도·달력·주간 기록\)을 지우고 새로 시작해요/.test(T_(wl)) && wl.querySelector('[data-act="sch-keep"]'), `67-2. 시작일을 바꾸면 미리 보기에 "${T_(wl)}"`);
+    const cards0 = Object.keys(pe.S().cards).length, cal0 = Object.keys(pe.S().cal).length;
+    click('[data-act="sch-save"]'); await sleep(40);
+    const S1 = pe.S();
+    ok(/지우고 11월 10일부터 새로 시작할까요/.test(asked[asked.length - 1]) && S1.settings.start === '2026-11-10' && !Object.keys(S1.cards).length && !Object.keys(S1.sp).length && !Object.keys(S1.cal).length && !Object.keys(S1.wrong).length && !Object.keys(S1.wk).length && !S1.today
+      && S1.userCards.length === 1 && !S1.days['2026-11-03'] && S1.days['2026-12-24'].m === 60 && S1.settings.budget.wd === 200 && S1.tk['seen:v3'] === '2026-10-31' && S1.created === '2026-11-09',
+      `67-3. 확인 → 기록 지움(카드 ${cards0}·달력 ${cal0} → 0), 시작일 11/10, 지난 쉬는 날은 지우고 앞으로 정한 짧은 날·내 카드·하루 공부 시간·바뀐 점은 그대로`);
+    const pv = pe.prevRec();
+    ok(pv && pv.at === '2026-11-09' && Object.keys(pv.state.cards).length === cards0 && pv.state.settings.start === '2026-10-19', '67-4. 지운 기록은 따로 둠(7일 동안 되돌리기)');
+    await show('#today');
+    ok(/준비 시작 전 · 11월 10일부터/.test(T_(V$())) && !/공부한 기록이 남아/.test(T_(V$())), '67-5. 오늘: 준비 시작 전 카드, 남은 기록 안내 없음');
+    await show('#backup');
+    const ur = V$().querySelector('[data-act="rec-undo"]');
+    ok(ur && /11\/9에 지운 공부 기록 되돌리기/.test(T_(ur)) && /11\/16까지/.test(T_(ur)), `67-6. 백업 화면: "${T_(ur)}"`);
+    click('[data-act="rec-undo"]'); await sleep(40);
+    ok(/지운 공부 기록으로 되돌릴까요/.test(asked[asked.length - 1]) && Object.keys(pe.S().cards).length === cards0 && pe.S().settings.start === '2026-10-19' && !pe.prevRec(), '67-7. 되돌리기 → 지운 기록 그대로, 되돌리기 기록은 비움');
+    // "기록은 그대로 두기": 날짜만 바꿈
+    scene('2026-11-09T09:00:00', base()); await show('#schedule');
+    { const i = V$().querySelector('#schStart'); i.value = '2026-11-10'; i.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(10); }
+    click('[data-act="sch-keep"]'); await sleep(10);
+    ok(/이전 공부 기록은 그대로 두고 날짜만 바꿔요/.test(T_(V$().querySelector('.schwipe'))), '67-8. 기록은 그대로 두기 → 안내가 바뀜');
+    const n0 = asked.length; click('[data-act="sch-save"]'); await sleep(40);
+    ok(pe.S().settings.start === '2026-11-10' && Object.keys(pe.S().cards).length === cards0 && !asked.slice(n0).some(m => /새로 시작할까요/.test(m)), '67-9. 날짜만 바꾸고 기록은 그대로(지울지 묻지 않음)');
+    // 이미 시작일을 바꿔 둔 기록(시작 전 날짜의 공부 기록이 남음): 오늘 카드와 시험 일정에서 한 번에 지우기
+    ok(pe.recBefore(), '67-10. 시작일(11/10) 전 공부 기록이 남아 있음');
+    await show('#today');
+    ok(/준비 시작 전에 공부한 기록이 남아 있어요/.test(T_(V$())) && V$().querySelector('.norows [data-act="rec-wipe"]'), '67-11. 오늘 카드에 "준비 시작 전에 공부한 기록이 남아 있어요 · 지우고 새로 시작"');
+    await show('#schedule');
+    ok(/준비 시작일 전 공부 기록이 남아 있어요/.test(T_(V$())), '67-12. 시험 일정 맨 위에도 같은 안내');
+    click('[data-act="rec-wipe"]'); await sleep(40);
+    ok(/지우고 11월 10일부터 새로 시작할까요/.test(asked[asked.length - 1]) && !Object.keys(pe.S().cards).length && pe.S().settings.start === '2026-11-10' && !pe.recBefore(), '67-13. 지우고 새로 시작 → 기록 지움, 시작일 그대로');
+    // 공부 기록이 없는 휴대폰(앱만 열어 본 것)은 묻지 않고 날짜만
+    const fr = clone(BLANK); fr.cal = { '2026-11-08': { in: ['09:00'], x: {} } }; scene('2026-11-09T09:00:00', fr);
+    ok(!pe.hasRec(), '67-14. 앱을 연 것만으로는 공부 기록이 아님');
+    w.confirm = c0; w.localStorage.removeItem('pe_state_prev'); pe.goTab('today'); await sleep(40); }
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);
-})().catch(e => { console.log('FAIL: 예외', e); process.exit(1); });
+})().catch(e => { console.log('FAIL: 예외', e && e.stack); process.exit(1); });

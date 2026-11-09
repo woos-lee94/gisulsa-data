@@ -1,5 +1,5 @@
 // 회원 승인 화면: 승인되기 전에는 앱 내용(웹 화면) 대신 이 화면만 보인다.
-// 아이디 만들기(관리자에게 보낼 말과 함께) → 승인 대기(다시 확인, 관리자에게 한마디 더, 기기 번호, 아이디 지우기) / 거절됨 / 인터넷 없음 / 설정 없는 빌드
+// 아이디 만들기(관리자에게 보낼 말과 함께) → 승인 대기(다시 확인, 관리자와 주고받은 말, 관리자에게 한마디 더, 기기 번호, 아이디 지우기) / 거절됨 / 인터넷 없음 / 설정 없는 빌드
 import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
@@ -19,8 +19,18 @@ function Btn({ c, title, onPress, kind, disabled }) {
 
 const MSG_MAX = 500;
 const hhmm = d => `${d.getHours() < 12 ? '오전' : '오후'} ${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')}`;
+const when = at => { const d = new Date(at); return isNaN(d) ? '' : `${d.getMonth() + 1}/${d.getDate()} ${hhmm(d)}`; };
+const DEC = { approved: ' · 승인과 함께', rejected: ' · 거절과 함께' };
+// 관리자와 주고받은 말(보낸 문자 + 관리자 답장), 새것부터 5개
+function threadItems(t) {
+  if (!t) return [];
+  const ts = x => Date.parse(x) || 0;
+  return (t.msgs || []).map(m => ({ key: 'm' + m.mid, at: m.at, text: m.text }))
+    .concat((t.replies || []).map(r => ({ key: 'r' + r.rid, at: r.at, text: r.text, r })))
+    .sort((a, b) => ts(b.at) - ts(a.at)).slice(0, 5);
+}
 
-export default function Gate({ m, busy, error, dark, onRegister, onRefresh, onRemove, onSend }) {
+export default function Gate({ m, busy, error, dark, thread, onRegister, onRefresh, onRemove, onSend }) {
   const c = dark ? DARK : LIGHT;
   const [id, setId] = useState('');
   const [code, setCode] = useState('');
@@ -94,6 +104,17 @@ export default function Gate({ m, busy, error, dark, onRegister, onRefresh, onRe
         </Pressable>
         {m.offline ? <Text style={[s.err, { color: c.red }]}>인터넷에 연결되어 있지 않아요.</Text> : null}
         {error ? <Text style={[s.err, { color: c.red }]}>{error}</Text> : null}
+        {threadItems(thread).length ? (
+          <View style={{ marginTop: 16 }}>
+            <Text style={[s.label, { color: c.ink2, marginTop: 0 }]}>관리자와 주고받은 말</Text>
+            {threadItems(thread).map(x => (
+              <View key={x.key} style={[s.bubble, { backgroundColor: x.r ? c.soft : c.paper, borderColor: x.r && x.r.fresh ? c.blue : c.rule }]}>
+                <Text style={[s.bmeta, { color: x.r ? c.blue : c.ink2 }]}>{x.r ? '관리자 답장' + (DEC[x.r.dec] || '') + (x.r.fresh ? ' · 새 답장' : '') : '보낸 말'} · {when(x.at)}</Text>
+                <Text selectable style={[s.btext, { color: c.ink }]}>{x.text}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
         <Btn c={c} title={busy ? '확인하는 중…' : '다시 확인'} disabled={busy} onPress={onRefresh} />
         <Text style={[s.label, { color: c.ink2, marginTop: 22 }]}>{sent ? '관리자에게 한마디 더' : '관리자에게 보낼 말'}</Text>
         {msgBox(pending ? '예: 홍길동입니다. 승인 부탁드려요' : '예: 다시 확인 부탁드려요')}
@@ -155,4 +176,7 @@ const s = StyleSheet.create({
   k: { fontSize: 13, fontWeight: '600' },
   v: { fontSize: 18, fontWeight: '700', marginTop: 2 },
   uid: { fontSize: 14, marginTop: 2, fontFamily: 'Menlo' },
+  bubble: { borderRadius: 12, borderWidth: 1, padding: 12, marginTop: 8 },
+  bmeta: { fontSize: 13, fontWeight: '700' },
+  btext: { fontSize: 15, lineHeight: 22, marginTop: 4 },
 });

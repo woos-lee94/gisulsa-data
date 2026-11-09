@@ -14,7 +14,7 @@ const INTERVALS=[0,1,3,7,14,30,60];
 const REVIEW_STEPS=[1,3,7,14,30];
 const KEY='pe_state_v1', SKEY='pe_sets_v1';
 const DATA_DEFAULT='https://raw.githubusercontent.com/woos-lee94/gisulsa-data/main/data/';
-const APP_VER='3.1.2';
+const APP_VER='3.1.3';
 const MOCK_GRADE_SINCE='2026-11-01';            /* v3.0.0을 내는 날. 이 날짜 전 모의고사는 "채점 받았어요"를 묻지 않는다 */
 const BUDGET_DEF={wd:180,sat:300,sun:240};       /* 하루 공부 시간(분) 기본값: 평일·토요일·일요일과 공휴일(S.settings.budget, budgetOf) */
 const PLAN_START=(window.PE_EXAM&&PE_EXAM.defaults.start)||'2026-10-19';
@@ -462,7 +462,7 @@ function route(){closeModal();const up=UPH;UPH=null;
   }catch(e){console.error(e);R=parseHash();}
   if(R.page!=='memo')memoStop();render();window.scrollTo(0,up&&up===curH()&&SCR[up]||0);scrollDo();v3Again();}
 /* 화면에 들어갈 때 한 번(그리기와 따로, 그리기는 기록을 쓰지 않는다): 토·일요일에 다음 주 단원의 기출 화면을 열면 "다음 주 단원 기출 훑기"(S.tk['kichul:주']) */
-function onEnter(r){if(r.page==='inbox'&&r.a)return ibxSeen(r.a);if(r.page!=='kichul'||r.a!=='u'||!r.b)return;const t=todayStr(),dw=parse(t).getDay(),W=wkStart(t),tk=S.tk||(S.tk={});if(dw!==0&&dw!==6||tk['kichul:'+W])return;
+function onEnter(r){if(r.page==='inbox'&&r.a)return ibxSeen(r.a);if(r.page==='msg')return mtPoll(true);if(r.page!=='kichul'||r.a!=='u'||!r.b)return;const t=todayStr(),dw=parse(t).getDay(),W=wkStart(t),tk=S.tk||(S.tk={});if(dw!==0&&dw!==6||tk['kichul:'+W])return;
   if((weekObj(weekIndex(addDays(W,7))).u||[]).map(Number).includes(Number(r.b))){tk['kichul:'+W]=t;touchDay();save();}}
 window.addEventListener('hashchange',route);
 const kbEl=t=>!!t&&(t.tagName==='TEXTAREA'||t.tagName==='INPUT'&&!/^(checkbox|radio|button|submit|reset|range|color|file|image)$/i.test(t.type||''));
@@ -473,6 +473,7 @@ function render(){PLN++;R=parseHash();document.querySelectorAll('#nav button').f
     if(!R.page)html=(TAB_VIEWS[R.tab]||vToday)();
     else html=(PAGES[R.page]||vToday)();
   }catch(e){html=`<div class="empty" style="margin-top:24px"><b>화면을 그리는 중 오류가 났어요</b>${esc(e.message)}</div>`;console.error(e);}
+  if(!R.page&&mtOn()){if(MT.n)html=`<div class="ibxrow mtrow">${mtBtn()}</div>`+html;mtPoll();}   /* 회원: 안 읽은 관리자 답장이 있을 때만 오른쪽 위 단추 */
   if(!R.page&&ibxOn()){html=`<div class="ibxrow">${ibxBtn()}</div>`+html;ibxPoll();if(!IBX.iv)IBX.iv=setInterval(()=>{if(!document.hidden&&!R.page)ibxPoll();},60000);}   /* 관리자: 탭 첫 화면 오른쪽 위 문자함(1분마다 다시 세기는 관리자 휴대폰에서만 켠다) */
   v.innerHTML=html;document.body.classList.toggle('kb',kbEl(document.activeElement));paintNavBadges();if(R.page==='timer')paintTimer();if(R.page==='memo')paintMemo();
   if(R.page==='sess'&&SES&&!SES.answered&&SES.items[SES.i]&&SES.items[SES.i].type==='fill'){const f=v.querySelector('.fill-in');if(f)try{f.focus({preventScroll:true});}catch(e){}}
@@ -1346,7 +1347,8 @@ function norowsHTML(V,t){const wt=V.info.find(x=>x.k==='wait'),none=!Object.keys
   if(w<0)h=`준비 시작 전 · ${korDate(S.settings.start)}부터`;else if(t>PLAN.target.d)h='시험 후 · 복기와 면접 준비';
   else if(none||wt){const f=!syncing&&syncBad();h=none?'아직 받은 세트가 없어요':wt.label;s=f?'받아 오지 못했어요 — 인터넷 연결을 확인하세요':none?'앱을 열 때마다 저장소에서 새 세트를 받아 와요.':wt.sub||'';b=[f,'sync'];}   /* 받아 오는 상태는 이 카드 하나에(버튼도 하나) */
   else{h='오늘 할 몫이 없어요';s='시간이 되면 범위를 골라 자유 연습을 해요.';}
-  return`<div class="dcard norows"><h3>${esc(h)}</h3>${s?`<p class="ds">${esc(s)}</p>`:''}${b[1]==='sync'?syncBtn('btn',b[0]):`<button class="btn" data-act="${b[1]}">${b[0]}</button>`}</div>`;}
+  if(w<0&&recBefore())s='준비 시작 전에 공부한 기록이 남아 있어요.';
+  return`<div class="dcard norows"><h3>${esc(h)}</h3>${s?`<p class="ds">${esc(s)}${w<0&&recBefore()?' <button class="lnk" data-act="rec-wipe">지우고 새로 시작</button>':''}</p>`:''}${b[1]==='sync'?syncBtn('btn',b[0]):`<button class="btn" data-act="${b[1]}">${b[0]}</button>`}</div>`;}
 /* 쉬는 날 카드: 오늘 몫이 이번 주 어느 날로 갔는지(평소 시간과 견준 앞날 계산), 못 넣는 것은 이름만(오늘 화면에 분은 쓰지 않음), 하나뿐인 파란 버튼 "다시 공부할래요" */
 function offCardHTML(t){const od=offDelta(t,t,0),pl=od?placeTxt(od.dl,t):'옮길 필수가 없어요',sp=od&&od.sp>=5?spillNames(od.ds):'',none=pl==='옮길 필수가 없어요';
   return`<div class="dcard off"><h3>오늘은 쉬어요</h3><p class="ds">${none?(sp?'다른 날로 옮길 수 있는 필수는 없어요':esc(pl)):nwTxt(pl)+'에 나눠 넣었어요'}</p><p class="ds">${esc(sp?`${sp}${jo(sp,['은','는'])} 다음 주로 놓아줘요`:'이번 주 안에 다 따라잡아요')}${SAME_HTML}</p><button class="btn" data-act="off-clear">다시 공부할래요</button></div>`;}
@@ -2485,7 +2487,7 @@ function vMore(){const s=S.sync||{};const rp=repoPlanState(),N=S.settings.nextTa
   ${sec('시험 일정','',`<div class="group">${row({ic:'flag',tone:rp==='diff'?'red':'',t:'준비 시작일·목표 회차',d:`${esc(korDate(S.settings.start))} 시작 · ${PLAN.E}주<br><span class="nw">제${PLAN.target.r}회</span> · <span class="nw">${esc(korDate(PLAN.target.d))}(${DAYK[parse(PLAN.target.d).getDay()]}${esc(estTag(PLAN.target).replace(/^\((.+)\)$/,', $1'))})</span>${rp==='diff'?'<br><b style="color:var(--red)">예약 작업 일정과 달라요</b>':''}${l3?`<br><span class="nw">${esc(l3)}</span>`:''}`,act:'go',data:{h:'schedule'}})}</div>`)}
   ${sec('공부 도구','',`<div class="group">${row({ic:'caldot',t:'학습 달력',d:'접속한 날과 끝낸 공부',act:'go',data:{h:'cal'}})}${row({ic:'cal',t:PLAN.E+'주 로드맵',d:'단계·주차별 목표와 학원 대체표',act:'go',data:{h:'plan'}})}${row({ic:'pen',t:'답안 작성 요령',d:'모범 답안으로 보는 답안지 쓰는 법',act:'go',data:{h:'guide'}})}${row({ic:'timer',t:'교시 타이머',d:'100분, 문제 경계마다 알림',act:'go',data:{h:'timer'}})}${row({ic:'chat',t:'Claude 프롬프트',d:'첨삭·카드 생성·주간 리포트 등 10개',act:'go',data:{h:'prompts'}})}</div>`)}
   ${sec('데이터','',`<div class="group">${row({ic:'sync',t:'지금 받아 오기',d:syncing?'받아 오는 중…':s.last&&!s.ok?'<span class="sfail">받아 오지 못했어요</span>':'',act:'sync'})}${row({ic:'imp',t:'카드·목차 가져오기',d:'Claude가 만든 JSON 붙여넣기',act:'go',data:{h:'imp'}})}${row({ic:'save',t:'백업·복원',d:(S.tk||{}).backup?'마지막 백업 '+md(S.tk.backup):'아직 백업한 적이 없어요',act:'go',data:{h:'backup'}})}</div>`)}
-  ${sec('앱','',`<div class="group">${row({ic:'gear',t:'설정',d:'하루 공부 시간, 새 카드 수, 글자 크기, 테마',act:'go',data:{h:'settings'}})}${row({ic:'info',t:'콘텐츠 출처',d:'카드·기출·세트가 어디서 왔는지',act:'go',data:{h:'about'}})}${me&&!me.admin?row({ic:'mail',t:'관리자에게 문자 보내기',d:'궁금한 점·요청을 관리자에게',act:'go',data:{h:'msg'}}):''}</div>`)}
+  ${sec('앱','',`<div class="group">${row({ic:'gear',t:'설정',d:'하루 공부 시간, 새 카드 수, 글자 크기, 테마',act:'go',data:{h:'settings'}})}${row({ic:'info',t:'콘텐츠 출처',d:'카드·기출·세트가 어디서 왔는지',act:'go',data:{h:'about'}})}${me&&!me.admin?row({ic:'mail',t:'관리자와 문자',d:`<span data-mtn>${mtTxt()}</span>`,act:'go',data:{h:'msg'}}):''}</div>`)}
   <p class="note">기록은 이 휴대폰에만 저장돼요. 1~2주에 한 번 백업해 두세요.</p><p class="note vfoot">기술사 6개월 v${APP_VER}</p>`;}
 /* 학습 달력: 앱을 연 날(접속 시각)과 그날 끝낸 공부를 종류별 동그라미로 */
 const CAL_K=[['term','용어'],['essay','논술'],['quiz','퀴즈·테스트'],['mock','모의고사'],['todo','할 일']];
@@ -2627,7 +2629,7 @@ function vSchedule(){const ed=SCH||{start:S.settings.start,target:S.settings.tar
   const ck=taskList(t).filter(x=>x.k==='applychk'||x.k==='notice');
   return topbar('시험 일정')+`<h1 class="ptitle">시험 일정</h1><p class="lsub">준비 시작일을 정하면 정기시험 가운데 ${PE_SCHED.minMonths}개월 이상 남은 가장 빠른 회차를 목표로 잡아요.</p>
   ${ck.length?`<div class="group schk">${ck.map(x=>`<div class="row noic"><span class="tx"><span class="tt">${esc(x.label)}</span><span class="ds">${x.k==='notice'?'공고된 시험일이 아래 일정과 다르면 고쳐요':'큐넷에서 접수 날짜와 시험일을 확인해요'}</span></span>${x.done?'<span class="pdn">✓ 확인했어요</span>':`<button class="btn sm sec" data-act="tk" data-id="${esc(x.id)}">확인했어요</button>`}</div>`).join('')}</div>`:''}
-  ${schTopHTML(t)}${schCmpHTML(t,slipCheck(t))}
+  ${schTopHTML(t)}${!SCH&&recBefore()?`<div class="group" style="margin-top:12px">${row({ic:'sync',tone:'gray',t:'준비 시작일 전 공부 기록이 남아 있어요',d:esc(`${korDate(S.settings.start)}부터 새로 시작하려면 이전 기록(${WIPE_TXT})을 지워요`),act:'rec-wipe'})}</div>`:''}${schCmpHTML(t,slipCheck(t))}
   <label class="f" for="schStart">준비 시작일</label><input class="in" type="date" id="schStart" value="${esc(ed.start)}">${(x=>x?`<p class="note">${esc(x)}</p>`:'')(firstWeekTxt(ed.start))}
   <label class="f" for="schTarget">목표 회차</label><select class="select" id="schTarget"><option value="auto"${ed.target==='auto'?' selected':''}>자동: 가장 빠른 회차(제${el[0].r}회)</option>${el.map(x=>`<option value="${x.r}"${String(ed.target)===String(x.r)?' selected':''}>제${x.r}회, ${x.d}${estTag(x)}, ${Math.floor(diffDays(planMon(ed.start),x.d)/7)}주</option>`).join('')}</select>
   <div class="sheet" id="schPrev" style="margin-top:16px"><p class="sheet-k">${changed?'바꾸면 이렇게 돼요':'지금 일정'}</p><h3>제${P.target.r}회 필기 ${esc(korDateY(P.target.d,true))}${P.target.est?' <span class="tag-new">예상</span>':''}</h3>
@@ -2640,7 +2642,8 @@ function vSchedule(){const ed=SCH||{start:S.settings.start,target:S.settings.tar
     ${P.mock?'':`<p class="ds" style="margin:4px 0 0">시작 ${PE_SCHED.mockMinWeeks}주 뒤부터 목표 전까지 열리는 정기시험이 없어 주말 모의고사로 대신해요.</p>`}
     ${P.target.note||(P.mock&&P.mock.note)?`<p class="ds" style="margin:6px 0 0">${esc([P.mock&&P.mock.note?`제${P.mock.r}회: ${P.mock.note}`:'',P.target.note?`제${P.target.r}회: ${P.target.note}`:''].filter(Boolean).join(' / '))}</p>`:''}
     ${pv?pv.lines:''}
-    ${changed?`<div class="btns schsv" style="margin-top:14px"><button class="btn" data-act="sch-save">${from?'<span>'+esc(dlab(from))+'부터 <span class="nw">이 일정으로</span></span>':'이 일정으로 저장'}</button><button class="btn ghost" data-act="sch-cancel">취소</button></div><p class="ds" style="margin:8px 0 0">${from?esc(dlab(from))+'부터 ':''}오늘 화면, 로드맵, 주차와 단계가 새 일정으로 바뀌어요. 카드·오답 기록은 그대로예요.</p>`:''}</div>
+    ${stCh&&hasRec()?`<p class="ds schl schwipe">${SCH.keep?'이전 공부 기록은 그대로 두고 날짜만 바꿔요.':`저장하면 이전 공부 기록(${WIPE_TXT})을 지우고 새로 시작해요. 설정과 내 카드는 그대로예요.`} <button class="lnk" data-act="sch-keep">${SCH.keep?'기록 지우고 새로 시작':'기록은 그대로 두기'}</button></p>`:''}
+    ${changed?`<div class="btns schsv" style="margin-top:14px"><button class="btn" data-act="sch-save">${from?'<span>'+esc(dlab(from))+'부터 <span class="nw">이 일정으로</span></span>':'이 일정으로 저장'}</button><button class="btn ghost" data-act="sch-cancel">취소</button></div><p class="ds" style="margin:8px 0 0">${from?esc(dlab(from))+'부터 ':''}오늘 화면, 로드맵, 주차와 단계가 새 일정으로 바뀌어요.${stCh&&hasRec()&&!SCH.keep?'':' 카드·오답 기록은 그대로예요.'}</p>`:''}</div>
   ${sec('예약 작업 일정','',rp==='same'?`<div class="group">${row({ic:'check',tone:'ok',t:'예약 작업도 같은 일정이에요',d:'매일 세트와 주간 모의고사가 이 일정의 주차·단원으로 만들어져요'})}</div>`
     :rp==='unknown'?`<div class="group">${row({ic:'sync',tone:'gray',t:'아직 확인하지 못했어요',d:'받아 오기를 하면 저장소의 일정과 비교해요',act:'sync'})}</div>`
     :rp==='wait'?`<div class="group">${row({ic:'cal',tone:'gray',t:esc(`예약 작업은 ${dlab(N.from)}부터 바꿔요`),d:esc(`${dlab(addDays(N.from,-1))}에 변경 요청을 붙여 넣어요`)})}</div>
@@ -2699,9 +2702,33 @@ function backupJSON(){S.tk=S.tk||{};const b0=S.tk.backup;S.tk.backup=todayStr();
    받은 세트는 이 휴대폰 것과 합치고(setsMerge) 받아 오기 상태도 이 휴대폰 것, 곧바로 다시 받아 온다(받아 오는 동안은 오늘 몫을 고정하지 않음) */
 function restoreFrom(text,name){let j,st;try{j=JSON.parse(String(text||'').replace(/^\uFEFF/,''));st=j.state||j;if(!st||!st.settings||!st.cards)throw 0;}catch(err){return toast(name?'백업 파일이 아니에요':'백업 형식이 아니에요');}
   const bd=(st.tk||{}).backup;
-  return PE_IO.ask(name?`${bd?korDate(bd)+' 백업 파일':'고른 백업 파일'}로 지금 기록을 덮어씁니다. 계속할까요? 파일: ${name}`:'지금 기록을 덮어씁니다. 계속할까요?',()=>{try{const sv=(S.tk||{})['seen:v3'],sy=S.sync;S=Object.assign(fresh(),st);S.settings=Object.assign(fresh().settings,st.settings||{});if(!S.settings.roundDates)S.settings.roundDates={};if(!S.days||typeof S.days!=='object')S.days={};S.v=2;S.today=null;S.tk=S.tk||{};S.tk['seen:v3']=sv||S.tk['seen:v3']||todayStr();if(j.sets)SETS=setsMerge(SETS,j.sets);S.sync=sy||S.sync;recalcPlan();flush();invalidate();applyLook();flowReset();toast('복원했어요');sync(true);nav('today');}catch(err){toast('백업 형식이 아니에요');}});}
+  return PE_IO.ask(name?`${bd?korDate(bd)+' 백업 파일':'고른 백업 파일'}로 지금 기록을 덮어씁니다. 계속할까요? 파일: ${name}`:'지금 기록을 덮어씁니다. 계속할까요?',()=>{try{adoptState(st);if(j.sets)SETS=setsMerge(SETS,j.sets);recalcPlan();flush();invalidate();applyLook();flowReset();toast('복원했어요');sync(true);nav('today');}catch(err){toast('백업 형식이 아니에요');}});}
+/* 다른 기록으로 바꾸기(복원·되돌리기): 빠진 칸은 새 기록 값으로, 이 휴대폰의 "바뀐 점" 표시·받아 오기 상태는 그대로 */
+function adoptState(st){const sv=(S.tk||{})['seen:v3'],sy=S.sync;S=Object.assign(fresh(),st);S.settings=Object.assign(fresh().settings,st.settings||{});if(!S.settings.roundDates)S.settings.roundDates={};if(!S.days||typeof S.days!=='object')S.days={};S.v=2;S.today=null;S.tk=S.tk||{};S.tk['seen:v3']=sv||S.tk['seen:v3']||todayStr();S.sync=sy||S.sync;}
+/* 새로 시작(3.1.3): 준비 시작일을 다시 정할 때 이전 공부 기록(카드 진도·별표·오답·세트 진도·모의고사·달력·주간 기록·오늘 몫·지난 쉬는 날)을 지운다.
+   그대로 두는 것: 설정(하루 공부 시간·글자 크기·외우기 등)·내일부터 정해 둔 쉬는 날·짧은 날·내 카드·내 목차·숨긴 카드·가리며 외우기 표시·받은 세트·받아 오기 상태·"바뀐 점"·마지막 백업 날짜.
+   지우기 전 기록은 7일 동안 되돌릴 수 있게 따로 둔다(PREV_KEY, 더보기 → 백업 "되돌리기") */
+const PREV_KEY='pe_state_prev',KEEP_TK=['seen:v3','backup','budget'];
+/* 공부한 기록이 있는지(앱을 연 것만으로 생기는 달력 접속·주간 기록은 세지 않는다) */
+const calStudy=()=>Object.keys(S.cal||{}).filter(d=>Object.keys((S.cal[d]||{}).x||{}).length);
+function hasRec(){return['cards','sp','wrong','mockp','daily','qp'].some(k=>S[k]&&Object.keys(S[k]).length)||(S.log||[]).length>0||calStudy().length>0;}
+/* 준비 시작일 전 날짜에 공부한 기록이 있는지(달력에 남은 공부·카드 매김·세트를 처음 연 날) */
+function recBefore(){const s=S.settings.start;return calStudy().concat(Object.keys(S.daily||{}),Object.values(S.sp||{}).map(p=>p&&p.first).filter(Boolean)).some(d=>d<s);}
+function prevRec(){try{const r=PE_IO.get(PREV_KEY);if(!r)return null;const o=JSON.parse(r);return o&&o.at&&o.state&&o.state.settings&&todayStr()<=addDays(o.at,7)?o:null;}catch(e){return null;}}
+function restartRec(start,target){const o=S,n=fresh();
+  try{PE_IO.set(PREV_KEY,JSON.stringify({at:todayStr(),state:o}));}catch(e){}
+  n.settings=Object.assign({},o.settings);['nextTarget','schUndo','schSent','schSig','slipNo'].forEach(k=>delete n.settings[k]);
+  if(start)n.settings.start=start;if(target)n.settings.target=target;
+  ['userCards','userEssays','hidden','memoPick','memoTape','range','fillLv','sync'].forEach(k=>{if(o[k]!==undefined)n[k]=o[k];});
+  KEEP_TK.forEach(k=>{if(o.tk&&o.tk[k])n.tk[k]=o.tk[k];});
+  const t=todayStr();n.days={};Object.keys(o.days||{}).forEach(d=>{if(d>t)n.days[d]=o.days[d];});   /* 내일부터 정해 둔 쉬는 날·짧은 날은 계획이라 남김 */
+  S=n;recalcPlan();flowReset();invalidate();flush();}
+const WIPE_TXT='카드 진도·오답·세트 진도·달력·주간 기록';
+try{if(PE_IO.get(PREV_KEY)&&!prevRec())PE_IO.set(PREV_KEY,'');}catch(e){}   /* 7일이 지난 되돌리기 기록은 비운다 */
+/* 지운 기록 되돌리기 줄(7일 동안, 백업 화면) */
+function prevRowHTML(){const p=prevRec();return p?`<div class="group" style="margin-top:14px">${row({ic:'sync',tone:'gray',t:`${md(p.at)}에 지운 공부 기록 되돌리기`,d:`${md(addDays(p.at,7))}까지 · 그 뒤에 한 공부 기록은 없어져요`,act:'rec-undo'})}</div>`:'';}
 function vBackup(){const bl=(S.tk||{}).backup;return topbar('백업')+`<h1 class="ptitle">백업·복원</h1><p class="lsub">학습 기록은 이 기기에만 있어요. 1~2주에 한 번 파일로 저장하거나 메모에 붙여 두세요. ${bl?`마지막 백업 ${esc(md(bl))}`:'아직 백업한 적이 없어요'}</p>
-  <div class="btns" style="margin-top:14px"><button class="btn" data-act="backup-copy">백업 복사</button><button class="btn sec" data-act="backup-dl">파일로 저장</button></div>
+  <div class="btns" style="margin-top:14px"><button class="btn" data-act="backup-copy">백업 복사</button><button class="btn sec" data-act="backup-dl">파일로 저장</button></div>${prevRowHTML()}
   <label class="f">파일로 복원</label><div class="btns" style="margin-top:0"><button class="btn sec" data-act="restore-file">파일에서 불러오기</button></div>
   <p class="note">"파일로 저장"으로 둔 gisulsa-backup-날짜.json을 고르세요(파일 앱 → 이 iPhone·iCloud Drive).</p>
   <label class="f" for="restoreText">붙여 넣어 복원(백업 복사로 둔 글)</label><textarea class="in" id="restoreText" placeholder='{"state":{...},"sets":{...}}'></textarea>
@@ -2809,7 +2836,7 @@ function vGuide(){const G=window.PE_GUIDE;if(!G)return topbar('답안 작성 요
 let ADM=null;
 /* ADM: 승인 관리·문자함이 함께 쓰는 목록 {members, codes, me, msgs}. msgs가 null이면 문자함을 못 읽음(Firebase 규칙을 새로 게시하기 전) */
 const admPage=()=>R.page==='admin'||R.page==='inbox';
-function admLoad(){ADM={loading:true};PE_IO.memberCall('list').then(v=>{ADM={members:v.members||[],codes:v.codes||[],me:v.me||'',msgs:Array.isArray(v.msgs)?v.msgs:null};
+function admLoad(){ADM={loading:true};PE_IO.memberCall('list').then(v=>{ADM={members:v.members||[],codes:v.codes||[],me:v.me||'',msgs:Array.isArray(v.msgs)?v.msgs:null,replies:Array.isArray(v.replies)?v.replies:[]};
     if(ADM.msgs){IBX.n=ADM.msgs.filter(m=>!m.read).length;IBX.at=Date.now();}if(R.page==='inbox'&&R.a)ibxSeen(R.a);if(admPage())render();},
   e=>{ADM={err:String(e&&e.message||e)};if(admPage())render();});}
 function admRun(p,msg){p.then(()=>{if(msg)toast(msg);admLoad();if(admPage())render();},e=>toast('하지 못했어요: '+(e&&e.message||e)));}
@@ -2832,7 +2859,7 @@ function vAdmin(){const me=PE_IO.member();if(!me||!me.admin)return topbar('승�
     +`<p class="note" style="margin-top:16px">내 기기 번호: ${esc(ADM.me)}</p>`;}
 
 /* ════════ 17-4. 문자함(관리자)·관리자에게 문자(회원), 앱 전용 ════════ */
-/* 관리자에게 온 문자: 아이디 만들 때 적은 승인 요청 문구(join), 승인 대기·거절 화면(wait), 앱 안 "관리자에게 문자 보내기"(app).
+/* 관리자에게 온 문자: 아이디 만들 때 적은 승인 요청 문구(join), 승인 대기·거절 화면(wait), 앱 안 "관리자와 문자"(app).
    관리자 휴대폰은 탭 첫 화면 오른쪽 위에 문자함 단추, 안 읽은 문자가 있으면 그 수를 빨간 동그라미로(카톡처럼). 안 읽은 수는 탭 첫 화면을 그릴 때 1분에 한 번,
    앱으로 돌아올 때 센다(문서를 하나하나 읽지 않는 세기 요청). 문자함: 보낸 사람마다 최근 순 → 누르면 그 사람이 보낸 문자 전부(언제·어디서·무슨 내용), 연 때 읽음으로 */
 const IBX={n:0,at:0,busy:false,iv:0};
@@ -2842,7 +2869,7 @@ const ibxOn=()=>{const me=PE_IO.member();return!!(me&&me.admin);};
 const ibxCnt=n=>n>99?'99+':String(n);
 const ibxTxt=()=>IBX.n?`안 읽은 문자 ${IBX.n}개`:'새 문자 없음';
 function ibxBtn(){const n=IBX.n;return`<button class="ibx" data-act="ibx" aria-label="문자함${n?`, 안 읽은 문자 ${n}개`:''}">${icon('mail')}${n?`<b class="bdg num">${ibxCnt(n)}</b>`:''}</button>`;}
-function paintIbx(){document.querySelectorAll('.ibx').forEach(b=>{b.outerHTML=ibxBtn();});document.querySelectorAll('[data-ibxn]').forEach(x=>{x.textContent=ibxTxt();});}
+function paintIbx(){document.querySelectorAll('.ibx:not(.mt)').forEach(b=>{b.outerHTML=ibxBtn();});document.querySelectorAll('[data-ibxn]').forEach(x=>{x.textContent=ibxTxt();});}
 function ibxPoll(force){if(!ibxOn()||IBX.busy||(!force&&Date.now()-IBX.at<60000))return;IBX.busy=true;IBX.at=Date.now();
   PE_IO.memberCall('unread').then(n=>{IBX.busy=false;n=Math.max(0,Math.floor(Number(n)||0));if(n!==IBX.n){IBX.n=n;paintIbx();}},()=>{IBX.busy=false;});}
 /* 보낸 때: 오늘·어제는 그 말로, 올해는 "11월 3일(화)", 그 전은 연도까지 + 오전·오후 시각 */
@@ -2852,8 +2879,9 @@ function msgWhen(at){const d=new Date(at);if(isNaN(d))return'';const ds=fmt(d),t
 const msgWhere=m=>(MSG_FROM[m.from]||'앱')+(m.dev?' · '+m.dev:'');
 function ibxPeople(){const by={},ts=x=>Date.parse(x)||0;(ADM.msgs||[]).forEach(m=>{(by[m.uid]=by[m.uid]||{uid:m.uid,list:[]}).list.push(m);});
   return Object.values(by).map(p=>{p.list.sort((a,b)=>ts(b.at)-ts(a.at));p.last=p.list[0];p.id=p.last.id;p.unread=p.list.filter(m=>!m.read).length;
-    const mm=(ADM.members||[]).find(x=>x.uid===p.uid);p.st=mm?MEM_ST[mm.status]||mm.status:'아이디 지움';p.mem=mm||null;return p;})
-    .sort((a,b)=>ts(b.last.at)-ts(a.last.at));}
+    const mm=(ADM.members||[]).find(x=>x.uid===p.uid);p.st=mm?MEM_ST[mm.status]||mm.status:'아이디 지움';p.mem=mm||null;
+    p.rp=(ADM.replies||[]).filter(r=>r.uid===p.uid).sort((a,b)=>ts(b.at)-ts(a.at));p.lastRp=p.rp[0]&&ts(p.rp[0].at)>ts(p.last.at)?p.rp[0]:null;p.lastAt=p.lastRp?p.lastRp.at:p.last.at;return p;})
+    .sort((a,b)=>ts(b.lastAt)-ts(a.lastAt));}
 /* 한 사람의 문자를 연 때 읽음으로(화면에는 이번에 처음 본 문자에 "새 문자" 표시를 남긴다) */
 function ibxSeen(uid){if(!ADM||!ADM.msgs)return;const un=ADM.msgs.filter(m=>m.uid===uid&&!m.read);if(!un.length)return;
   un.forEach(m=>{m.read=true;m.fresh=true;});IBX.n=Math.max(0,IBX.n-un.length);paintIbx();
@@ -2867,18 +2895,45 @@ function vInbox(){const me=PE_IO.member();if(!me||!me.admin)return topbar('문�
     if(ADM.err)return head+`<div class="empty" style="margin-top:14px"><b>불러오지 못했어요</b>${esc(ADM.err)}</div>`;
     if(!ADM.msgs)return head+'<div class="empty" style="margin-top:14px"><b>문자함을 열지 못했어요</b>Firebase 콘솔 → Firestore Database → 규칙에 새 규칙(firebase/firestore.rules)을 붙여 넣고 게시해 주세요.</div>';
     const ps=ibxPeople();if(!ps.length)return head+'<div class="empty" style="margin-top:14px"><b>아직 받은 문자가 없어요</b>아이디를 만들 때 적은 승인 요청 문구와 회원이 앱에서 보낸 문자가 여기 와요.</div>';
-    return head+`<div class="group ibxlist" style="margin-top:14px">${ps.map(p=>`<button class="row" data-act="go" data-h="inbox/${esc(p.uid)}"><span class="ic av${p.unread?' on':''}" aria-hidden="true">${esc(Array.from(p.id||'?')[0])}</span><span class="tx"><span class="tt">${esc(p.id)} <span class="mst">${esc(p.st)}</span></span><span class="ds msnip">${esc(p.last.text)}</span><span class="ds">${esc(msgWhen(p.last.at))} · ${esc(MSG_FROM[p.last.from]||'앱')}${p.list.length>1?` · 문자 ${p.list.length}개`:''}</span></span>${p.unread?`<b class="badge" aria-label="안 읽은 문자 ${p.unread}개">${ibxCnt(p.unread)}</b>`:''}<span class="chev"></span></button>`).join('')}</div>
-      <p class="note">문자는 회원이 보낸 그대로예요. 답은 앱 밖(전화·카톡 등)으로 해 주세요.</p>`;}
-  const st=one.mem&&one.mem.status,btn=(label,cls,s)=>`<button class="btn sm ${cls}" data-act="adm-set" data-uid="${esc(one.uid)}" data-id="${esc(one.id)}" data-s="${s}">${label}</button>`;
-  return topbar(one.id)+`<h1 class="ptitle">${esc(one.id)}</h1><p class="lsub">${esc(one.st)} · 문자 ${one.list.length}개${one.mem?` · 아이디 만든 날 ${esc(String(one.mem.createdAt||'').slice(0,10))}`:''}</p>
-    ${st==='pending'?`<div class="btns">${btn('승인','','approved')}${btn('거절','ghost','rejected')}</div>`:st==='rejected'?`<div class="btns">${btn('승인','sec','approved')}</div>`:''}
-    <div class="msgs">${one.list.map(m=>`<article class="sheet msg${m.fresh?' fresh':''}"><div class="mh"><b>${esc(msgWhen(m.at))}</b>${m.fresh?'<span class="tag-new">새 문자</span>':''}</div><p class="mt">${esc(m.text)}</p><p class="mw">${esc(msgWhere(m))}</p></article>`).join('')}</div>
+    return head+`<div class="group ibxlist" style="margin-top:14px">${ps.map(p=>`<button class="row" data-act="go" data-h="inbox/${esc(p.uid)}"><span class="ic av${p.unread?' on':''}" aria-hidden="true">${esc(Array.from(p.id||'?')[0])}</span><span class="tx"><span class="tt">${esc(p.id)} <span class="mst">${esc(p.st)}</span></span><span class="ds msnip">${p.lastRp?'답장 · ':''}${esc((p.lastRp||p.last).text)}</span><span class="ds">${esc(msgWhen(p.lastAt))} · ${p.lastRp?'보낸 답장':esc(MSG_FROM[p.last.from]||'앱')}${p.list.length>1?` · 문자 ${p.list.length}개`:''}</span></span>${p.unread?`<b class="badge" aria-label="안 읽은 문자 ${p.unread}개">${ibxCnt(p.unread)}</b>`:''}<span class="chev"></span></button>`).join('')}</div>
+      <p class="note">문자를 누르면 그 사람에게 답장하고, 답장하며 승인·거절할 수 있어요.</p>`;}
+  const st=one.mem&&one.mem.status,ts=x=>Date.parse(x)||0;
+  const rb=(label,cls,dec)=>`<button class="btn${cls?' '+cls:''}" data-act="ibx-reply" data-uid="${esc(one.uid)}" data-id="${esc(one.id)}"${dec?` data-dec="${dec}"`:''}>${label}</button>`;
+  const bt=st==='pending'?rb('승인하고 보내기','','approved')+rb('답장만 보내기','sec','')+rb('거절하고 보내기','ghost','rejected')
+    :st==='rejected'?rb('답장 보내기','','')+rb('승인하고 보내기','sec','approved'):rb('답장 보내기','','')+rb('승인 취소하고 보내기','ghost','rejected');
+  const box=one.mem?`<div class="rpbox"><label class="f" for="rpText">${esc(one.id)} 님에게 답장</label><textarea class="in plain" id="rpText" maxlength="500" data-uid="${esc(one.uid)}" placeholder="답장을 적어 주세요">${esc(SV['rp:'+one.uid]||'')}</textarea>
+    <div class="btns">${bt}</div><p class="note">답장을 비우고 ${st==='pending'?'승인·거절':st==='rejected'?'승인':'승인 취소'}을 누르면 상태만 바꿔요. 답장은 회원의 승인 대기 화면과 앱의 "관리자와 문자"에 보여요.</p></div>`
+    :'<p class="note">아이디를 지운 사람이라 답장할 수 없어요.</p>';
+  const items=one.list.map(m=>({at:m.at,m})).concat(one.rp.map(r=>({at:r.at,r}))).sort((a,b)=>ts(b.at)-ts(a.at));
+  return topbar(one.id)+`<h1 class="ptitle">${esc(one.id)}</h1><p class="lsub">${esc(one.st)} · 문자 ${one.list.length}개${one.rp.length?` · 답장 ${one.rp.length}개`:''}${one.mem?` · 아이디 만든 날 ${esc(String(one.mem.createdAt||'').slice(0,10))}`:''}</p>
+    ${box}
+    <div class="msgs">${items.map(({m,r})=>m?`<article class="sheet msg${m.fresh?' fresh':''}"><div class="mh"><b>${esc(msgWhen(m.at))}</b>${m.fresh?'<span class="tag-new">새 문자</span>':''}</div><p class="mt">${esc(m.text)}</p><p class="mw">${esc(msgWhere(m))}</p></article>`
+      :`<article class="sheet msg rp"><div class="mh"><b>${esc(msgWhen(r.at))}</b><span class="mwho">보낸 답장${r.dec?' · '+DEC_TXT[r.dec]:''}</span></div><p class="mt">${esc(r.text)}</p><p class="mw">${r.read?'읽음':'아직 안 읽음'}</p></article>`).join('')}</div>
     <div class="btns"><button class="btn ghost dng" data-act="ibx-del" data-uid="${esc(one.uid)}" data-id="${esc(one.id)}">${esc(one.id)} 님 문자 모두 지우기</button></div>`;}
-/* 회원: 관리자에게 문자 보내기(관리자는 문자함에서 읽는다) */
-function vMsg(){const me=PE_IO.member();if(!me)return topbar('관리자에게 문자')+'<div class="empty" style="margin-top:20px"><b>앱에서만 보낼 수 있어요</b></div>';
-  return topbar('관리자에게 문자')+`<h1 class="ptitle">관리자에게 문자</h1><p class="lsub">아이디 ${esc(me.id)}로 보내요. 관리자만 읽어요.</p>
+/* 관리자 답장(3.1.3): 승인·거절과 함께 보낸 답장에 붙는 말 */
+const DEC_TXT={approved:'승인과 함께',rejected:'거절과 함께'};
+/* 회원: 관리자와 문자(내가 보낸 문자와 관리자 답장, 새것부터). 안 읽은 답장이 있으면 탭 첫 화면 오른쪽 위 단추와 수, 더보기 줄에 "새 답장 n개".
+   답장은 탭 첫 화면을 그릴 때 5분에 한 번·앱으로 돌아올 때 받아 오고, 이 화면을 열면 새로 받아 읽음으로 */
+const MT={n:0,at:0,busy:false,data:null};
+const mtOn=()=>{const me=PE_IO.member();return!!(me&&!me.admin);};
+const mtTxt=()=>MT.n?`새 답장 ${MT.n}개`:'궁금한 점·요청, 관리자 답장';
+function mtBtn(){return MT.n?`<button class="ibx mt" data-act="go" data-h="msg" aria-label="관리자 답장, 안 읽은 답장 ${MT.n}개">${icon('mail')}<b class="bdg num">${ibxCnt(MT.n)}</b></button>`:'';}
+function paintMt(){document.querySelectorAll('#view > .ibxrow.mtrow').forEach(x=>x.remove());const v=$('#view');
+  if(MT.n&&!R.page&&v)v.insertAdjacentHTML('afterbegin',`<div class="ibxrow mtrow">${mtBtn()}</div>`);document.querySelectorAll('[data-mtn]').forEach(x=>{x.textContent=mtTxt();});}
+function mtPoll(force){if(!mtOn()||MT.busy||(!force&&Date.now()-MT.at<300000))return;MT.busy=true;MT.at=Date.now();
+  PE_IO.memberCall('thread').then(v=>{MT.busy=false;MT.data=v&&typeof v==='object'?v:{msgs:[],replies:null};const n=(MT.data.replies||[]).filter(r=>!r.read).length;
+    if(R.page==='msg'){const rs=mtMark();render();return mtSend(rs);}if(n!==MT.n){MT.n=n;paintMt();}},()=>{MT.busy=false;if(R.page==='msg'&&!MT.data){MT.data={msgs:[],replies:null,err:1};render();}});}
+/* 이 화면에서 본 답장을 읽음으로: 먼저 표시(이번에 처음 본 답장에 "새 답장")를 하고 그린 뒤 앱에 읽음 요청 */
+function mtMark(){const rs=(MT.data&&MT.data.replies||[]).filter(r=>!r.read);MT.n=0;rs.forEach(r=>{r.read=true;r.fresh=true;});return rs;}
+function mtSend(rs){if(rs.length)PE_IO.memberCall('reply-read',{rids:rs.map(r=>r.rid)}).catch(()=>{rs.forEach(r=>{r.read=false;});});}
+function vMsg(){const me=PE_IO.member();if(!me)return topbar('관리자와 문자')+'<div class="empty" style="margin-top:20px"><b>앱에서만 보낼 수 있어요</b></div>';
+  const d=MT.data,ts=x=>Date.parse(x)||0,items=d?(d.msgs||[]).map(m=>({at:m.at,m})).concat((d.replies||[]).map(r=>({at:r.at,r}))).sort((a,b)=>ts(b.at)-ts(a.at)):[];
+  return topbar('관리자와 문자')+`<h1 class="ptitle">관리자와 문자</h1><p class="lsub">아이디 ${esc(me.id)}로 보내요. 관리자만 읽고, 답장은 여기로 와요.</p>
   <label class="f" for="msgText">보낼 말</label><textarea class="in plain" id="msgText" maxlength="500" placeholder="궁금한 점이나 요청을 적어 주세요">${esc(SV.msgDraft||'')}</textarea>
-  <div class="btns"><button class="btn" data-act="msg-send">보내기</button></div><p class="note">500자까지. 보낸 때와 이 휴대폰의 iOS·앱 버전이 함께 가요.</p>`;}
+  <div class="btns"><button class="btn" data-act="msg-send">보내기</button></div><p class="note">500자까지. 보낸 때와 이 휴대폰의 iOS·앱 버전이 함께 가요.</p>
+  ${!d?'<div class="empty" style="margin-top:14px"><b>주고받은 문자를 불러오는 중</b></div>':d.err?'<div class="empty" style="margin-top:14px"><b>주고받은 문자를 불러오지 못했어요</b>인터넷 연결을 확인해 주세요.</div>'
+    :items.length?`<div class="msgs">${items.map(({m,r})=>m?`<article class="sheet msg me"><div class="mh"><b>${esc(msgWhen(m.at))}</b><span class="mwho">보낸 문자</span></div><p class="mt">${esc(m.text)}</p></article>`
+      :`<article class="sheet msg rp${r.fresh?' fresh':''}"><div class="mh"><b>${esc(msgWhen(r.at))}</b><span class="mwho">관리자 답장${r.dec?' · '+DEC_TXT[r.dec]:''}</span>${r.fresh?'<span class="tag-new">새 답장</span>':''}</div><p class="mt">${esc(r.text)}</p></article>`).join('')}</div>`:''}`;}
 
 /* ════════ 18. 타이머 ════════ */
 /* ctx: 그 자리에서 시작한 타이머 {kind 'mock'|'essay'|'dd', D 날짜, pk 교시, label 이름, short 짧은 이름}(모의고사 화면·세트 ④ 논술·숙제 단답 카드 안 타이머).
@@ -3165,10 +3220,14 @@ document.addEventListener('click',e=>{
   case'member-remove':return PE_IO.ask('아이디를 지울까요? 승인도 함께 없어지고 처음 화면으로 돌아가요.',()=>{flush();PE_IO.memberCall('remove').catch(e=>toast('지우지 못했어요: '+(e&&e.message||e)));});
   case'adm-reload':ADM=null;return render();
   case'ibx':ADM=null;IBX.at=0;closeModal();return nav('inbox');
-  case'ibx-del':{const mids=((ADM&&ADM.msgs)||[]).filter(m=>m.uid===D.uid).map(m=>m.mid);if(!mids.length)return;
-    return PE_IO.ask(`${D.id} 님이 보낸 문자 ${mids.length}개를 지울까요? 되돌릴 수 없어요.`,()=>PE_IO.memberCall('msg-del',{mids}).then(()=>{toast('문자를 지웠어요');ADM=null;goUp();},err=>toast('지우지 못했어요: '+(err&&err.message||err))));}
+  case'ibx-del':{const mids=((ADM&&ADM.msgs)||[]).filter(m=>m.uid===D.uid).map(m=>m.mid),rids=((ADM&&ADM.replies)||[]).filter(r=>r.uid===D.uid).map(r=>r.rid);if(!mids.length)return;
+    return PE_IO.ask(`${D.id} 님이 보낸 문자 ${mids.length}개${rids.length?`와 보낸 답장 ${rids.length}개`:''}를 지울까요? 되돌릴 수 없어요.`,()=>PE_IO.memberCall('msg-del',{mids,rids}).then(()=>{toast('문자를 지웠어요');ADM=null;goUp();},err=>toast('지우지 못했어요: '+(err&&err.message||err))));}
+  /* 관리자 답장: 승인·거절과 함께(dec), 글 없이 승인·거절만 하면 상태만 */
+  case'ibx-reply':{const el=$('#rpText'),t=((el&&el.value)||'').trim(),dec=D.dec||'';if(!t&&!dec)return toast('답장을 적어 주세요');b.disabled=true;
+    const done=dec==='approved'?(t?'승인하고 답장을 보냈어요':`${D.id} 님을 승인했어요`):dec==='rejected'?(t?'거절하고 답장을 보냈어요':`${D.id} 님의 승인을 막았어요`):'답장을 보냈어요';
+    return PE_IO.memberCall('reply',{uid:D.uid,text:t,dec}).then(()=>{delete SV['rp:'+D.uid];toast(done);admLoad();render();},err=>{b.disabled=false;toast('보내지 못했어요: '+(err&&err.message||err));});}
   case'msg-send':{const el=$('#msgText'),t=((el&&el.value)||'').trim();if(!t)return toast('보낼 말을 적어 주세요');b.disabled=true;
-    return PE_IO.memberCall('msg-send',{text:t}).then(()=>{SV.msgDraft='';toast('관리자에게 보냈어요');goUp();},err=>{b.disabled=false;toast('보내지 못했어요: '+(err&&err.message||err));});}
+    return PE_IO.memberCall('msg-send',{text:t}).then(()=>{SV.msgDraft='';toast('관리자에게 보냈어요');MT.at=0;if(R.page==='msg'){render();mtPoll(true);}},err=>{b.disabled=false;toast('보내지 못했어요: '+(err&&err.message||err));});}
   case'adm-set':return admRun(PE_IO.memberCall('set',{uid:D.uid,status:D.s}),D.s==='approved'?D.id+' 님을 승인했어요':D.id+' 님의 승인을 막았어요');
   case'adm-del':return PE_IO.ask(`${D.id} 아이디를 지울까요? 그 휴대폰은 처음 화면으로 돌아가요.`,()=>admRun(PE_IO.memberCall('del',{uid:D.uid,id:D.id}),'지웠어요'));
   case'code-add':return admRun(PE_IO.memberCall('code-add').then(code=>{copy(code,'초대 코드 '+code+'를 만들고 복사했어요');}),'');
@@ -3251,6 +3310,12 @@ document.addEventListener('click',e=>{
      어느 쪽이든 "지금 일정대로 할게요"는 지우고, 저장소 일정이 저장한 일정(기다리면 그 새 일정)과 다르면 변경 요청을 같은 탭에서 복사(schSent·schSig).
      그 전 복사 기록은 다른 일정의 것이라 늘 새로 정한다(7일 안에 두 번 바꾸기·되돌리기도 복사). 지금과 같은 계획(예: 자동 = 제142회 → 제142회)은 바꾸지 않는다 */
   case'sch-save':{if(!SCH)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(SCH.start||''))return toast('준비 시작일을 확인하세요');
+    /* 준비 시작일을 다시 정하면 이전 공부 기록을 지우고 새로 시작(3.1.3, "기록은 그대로 두기"를 고르지 않았을 때) */
+    if(SCH.start!==S.settings.start&&hasRec()&&!SCH.keep){const ns=SCH.start,tg=SCH.target||'auto';
+      return PE_IO.ask(`이전 공부 기록(${WIPE_TXT})을 지우고 ${korDate(ns)}부터 새로 시작할까요? 설정과 내 카드는 그대로이고, 지운 기록은 7일 동안 더보기 → 백업에서 되돌릴 수 있어요.`,()=>{
+        SCH=null;restartRec(ns,tg);const m='이전 기록을 지우고 '+korDate(ns)+'부터 새로 시작해요',t=todayStr();
+        if(SETS.plan&&!sigEq(SETS.plan,repoWant())){schSentSet(t);save();PE_IO.copy(schReq()).then(()=>toast(m+'. 변경 요청을 복사했어요'),()=>{schSentDel();save();toast(m+'. 변경 요청은 복사하지 못했어요');render();});}
+        else toast(m);render();});}
     const t=todayStr(),st=S.settings,pre=planPre(),prev=st.target||'auto',tg=SCH.target||'auto',stCh=SCH.start!==st.start,P1=stCh?null:computePlan(st.start,tg);
     if(P1&&P1.target.r===PLAN.target.r){SCH=null;return render();}
     const from=stCh?null:schFrom(PLAN,P1,t);
@@ -3262,6 +3327,10 @@ document.addEventListener('click',e=>{
     else{schSentDel();save();toast(msg);}
     return render();}
   case'sch-cancel':SCH=null;return render();
+  case'sch-keep':if(SCH){SCH.keep=!SCH.keep;}return render();   /* 시작일을 바꿀 때 이전 기록 지우기 ↔ 그대로 두기 */
+  case'rec-wipe':return PE_IO.ask(`이전 공부 기록(${WIPE_TXT})을 지우고 ${korDate(S.settings.start)}부터 새로 시작할까요? 설정과 내 카드는 그대로이고, 지운 기록은 7일 동안 더보기 → 백업에서 되돌릴 수 있어요.`,()=>{restartRec();toast('이전 기록을 지웠어요. 새로 시작해요');render();});
+  case'rec-undo':{const p=prevRec();if(!p)return toast('되돌릴 기록이 없어요');
+    return PE_IO.ask(`${korDate(p.at)}에 지운 공부 기록으로 되돌릴까요? 그 뒤에 한 공부 기록은 없어져요.`,()=>{adoptState(p.state);try{PE_IO.set(PREV_KEY,'');}catch(e){}recalcPlan();flush();invalidate();applyLook();flowReset();toast('지운 기록을 되돌렸어요');sync(true);nav('today');});}
   case'sch-pick':SCH={start:S.settings.start,target:D.r==='auto'?'auto':Number(D.r)};SV.scrollTo='#schPrev';render();return scrollDo();   /* 회차 견주기·되돌리기 줄 → 미리 보기 */
   case'sch-next-cancel':delete S.settings.nextTarget;save();toast('지금 일정 그대로 둬요');return render();   /* 기다리던 새 일정을 미리 붙여 넣었으면(next) 저장소가 지금 일정과 달라 diff(빨강, 변경 요청 복사): 복사한 요청은 새 일정의 것(schSig) */
   case'slip-no':{const t=todayStr(),c=slipCheck(t);S.settings.slipNo={at:t,avg:c&&c.avg!=null?c.avg:null};save();toast('4주 동안 다시 묻지 않을게요');return render();}
@@ -3289,9 +3358,9 @@ document.addEventListener('keydown',e=>{const t=e.target;if(e.key!=='Enter'||!t.
   const all=Array.from(document.querySelectorAll('.fill-in'));const k=all.indexOf(t);if(k<all.length-1)all[k+1].focus();else fillCheck(false);});
 $('#nav').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b)goTab(b.dataset.tab);});
 let calHid=0;
-document.addEventListener('visibilitychange',()=>{if(document.hidden){memoPause();calHid=Date.now();}if(!document.hidden){if(Date.now()-calHid>10*60000)calOpen();sync(false);IBX.at=0;nextApply(todayStr());if(!R.page)render();}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){memoPause();calHid=Date.now();}if(!document.hidden){if(Date.now()-calHid>10*60000)calOpen();sync(false);IBX.at=0;MT.at=0;nextApply(todayStr());if(!R.page)render();}});
 /* 관리자에게 보낼 말은 다시 그려도 남게 */
-document.addEventListener('input',e=>{if(e.target&&e.target.id==='msgText')SV.msgDraft=e.target.value;});
+document.addEventListener('input',e=>{if(e.target&&e.target.id==='msgText')SV.msgDraft=e.target.value;if(e.target&&e.target.id==='rpText')SV['rp:'+e.target.dataset.uid]=e.target.value;});
 window.addEventListener('online',()=>sync(true));
 /* 화면 안 타이머를 밀어 올려 안 보이면 위쪽 알약으로 남은 시간을 보여 준다 */
 window.addEventListener('scroll',()=>{if(TM.running||TM.remain>0&&TM.remain<TM.total)paintPill();},{passive:true});
@@ -3316,5 +3385,7 @@ window.__pe={S:()=>S,rParts,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS
   /* 시험 일정 살펴보기(검사용) */
   slipCheck:fresh2(slipCheck),weekP:fresh2(weekP),roundRows:fresh2(roundRows),schFrom:fresh2(schFrom),nextApply:fresh2(nextApply),repoPlanState:fresh2(repoPlanState),schReq:fresh2(schReq),setPh,lockLived,planSig,monNoticeHTML,
   /* 어느 요일에 시작해도(검사용) */
-  wkIdx,wkFrom,planMon,firstWeekTxt};
+  wkIdx,wkFrom,planMon,firstWeekTxt,
+  /* 새로 시작(검사용) */
+  hasRec,recBefore,prevRec};
 })();

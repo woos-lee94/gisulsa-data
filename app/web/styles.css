@@ -841,8 +841,9 @@ body.haspill .ibxrow{padding-right:var(--pw,0px)}   /* 타이머 알약 왼쪽�
 .ds.msnip{color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .msgs{display:grid;gap:10px;margin-top:14px}
 .sheet.msg{padding:14px 16px 14px 40px}
-.msg .mh{display:flex;align-items:center;gap:8px;font-size:.86rem;color:var(--ink2)}
+.msg .mh{display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;font-size:.86rem;color:var(--ink2)}
 .msg .mh b{font-weight:700}
+.msg .mh b,.msg .mh .mwho{white-space:nowrap}
 .msg .mh .tag-new{margin-left:0}
 .msg .mt{margin:6px 0 0;white-space:pre-wrap;font-size:1rem;line-height:1.6;color:var(--ink)}
 #view .msg .mt{-webkit-user-select:text;user-select:text}
@@ -850,3 +851,9 @@ body.haspill .ibxrow{padding-right:var(--pw,0px)}   /* 타이머 알약 왼쪽�
 .sheet.msg.fresh::before{background:var(--blue)}   /* 이번에 처음 본 문자: 여백 줄을 파랗게 */
 textarea.in.plain{font-family:inherit;font-size:1rem;line-height:1.6;min-height:150px}
 .btn.ghost.dng{color:var(--red)}
+/* 관리자 답장(3.1.3): 답장 칸, 보낸 문자·답장 구분 */
+.rpbox{margin-top:14px}
+.rpbox .btns{flex-wrap:wrap}
+.msg .mwho{font-weight:700;color:var(--ink2)}
+.sheet.msg.rp::before{background:var(--ok)}
+.sheet.msg.rp.fresh::before{background:var(--blue)}

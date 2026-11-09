@@ -1,7 +1,7 @@
 // 앱 쪽 다리: 웹 페이지(web/bridge.js의 PE_IO)와 주고받는 규칙.
 // expo 모듈은 deps로 받으므로 같은 코드가 앱(App.js)과 Node 검사(tests/native.test.js)에서 돈다.
-const STORE_KEYS = ['pe_state_v1', 'pe_sets_v1'];
-const MEMBER_OPS = ['list', 'set', 'del', 'code-add', 'code-del', 'remove', 'unread', 'msg-read', 'msg-del', 'msg-send'];
+const STORE_KEYS = ['pe_state_v1', 'pe_sets_v1', 'pe_state_prev'];   // pe_state_prev: 시작일을 다시 정하며 지운 기록(7일 동안 되돌리기, 3.1.3)
+const MEMBER_OPS = ['list', 'set', 'del', 'code-add', 'code-del', 'remove', 'unread', 'msg-read', 'msg-del', 'msg-send', 'reply', 'thread', 'reply-read'];
 const NOTIF_DEFAULT = { wd: { on: false, time: '07:00' }, su: { on: false, time: '20:00' } };
 
 // JS 소스에 그대로 넣을 수 있는 값 표기(JSON + 줄 구분 문자 이스케이프)
@@ -48,6 +48,7 @@ function safeFileName(name) {
 // deps: inject(code), writeStore(key, text), copy(text), saveFile(name, text, type), pickFile() → Promise<{name, text}|null>, confirm(msg) → Promise<boolean>,
 //       keepAwake(on), fetchText(url) → Promise<{ok, status, text}>, setNotif(cfg) → Promise<cfg>, look(dark),
 //       member(op, args) → 관리자 화면·문자함·아이디 지우기·관리자에게 문자(list, set, del, code-add, code-del, remove, unread, msg-read, msg-del, msg-send)
+//       ·관리자 답장(reply: 승인·거절과 함께)·회원의 주고받은 문자(thread)·답장 읽음(reply-read)
 function createHost(deps) {
   const reply = (id, ok, v, err) => deps.inject(`window.PE_IO&&PE_IO._reply(${jsLiteral({ id, ok, v, err })});true;`);
   const toast = m => deps.inject(`window.PE_IO&&PE_IO._toast(${jsLiteral(m)});true;`);

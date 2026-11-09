@@ -29,6 +29,9 @@ const MSGS = () => [
   { mid: 'M3', uid: 'U3', id: 'lee', text: '이영희예요', from: 'join', dev: '', at: ago(60 * 30), read: true },
 ];
 let msgs = MSGS();
+let replies = [];   // 관리자 답장(3.1.3)
+let thread = { msgs: [], replies: [] };   // 회원 휴대폰이 받아 오는 주고받은 말
+const memOps = () => dev.member.filter(x => x[0] !== 'thread');   // 회원 탭 첫 화면은 5분에 한 번 답장을 받아 온다
 
 function open(opt = {}) {
   const errors = [], webFetch = [], lsUse = [];
@@ -52,10 +55,13 @@ function open(opt = {}) {
     pickFile: async () => { dev.picks++; return dev.pick; },
     member: async (op, a) => {
       dev.member.push([op, a]);
-      if (op === 'list') return { members: MEMBERS, codes: CODES, me: 'U1', msgs: msgs === null ? null : msgs.map(m => ({ ...m })) };
+      if (op === 'list') return { members: MEMBERS, codes: CODES, me: 'U1', msgs: msgs === null ? null : msgs.map(m => ({ ...m })), replies: replies.map(r => ({ ...r })) };
+      if (op === 'reply') { if (dev.sendFail) throw new Error(dev.sendFail); if (!a.text) return null; const r = { rid: 'R' + (replies.length + 1), uid: a.uid, id: (MEMBERS.find(x => x.uid === a.uid) || {}).id, text: a.text, dec: a.dec || '', at: new Date().toISOString(), read: false }; replies.push(r); return r.rid; }
+      if (op === 'thread') return JSON.parse(JSON.stringify(thread));
+      if (op === 'reply-read') { thread.replies.forEach(r => { if (a.rids.includes(r.rid)) r.read = true; }); return a.rids.length; }
       if (op === 'unread') return (msgs || []).filter(m => !m.read).length;
       if (op === 'msg-read') { (msgs || []).forEach(m => { if (a.mids.includes(m.mid)) m.read = true; }); return a.mids.length; }
-      if (op === 'msg-del') { msgs = (msgs || []).filter(m => !a.mids.includes(m.mid)); return a.mids.length; }
+      if (op === 'msg-del') { msgs = (msgs || []).filter(m => !a.mids.includes(m.mid)); replies = replies.filter(r => !(a.rids || []).includes(r.rid)); return a.mids.length; }
       if (op === 'msg-send') { if (dev.sendFail) throw new Error(dev.sendFail); return 'NEWID'; }
       if (op === 'code-add') return 'ABCD23';
       return true;
@@ -220,7 +226,7 @@ function open(opt = {}) {
   await B.go('#more');
   const appVer = require('../app.json').expo.version;
   ok(B.txt().includes('기술사 6개월 v' + appVer), '더보기 버전 = app.json 버전 ' + appVer);
-  ok(appVer === '3.1.2' && require('../package.json').version === appVer && require('../package-lock.json').version === appVer && require('../package-lock.json').packages[''].version === appVer, `버전 ${appVer}: app.json = package.json = package-lock(앱 줄)`);
+  ok(appVer === '3.1.3' && require('../package.json').version === appVer && require('../package-lock.json').version === appVer && require('../package-lock.json').packages[''].version === appVer, `버전 ${appVer}: app.json = package.json = package-lock(앱 줄)`);
   ok(B.errors.length === 0, '다시 연 화면 콘솔 오류 없음 ' + B.errors.slice(0, 3).join(' | '));
 
   // 예전(2.x) 기록이 든 휴대폰에서 3.0.0을 처음 열면 "바뀐 점" 창 한 번(기록은 그대로), 표시는 네이티브 저장소에 남아 다시 열면 없음
@@ -246,15 +252,15 @@ function open(opt = {}) {
   await K.go('#more');
   ok(/아이디 kim/.test(K.txt()) && !/승인 관리/.test(K.txt()), '일반 회원: 더보기에 아이디만, 승인 관리 없음');
   await K.go('#admin');
-  ok(/관리자만 볼 수 있어요/.test(K.txt()) && !dev.member.length, '일반 회원이 #admin을 열어도 목록을 부르지 않음');
+  ok(/관리자만 볼 수 있어요/.test(K.txt()) && !memOps().length, '일반 회원이 #admin을 열어도 목록을 부르지 않음');
   await K.go('#settings');
   ok(/이 휴대폰에 고정된 아이디/.test(K.txt()) && K.d.querySelector('[data-act="member-remove"]'), '설정에 아이디·아이디 지우기');
   dev.answers.push(false);
   K.click('[data-act="member-remove"]'); await sleep(40);
-  ok(/아이디를 지울까요/.test(dev.asked[dev.asked.length - 1]) && !dev.member.length, '아이디 지우기 확인에서 취소 → 그대로');
+  ok(/아이디를 지울까요/.test(dev.asked[dev.asked.length - 1]) && !memOps().length, '아이디 지우기 확인에서 취소 → 그대로');
   dev.answers.push(true);
   K.click('[data-act="member-remove"]'); await sleep(40);
-  ok(dev.member.length === 1 && dev.member[0][0] === 'remove', '아이디 지우기 확인 → 앱에 지우기 요청');
+  ok(memOps().length === 1 && memOps()[0][0] === 'remove', '아이디 지우기 확인 → 앱에 지우기 요청');
   // 앱이 떠 있는 동안 관리자로 지정되면(콘솔) 앱이 알려 주고 화면이 바로 바뀐다
   await K.go('#more');
   K.w.PE_IO._member({ id: 'kim', admin: true, uid: 'U2' }); await sleep(20);
@@ -316,9 +322,20 @@ function open(opt = {}) {
   ok(cards.every(c => c.classList.contains('fresh')) && /새 문자/.test(th), '처음 본 문자에 "새 문자" 표시');
   ok(dev.member.some(x => x[0] === 'msg-read' && x[1].mids.slice().sort().join() === 'M1,M2') && msgs.filter(m => !m.read).length === 0, '열면 읽음으로(앱에 읽음 요청)');
   ok(!I.d.querySelector('.ibx'), '문자 화면에는 문자함 단추 없음(탭 첫 화면에만)');
-  ok(I.d.querySelector('[data-act="adm-set"][data-uid="U2"][data-s="approved"]'), '승인 대기인 사람은 문자 화면에서 바로 승인');
-  I.click('[data-act="adm-set"][data-uid="U2"][data-s="approved"]'); await sleep(60);
-  ok(dev.member.some(x => x[0] === 'set' && x[1].uid === 'U2') && I.w.location.hash === '#inbox/U2', '문자 화면에서 승인 → 그 화면 그대로');
+  // 관리자 답장(3.1.3): 승인 대기인 사람은 답장 칸에 "승인하고 보내기"(파란 버튼 하나) · "답장만 보내기" · "거절하고 보내기"
+  const rb = d => I.d.querySelector(`[data-act="ibx-reply"][data-uid="U2"]${d ? `[data-dec="${d}"]` : ':not([data-dec])'}`);
+  ok(I.d.querySelector('#rpText') && rb('approved') && rb('rejected') && rb('') && rb('approved').className === 'btn' && !I.d.querySelector('[data-act="adm-set"]'), '승인 대기인 사람: 답장 칸과 승인하고 보내기·답장만 보내기·거절하고 보내기');
+  I.click('[data-act="ibx-reply"][data-uid="U2"]:not([data-dec])'); await sleep(30);
+  ok(/답장을 적어 주세요/.test(I.toast()) && !dev.member.some(x => x[0] === 'reply'), '빈 답장은 안 보냄');
+  { const t = I.d.querySelector('#rpText'); t.value = '김철수 님 확인했어요. 승인합니다'; t.dispatchEvent(new I.w.Event('input', { bubbles: true })); }
+  I.pe.render(); await sleep(10);
+  ok(I.d.querySelector('#rpText').value === '김철수 님 확인했어요. 승인합니다', '다시 그려도 쓰던 답장 남음');
+  I.click('[data-act="ibx-reply"][data-uid="U2"][data-dec="approved"]'); await sleep(80);
+  ok(dev.member.some(x => x[0] === 'reply' && x[1].uid === 'U2' && x[1].dec === 'approved' && x[1].text === '김철수 님 확인했어요. 승인합니다') && /승인하고 답장을 보냈어요/.test(I.toast()) && I.w.location.hash === '#inbox/U2', '승인하고 보내기 → 앱에 답장 요청(승인과 함께), 그 화면 그대로');
+  const rp = I.d.querySelector('.msg.rp');
+  ok(rp && /보낸 답장 · 승인과 함께/.test(rp.textContent) && /아직 안 읽음/.test(rp.textContent) && I.d.querySelector('#rpText').value === '' && /답장 1개/.test(I.txt()), '보낸 답장이 문자들 사이에(승인과 함께 · 아직 안 읽음), 답장 칸은 비움');
+  I.click('[data-act="ibx-reply"][data-uid="U2"][data-dec="rejected"]'); await sleep(60);
+  ok(dev.member.some(x => x[0] === 'reply' && x[1].dec === 'rejected' && x[1].text === '') && /kim 님의 승인을 막았어요/.test(I.toast()), '답장 없이 거절만 → 상태만 바꾸기');
   I.click('.topbar .back'); await sleep(60);
   ok(I.w.location.hash === '#inbox' && !I.d.querySelector('.ibxlist .badge'), '뒤로 → 문자함 목록(안 읽은 수 없어짐)');
   I.click('.topbar .back'); await sleep(60);
@@ -326,7 +343,10 @@ function open(opt = {}) {
   await I.go('#inbox/U3'); await sleep(20);
   dev.answers.push(true);
   I.click('[data-act="ibx-del"]'); await sleep(80);
-  ok(/lee 님이 보낸 문자 1개를 지울까요/.test(dev.asked[dev.asked.length - 1]) && dev.member.some(x => x[0] === 'msg-del' && x[1].mids.join() === 'M3') && I.w.location.hash === '#inbox', '한 사람 문자 지우기(확인 후) → 목록으로');
+  ok(/lee 님이 보낸 문자 1개를 지울까요/.test(dev.asked[dev.asked.length - 1]) && dev.member.some(x => x[0] === 'msg-del' && x[1].mids.join() === 'M3' && x[1].rids.length === 0) && I.w.location.hash === '#inbox', '한 사람 문자 지우기(확인 후) → 목록으로');
+  await I.go('#inbox/U2'); await sleep(40); dev.answers.push(true);
+  I.click('[data-act="ibx-del"]'); await sleep(80);
+  ok(/kim 님이 보낸 문자 2개와 보낸 답장 1개를 지울까요/.test(dev.asked[dev.asked.length - 1]) && dev.member.some(x => x[0] === 'msg-del' && x[1].rids.join() === 'R1'), '문자 지우기는 보낸 답장도 함께');
   msgs = null; await I.go('#today'); I.click('#view .ibxrow .ibx'); await sleep(60);
   ok(/문자함을 열지 못했어요/.test(I.txt()) && /규칙/.test(I.txt()), '문자 규칙을 아직 게시하지 않았으면 안내');
   ok(I.errors.length === 0, '문자함 콘솔 오류 없음 ' + I.errors.slice(0, 3).join(' | '));
@@ -336,7 +356,7 @@ function open(opt = {}) {
   const W = open({ member: { id: 'kim', admin: false, uid: 'U2' } });
   await sleep(300);
   await W.go('#today');
-  ok(!W.d.querySelector('.ibx') && !dev.member.some(x => x[0] === 'unread'), '회원: 문자함 단추 없음, 안 읽은 수도 안 셈');
+  ok(!W.d.querySelector('.ibx') && !dev.member.some(x => x[0] === 'unread') && dev.member.some(x => x[0] === 'thread'), '회원: 답장이 없으면 문자함 단추 없음, 안 읽은 수는 세지 않고 답장만 받아 옴');
   await W.go('#more');
   W.click('[data-act="go"][data-h="msg"]'); await sleep(40);
   ok(W.w.location.hash === '#msg' && W.d.querySelector('#msgText'), '더보기 → 관리자에게 문자 보내기');
@@ -350,8 +370,22 @@ function open(opt = {}) {
   ok(W.d.querySelector('#msgText').value === '오늘 세트가 안 보여요', '다시 그려도 쓰던 글 남음');
   dev.sendFail = null;
   W.click('[data-act="msg-send"]'); await sleep(40);
-  ok(dev.member.some(x => x[0] === 'msg-send' && x[1].text === '오늘 세트가 안 보여요') && /관리자에게 보냈어요/.test(W.toast()) && W.w.location.hash === '#more', '보내기 → 앱에 보내기 요청, 더보기로');
-  await W.go('#msg'); ok(W.d.querySelector('#msgText').value === '', '보낸 뒤 새로 열면 빈 칸');
+  ok(dev.member.some(x => x[0] === 'msg-send' && x[1].text === '오늘 세트가 안 보여요') && /관리자에게 보냈어요/.test(W.toast()) && W.w.location.hash === '#msg' && W.d.querySelector('#msgText').value === '', '보내기 → 앱에 보내기 요청, 그 화면 그대로(빈 칸)');
+  // 관리자 답장(3.1.3): 안 읽은 답장이 오면 탭 첫 화면 오른쪽 위 단추와 수, 더보기 "새 답장 1개" → 관리자와 문자(주고받은 말, 새 답장 표시) → 읽음으로
+  thread = { msgs: [{ mid: 'M9', uid: 'U2', id: 'kim', text: '오늘 세트가 안 보여요', from: 'app', at: new Date(Date.now() - 600000).toISOString(), read: false }],
+    replies: [{ rid: 'R7', uid: 'U2', id: 'kim', text: '받아 오기를 한 번 눌러 주세요', dec: '', at: new Date().toISOString(), read: false }] };
+  W.w.document.dispatchEvent(new W.w.Event('visibilitychange')); await W.go('#today'); await sleep(60);
+  const mb = W.d.querySelector('#view > .ibxrow .ibx.mt');
+  ok(mb && mb.querySelector('.bdg').textContent === '1' && /안 읽은 답장 1개/.test(mb.getAttribute('aria-label')), '안 읽은 답장 1개 → 오늘 오른쪽 위 단추와 빨간 동그라미 1');
+  await W.go('#more'); await sleep(20);
+  ok(/관리자와 문자/.test(W.txt()) && /새 답장 1개/.test(W.txt()), '더보기: 관리자와 문자 · 새 답장 1개');
+  W.click('#view .ibxrow .ibx.mt'); await sleep(80);
+  const items = [...W.d.querySelectorAll('.msg')];
+  ok(W.w.location.hash === '#msg' && items.length === 2 && items[0].classList.contains('rp') && /관리자 답장/.test(items[0].textContent) && /새 답장/.test(items[0].textContent) && /받아 오기를 한 번/.test(items[0].textContent) && /오늘 세트가 안 보여요/.test(items[1].textContent),
+    '단추 → 관리자와 문자: 새것부터(관리자 답장에 "새 답장"), 내가 보낸 문자');
+  ok(dev.member.some(x => x[0] === 'reply-read' && x[1].rids.join() === 'R7') && thread.replies[0].read, '열면 답장을 읽음으로(앱에 읽음 요청)');
+  await W.go('#today'); await sleep(20);
+  ok(!W.d.querySelector('.ibx'), '읽은 뒤 오늘에는 단추 없음');
   await W.go('#inbox'); ok(/관리자만 볼 수 있어요/.test(W.txt()) && !dev.member.some(x => x[0] === 'list'), '회원이 #inbox를 열어도 목록을 부르지 않음');
   ok(W.errors.length === 0, '회원 문자 화면 콘솔 오류 없음 ' + W.errors.slice(0, 3).join(' | '));
 

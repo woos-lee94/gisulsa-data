@@ -411,13 +411,13 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   const se = d.querySelector('#schStart'); se.value = '2026-12-01'; se.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(20);
   ok(/바꾸면 이렇게 돼요/.test(txt()) && /제143회 필기/.test(txt()) && d.querySelector('[data-act="sch-save"]'), '미리보기: 12/1 시작 → 제143회');
   ok(pe.S().settings.start === '2026-10-19', '저장 전엔 그대로');
-  click('[data-act="sch-save"]'); await sleep(20);
+  click('[data-act="sch-keep"]'); await sleep(10); click('[data-act="sch-save"]'); await sleep(20);   // 기록은 그대로 두기(지우는 길은 plan.test 67)
   ok(pe.S().settings.start === '2026-12-01' && pe.PLAN().target.r === 143 && pe.S().settings.exam === '2027-08-28', '저장 → 제143회 2027-08-28');
   ok(pe.PLAN().mock && pe.PLAN().mock.r === 142, '실전 모의 제142회');
   // 목표 회차 직접 고르기(시작일도 같은 초안에서 바꿔, 어느 날 돌려도 바로 바뀌는 시작일 바꾸기 길로. 목표만 바꾸면 이번 주가 달라질 때 다음 월요일까지 기다린다)
   const se1 = d.querySelector('#schStart'); se1.value = '2026-12-07'; se1.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(20);
   const tg = d.querySelector('#schTarget'); tg.value = '144'; tg.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(20);
-  click('[data-act="sch-save"]'); await sleep(20);
+  click('[data-act="sch-keep"]'); await sleep(10); click('[data-act="sch-save"]'); await sleep(20);   // 기록은 그대로 두기(지우는 길은 plan.test 67)
   ok(pe.PLAN().target.r === 144 && pe.S().settings.target === 144, '목표 제144회 선택');
   // 시작일을 늦춰 144회가 6개월 안이 되면 자동으로 돌아감
   const se2 = d.querySelector('#schStart'); se2.value = '2027-09-01'; se2.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(20);
@@ -441,7 +441,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   await go('#schedule');
   const se3 = d.querySelector('#schStart'); se3.value = '2026-10-19'; se3.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(20);
   const tg3 = d.querySelector('#schTarget'); tg3.value = 'auto'; tg3.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(20);
-  click('[data-act="sch-save"]'); await sleep(20);
+  click('[data-act="sch-keep"]'); await sleep(10); click('[data-act="sch-save"]'); await sleep(20);   // 기록은 그대로 두기(지우는 길은 plan.test 67)
   ok(pe.PLAN().target.r === 142 && /예약 작업도 같은 일정이에요/.test(txt()), '원래 일정 → 저장소와 같음');
   { const st = pe.S().settings; delete st.schSent; delete st.schSig; delete st.schUndo; delete st.nextTarget; delete st.slipNo; }   /* 되돌리기 줄·복사 기록·기다리는 바꾸기를 지워 다음 검사가 처음 상태로 */
 

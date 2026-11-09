@@ -1,6 +1,6 @@
 # App Store Connect 등록 문구
 
-기술사 6개월(번들 ID `io.github.wooslee94.gisulsa`). 2.3.0 첫 출시, 2.3.1 업데이트(숙제, 학습 달력, 가리며 외우기 테이프), 2.3.2 업데이트(용어 퀴즈, 복습 탭의 외우기 도구), 3.0.0 업데이트(오늘 몫과 이번 주, 아래 탭 오늘·이번 주·복습·연습·더보기), 3.1.0 업데이트(쉬는 날과 앞날 셈, 시험 일정 살펴보기). 붙여 넣는 문구는 특수문자 없이 썼다(앱등록질문 스킬 규칙). 문구를 고치면 이 파일도 함께 고친다.
+기술사 6개월(번들 ID `io.github.wooslee94.gisulsa`). 2.3.0 첫 출시, 2.3.1 업데이트(숙제, 학습 달력, 가리며 외우기 테이프), 2.3.2 업데이트(용어 퀴즈, 복습 탭의 외우기 도구), 3.0.0 업데이트(오늘 몫과 이번 주, 아래 탭 오늘·이번 주·복습·연습·더보기), 3.1.0 업데이트(쉬는 날과 앞날 셈, 시험 일정 살펴보기), 3.1.3 업데이트(관리자 답장, 시작일을 다시 정하면 새로 시작). 붙여 넣는 문구는 특수문자 없이 썼다(앱등록질문 스킬 규칙). 문구를 고치면 이 파일도 함께 고친다.
 
 ## 부제 (23자 / 30자)
 
@@ -16,7 +16,7 @@
 토목시공기술사 필기를 혼자 준비하는 사람을 위한 학습 앱입니다. 매일 세트와 숙제를 남은 시간에 맞춘 오늘 몫으로 정리하고, 하루를 쉬어도 이번 주 다른 날에 다시 나눠 넣어 줍니다.
 ```
 
-## 설명 (2932자 / 4,000자)
+## 설명 (2938자 / 4,000자)
 
 ```
 기술사 6개월은 토목시공기술사 필기를 혼자 준비하는 사람을 위한 학습 앱입니다. 시험일까지 주차별 계획을 세우고, 평일마다 새 학습 세트를 받아 그날 할 공부를 남은 시간에 맞춰 순서대로 정리해 줍니다.
@@ -65,8 +65,8 @@
 회원과 개인정보
 관리자가 승인한 사람만 쓰는 앱입니다. 비밀번호 없이 아이디만 만들어 승인을 요청하고, 받은 초대 코드를 넣으면 기다리지 않고 바로 열립니다.
 아이디는 휴대폰마다 하나로 고정되고, 더보기의 설정에서 언제든 지울 수 있습니다. 한 번 승인되면 인터넷이 없어도 열립니다.
-아이디를 만들 때 관리자에게 보낼 말을 함께 적고, 승인된 뒤에도 더보기에서 관리자에게 문자를 보낼 수 있습니다.
-학습 기록은 이 iPhone 안에만 저장합니다. 광고와 사용 분석 도구가 없습니다. 인터넷은 승인 확인, 관리자에게 보내는 문자, 새 세트와 모의고사와 기출을 받을 때 쓰고, 학습 기록은 보내지 않습니다.
+아이디를 만들 때 관리자에게 보낼 말을 함께 적고, 승인된 뒤에도 더보기의 관리자와 문자에서 묻고 답장을 받을 수 있습니다.
+학습 기록은 이 iPhone 안에만 저장합니다. 광고와 사용 분석 도구가 없습니다. 인터넷은 승인 확인, 관리자와 주고받는 문자, 새 세트와 모의고사와 기출을 받을 때 쓰고, 학습 기록은 보내지 않습니다.
 학습 기록은 백업 문구를 복사하거나 파일로 내보내 보관하고, 그 파일이나 붙여 넣은 글로 다시 복원할 수 있습니다.
 인터넷이 없어도 앱에 들어 있는 카드와 기출은 그대로 열립니다.
 
@@ -110,7 +110,7 @@ https://github.com/woos-lee94/gisulsa-data/blob/main/app/docs/privacy.md
 - 기본: 교육. 토목시공기술사 필기 시험 공부가 핵심 기능
 - 추가: 참고. 기출 문제 요지와 용어 카드를 찾아보는 용도
 
-## 앱 심사 메모 (3979자 / 4,000자)
+## 앱 심사 메모 (3987자 / 4,000자)
 
 ```
 OVERVIEW
@@ -139,7 +139,7 @@ METHOD
 No AI runs inside the app. Spaced repetition, the daily list, weekly planning, exam dates and the term quizzes (built from the card text) are rule-based and computed on the device. Copy buttons give prompt text the user may paste into an AI assistant of their choice; the app sends nothing to any AI service.
 
 PRIVACY
-No ads, analytics or tracking. Study records stay on the device. For access control the app uses Firebase Anonymous Authentication and Cloud Firestore to store only the chosen ID, a random account number, the approval status, timestamps and messages the user sends to the administrator; no name, email or phone number. The account key is kept in the device keychain. Other requests are HTTPS GETs for public JSON files on raw.githubusercontent.com with no user data. In the word lookup, the "국어사전" and "지식백과" buttons open a Naver search for that word in Safari. The only permission is notifications.
+No ads, analytics or tracking. Study records stay on the device. For access control the app uses Firebase Anonymous Authentication and Cloud Firestore to store only the chosen ID, a random account number, the approval status, timestamps and messages between the user and the administrator; no name, email or phone number. The account key is kept in the device keychain. Other requests are HTTPS GETs for public JSON files on raw.githubusercontent.com with no user data. In the word lookup, the "국어사전" and "지식백과" buttons open a Naver search for that word in Safari. The only permission is notifications.
 
 EXTENSIONS
 None.
@@ -157,6 +157,21 @@ The app is an independent study aid and is not affiliated with HRD Korea or any 
 ## 이 버전의 새로운 기능
 
 업데이트마다 바로 전 출시 버전과 비교해 바뀐 것만 쓴다. 2.3.0은 첫 출시라 비웠고, 2.3.1은 숙제·학습 달력·가리며 외우기(무작위 줄, 테이프, 완료, 이어 하기)·단답 답안지·카드 넘겨 보기 이어 하기였다(git 기록).
+
+3.1.3 (368자 / 4,000자, 3.1.2와 비교. 3.1.2가 이미 출시됐을 때 쓴다. 3.1.2가 출시되지 않았으면 3.1.2 문구 뒤에 이 문구의 둘째 줄부터 더한다):
+
+```
+관리자 답장과 새로 시작하기가 생겼습니다.
+
+관리자와 문자
+관리자가 회원이 보낸 문자에 답장할 수 있고, 답장하면서 승인이나 거절도 함께 할 수 있습니다.
+회원은 승인을 기다리는 화면과 더보기의 관리자와 문자에서 답장을 봅니다. 새 답장이 오면 탭 첫 화면 오른쪽 위에 알려 줍니다.
+
+준비 시작일을 다시 정하면 새로 시작
+시험 일정에서 준비 시작일을 바꿔 저장하면 이전 공부 기록을 지우고 새 시작일부터 다시 셉니다. 설정과 내 카드는 그대로입니다.
+기록을 남기고 날짜만 바꾸려면 기록은 그대로 두기를 고릅니다. 지운 기록은 7일 동안 백업 화면에서 되돌릴 수 있습니다.
+이미 시작일을 바꿔 둔 경우 오늘 화면에서 한 번에 지우고 새로 시작할 수 있습니다.
+```
 
 3.1.2 (118자 / 4,000자, 3.1.1과 비교. 3.1.1이 이미 출시됐을 때 쓴다. 3.1.1이 출시되지 않았으면 3.1.1 문구 끝에 이 문구의 둘째·셋째 줄을 더한다):
 
@@ -295,6 +310,15 @@ The app is an independent study aid and is not affiliated with HRD Korea or any 
 가리며 외우기 테이프
 가릴 곳을 살짝 꾹 눌렀다가 그으면 테이프가 붙고, 그냥 밀면 화면이 움직이도록 바꿨습니다.
 ```
+
+## 3.1.3 심사 제출 순서
+
+0. 먼저 Firebase 규칙을 새로 게시한다(`docs/firebase-setup.md` 4-2). 안 하면 답장을 적어 보내는 것만 안 된다(답장 없이 승인·거절은 된다).
+1. 빌드: `npm test`가 네 파일 모두 "모두 통과"인지 본 뒤 `eas build -p ios --profile production --auto-submit`. 올리기만 서버 오류로 실패하면 다시 빌드하지 않고 `eas submit -p ios --latest`.
+2. App Store Connect 버전: 3.1.2가 아직 "제출 준비 중"이면 그 화면의 버전 칸을 `3.1.3`으로 고친다. 심사에 냈으면 "심사에서 제거" 뒤 같은 방법으로 고치거나, 출시를 기다린 뒤 버전 추가 → `3.1.3`. 빌드 칸에서 3.1.3 빌드를 고른다.
+3. 이 버전의 새로운 기능: 위 3.1.3 문구(3.1.2가 출시되지 않았으면 3.1.2 문구 뒤에 더한 것). 설명의 "회원과 개인정보" 두 줄(관리자와 문자, 주고받는 문자)이 바뀌었으니 설명 칸도 이 파일의 문구로 바꾼다. 앱 심사 메모의 PRIVACY 한 곳(messages between the user and the administrator)도 바뀌었다.
+4. App Privacy: 그대로(관리자 답장은 사용자에게서 모으는 데이터가 아니다).
+5. 저장 → 심사에 추가 → 심사에 제출. 끝나면 `apple_review`와 쓴 초대 코드를 정리한다.
 
 ## 3.1.2 심사 제출 순서
 

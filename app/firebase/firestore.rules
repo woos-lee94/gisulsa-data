@@ -5,6 +5,7 @@ rules_version = '2';
 // codes/{초대 코드}: 이 코드로 만들면 바로 승인(관리자가 만들고 지운다)
 // admins/{uid}: 관리자(콘솔에서 직접 만든다)
 // msgs/{자동 ID}: 관리자에게 보낸 문자(3.0.1부터)
+// replies/{자동 ID}: 관리자가 보낸 답장(3.1.3부터, 승인·거절과 함께 보낼 수 있다)
 service cloud.firestore {
   match /databases/{db}/documents {
     function signedIn() { return request.auth != null; }
@@ -69,6 +70,24 @@ service cloud.firestore {
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
         && request.resource.data.read is bool;
+      allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+    }
+
+    // replies/{자동 ID}: 관리자 답장. 관리자만 쓰고(받는 회원의 기기 번호·아이디, 500자, 서버 시각, 안 읽음으로),
+    // 받는 회원은 자기 것만 읽고 읽음으로만 바꾸고 지운다(아이디 지우기 때 함께). dec: 함께 한 승인(approved)·거절(rejected)
+    match /replies/{rid} {
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['uid', 'id', 'text', 'dec', 'at', 'read'])
+        && request.resource.data.uid is string
+        && request.resource.data.id == get(/databases/$(db)/documents/members/$(request.resource.data.uid)).data.id
+        && request.resource.data.text is string && request.resource.data.text.size() >= 1 && request.resource.data.text.size() <= 500
+        && (!('dec' in request.resource.data) || request.resource.data.dec in ['approved', 'rejected'])
+        && request.resource.data.at == request.time
+        && request.resource.data.read == false;
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow update: if signedIn() && resource.data.uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+        && request.resource.data.read == true;
       allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
     }
   }

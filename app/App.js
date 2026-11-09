@@ -79,6 +79,8 @@ export default function App() {
   const [m, setM] = useState({ state: 'loading' });
   const [busy, setBusy] = useState(false);
   const [gateErr, setGateErr] = useState(null);
+  const [thread, setThread] = useState(null);   // 승인 전 화면의 관리자와 주고받은 말(보낸 문자·관리자 답장)
+  const freshIds = useRef(new Set());
   const lastCheck = useRef(0);
 
   const inject = useCallback(code => { if (web.current) web.current.injectJavaScript(code); }, []);
@@ -107,10 +109,21 @@ export default function App() {
     return () => clearTimeout(t);
   }, []);
 
+  // 승인 대기·거절 화면의 주고받은 말: 받아 와 보여 주고, 처음 본 답장은 "새 답장"으로 남긴 채 읽음으로
+  const loadThread = useCallback(async () => {
+    try {
+      const t = await member.thread();
+      const un = (t.replies || []).filter(r => !r.read);
+      un.forEach(r => freshIds.current.add(r.rid));   // 이번에 연 동안은 "새 답장" 표시를 남긴다(15초마다 다시 받아도)
+      setThread({ msgs: t.msgs || [], replies: (t.replies || []).map(r => (freshIds.current.has(r.rid) ? { ...r, fresh: true } : r)) });
+      if (un.length) member.readReplies(un.map(r => r.rid)).catch(() => {});
+    } catch (e) { /* 못 받아 오면 전에 받은 그대로 */ }
+  }, []);
+
   // 회원 상태: 승인된 적 있는 휴대폰은 바로 열고(인터넷 없어도), 뒤에서 다시 확인한다
   const recheck = useCallback(async quiet => {
     lastCheck.current = Date.now();
-    try { const r = await member.check(); setM(r); setGateErr(null); return r; }
+    try { const r = await member.check(); setM(r); setGateErr(null); if (r.state === 'pending' || r.state === 'rejected') loadThread(); return r; }
     catch (e) {
       const c = await member.cached();
       if (c && c.state === 'approved') return c;            // 승인된 휴대폰은 확인이 안 돼도 그대로 연다
@@ -119,7 +132,7 @@ export default function App() {
       if (!quiet) setGateErr(e.code === 'offline' ? null : String(e.message || e));
       return null;
     }
-  }, []);
+  }, [loadThread]);
 
   useEffect(() => {
     (async () => {
@@ -154,7 +167,7 @@ export default function App() {
     } catch (e) { setGateErr(String(e.message || e)); } finally { setBusy(false); }
     return sent;
   }, []);
-  const onSend = useCallback(text => sendMsg(text, 'wait'), []);
+  const onSend = useCallback(async text => { const r = await sendMsg(text, 'wait'); loadThread(); return r; }, [loadThread]);
   const onRefresh = useCallback(async () => { setBusy(true); await recheck(false); setBusy(false); }, [recheck]);
   const onRemove = useCallback(async () => {
     if (!(await confirmAlert('아이디를 지울까요? 승인도 함께 없어지고 처음 화면으로 돌아가요.'))) return;
@@ -197,10 +210,13 @@ export default function App() {
     look: d => setDark(d),
     member: async (op, a) => {
       // 문자함은 규칙을 새로 게시하기 전이면 못 읽는다(msgs: null, 승인 관리는 그대로)
-      if (op === 'list') return { members: await member.list(), codes: await member.codes(), me: member.uid(), msgs: await member.msgs().catch(() => null) };
+      if (op === 'list') return { members: await member.list(), codes: await member.codes(), me: member.uid(), msgs: await member.msgs().catch(() => null), replies: await member.replies().catch(() => []) };
       if (op === 'unread') return member.unread();
       if (op === 'msg-read') return member.markRead(a.mids);
-      if (op === 'msg-del') return member.delMsgs(a.mids);
+      if (op === 'msg-del') { const n = await member.delMsgs(a.mids); if (Array.isArray(a.rids) && a.rids.length) await member.delReplies(a.rids); return n; }
+      if (op === 'reply') return member.reply(String(a.uid || ''), String(a.text || ''), String(a.dec || ''));   // 관리자 답장(승인·거절과 함께)
+      if (op === 'thread') return member.thread();
+      if (op === 'reply-read') return member.readReplies(a.rids);
       if (op === 'msg-send') return sendMsg(String(a.text || ''), 'app');
       if (op === 'set') return member.setStatus(String(a.uid), String(a.status));
       if (op === 'del') return member.removeMember(String(a.uid), String(a.id || ''));
@@ -253,7 +269,7 @@ export default function App() {
   return (
     <View style={[styles.fill, { backgroundColor: bg }]}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      {m.state !== 'approved' && <Gate m={m} busy={busy} error={gateErr} dark={isDark} onRegister={onRegister} onRefresh={onRefresh} onRemove={onRemove} onSend={onSend} />}
+      {m.state !== 'approved' && <Gate m={m} busy={busy} error={gateErr} dark={isDark} thread={thread} onRegister={onRegister} onRefresh={onRefresh} onRemove={onRemove} onSend={onSend} />}
       {files && m.state === 'approved' && (
         <WebView
           key={gen}

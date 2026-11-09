@@ -84,6 +84,35 @@ const owner = (method, path, body) => fetch(`${FS}/${path}`, { method, headers: 
   const forged = (await admin.msgs()).filter(x => x.from === 'app').map(x => x.mid);
   ok(await admin.delMsgs(forged) === 1 && await admin.unread() === 1, '관리자: 문자 지우기');
 
+  // 관리자 답장(3.1.3): 답장만 · 승인하며 답장 · 거절하며 답장. 받는 회원만 읽고 읽음으로만 바꾼다
+  const r1 = await admin.reply(b1.uid, '  확인했어요. 이름을 한 번 더 알려 주세요  ');
+  ok(typeof r1 === 'string' && r1.length === 20 && (await B.check()).state === 'pending', '관리자: 답장만 보내기(상태 그대로)');
+  const tb = await B.thread();
+  ok(tb.replies.length === 1 && tb.replies[0].text === '확인했어요. 이름을 한 번 더 알려 주세요' && tb.replies[0].id === 'lee' && !tb.replies[0].read && !tb.replies[0].dec && Date.parse(tb.replies[0].at) > 0
+    && tb.msgs.length === 1 && tb.msgs[0].text === '이영희예요', 'B: 내 문자와 받은 답장(누가·언제·무슨 내용)');
+  ok((await A.thread()).replies.length === 0, 'A에게는 B의 답장이 안 보임');
+  ok((await fetch(`${FS}/replies/${r1}`, { headers: { Authorization: 'Bearer ' + s.idToken } })).status === 403, 'A는 남의 답장을 못 읽음');
+  ok(await err(A.reply(b1.uid, '내가 답장')) === 'denied' && await err(B.reply(b1.uid, '셀프 승인', 'approved')) === 'denied' && (await B.check()).state === 'pending', '회원은 답장을 못 쓰고, 답장으로 스스로 승인도 못 함');
+  ok(await err(A.readReplies([r1])) === 'denied' && await B.readReplies([r1]) === 1 && (await B.thread()).replies[0].read, '남의 답장 읽음 표시 → 거부, B는 자기 답장을 읽음으로');
+  const bs = await B.auth();
+  const unreadAgain = await fetch(`${FS}:commit`, { method: 'POST', headers: { Authorization: 'Bearer ' + bs.idToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ writes: [{ update: { name: `projects/${PROJECT}/databases/(default)/documents/replies/${r1}`, fields: { text: { stringValue: '바꾼 답장' }, read: { booleanValue: true } } }, updateMask: { fieldPaths: ['text'] } }] }) });
+  ok(unreadAgain.status === 403, 'B는 답장 글을 못 바꿈');
+  const fr = async (fields, transform = true) => (await fetch(`${FS}:commit`, { method: 'POST', headers: { Authorization: 'Bearer ' + (await admin.auth()).idToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ writes: [{ update: { name: `projects/${PROJECT}/databases/(default)/documents/replies/forge${Math.random().toString(36).slice(2, 10)}`, fields }, updateTransforms: transform ? [{ fieldPath: 'at', setToServerValue: 'REQUEST_TIME' }] : [], currentDocument: { exists: false } }] }) })).status;
+  const rb = { uid: { stringValue: b1.uid }, id: { stringValue: 'lee' }, text: { stringValue: '답장' }, read: { booleanValue: false } };
+  ok(await fr(rb) === 200, '관리자가 규칙대로 쓴 답장은 통과(대조군)');
+  ok(await fr({ ...rb, id: { stringValue: 'kim' } }) === 403 && await fr({ ...rb, dec: { stringValue: 'boss' } }) === 403 && await fr({ ...rb, text: { stringValue: '가'.repeat(501) } }) === 403
+    && await fr({ ...rb, at: { timestampValue: '2020-01-01T00:00:00Z' } }, false) === 403 && await fr({ ...rb, uid: { stringValue: 'nobody' } }) === 403, '답장 꾸미기(다른 아이디·모르는 결정·501자·시각·없는 사람) → 거부');
+  await admin.delReplies((await admin.replies()).filter(x => x.text === '답장').map(x => x.rid));
+  ok(await err(admin.reply(b1.uid, '   ')) === 'empty' && await err(admin.reply('bad/../uid', '안녕')) === 'baduid', '빈 답장·이상한 기기 번호는 안 보냄');
+  const r2 = await admin.reply(b1.uid, '이영희 님 확인했어요. 승인합니다', 'approved');
+  ok((await B.check()).state === 'approved' && (await B.thread()).replies.find(x => x.rid === r2).dec === 'approved', '관리자: 승인하며 답장 → B 열림, 답장에 승인 표시');
+  ok(await admin.reply(b1.uid, '', 'rejected') === null && (await B.check()).state === 'rejected' && (await B.thread()).replies.length === 2, '관리자: 글 없이 거절만(답장 없음)');
+  const rp = await admin.replies();
+  ok(rp.length === 2 && rp[0].rid === r2 && rp.every(x => x.uid === b1.uid), '관리자: 보낸 답장 목록(새것부터)');
+  ok(await admin.unread() === 1, '답장은 관리자의 안 읽은 문자 수에 들지 않음');
+
   // 관리자 승인
   const list = await admin.list();
   ok(list.length === 3 && list.some(m => m.id === 'kim' && m.status === 'pending'), '관리자: 회원 목록 3명');
@@ -136,6 +165,11 @@ const owner = (method, path, body) => fetch(`${FS}/${path}`, { method, headers: 
   // 관리자 정리: 회원 지우기
   await admin.removeMember(b1.uid, 'lee');
   ok((await B.check()).state === 'none', '관리자가 B를 지우면 B는 처음 화면');
+  ok(await admin.delReplies((await admin.replies()).map(x => x.rid)) === 2 && (await admin.replies()).length === 0, '관리자: 답장 지우기');
+  // 아이디 지우기는 받은 답장도 함께 지운다
+  const G = phone(); const g1 = await G.register('gwon', '');
+  await admin.reply(g1.uid, '반가워요'); await G.remove();
+  ok((await admin.replies()).length === 0, '아이디 지우기 → 받은 답장도 함께 지워짐');
 
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);

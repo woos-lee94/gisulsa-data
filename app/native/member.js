@@ -6,6 +6,7 @@ const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const AUTH_KEY = 'pe_auth', CACHE_KEY = 'pe_member';
 const MSG_FROM = ['join', 'wait', 'app']; // 아이디 만들 때 · 승인 대기 화면 · 앱 안
 const MSG_MAX = 500;
+const DECS = ['approved', 'rejected']; // 답장과 함께 하는 승인·거절
 const MID_RE = /^[A-Za-z0-9]{1,40}$/;
 const ALNUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
@@ -136,17 +137,23 @@ function createMember({ apiKey, projectId, fetch, store, now = () => Date.now(),
     return check();
   }
 
-  // 내가 보낸 문자(규칙이 본인 것만 읽고 지우게 한다)
-  async function myMsgs(uid) {
-    const b = await req('POST', `${FS}:runQuery`, { structuredQuery: { from: [{ collectionId: 'msgs' }], where: { fieldFilter: { field: { fieldPath: 'uid' }, op: 'EQUAL', value: { stringValue: uid } } } } });
-    return (Array.isArray(b) ? b : []).filter(x => x && x.document).map(x => x.document.name);
+  // 내 문서(보낸 문자 msgs·받은 답장 replies): 규칙이 본인 것만 읽고 지우게 하므로 uid로 거른 질의만 된다
+  async function mine(coll, uid) {
+    const b = await req('POST', `${FS}:runQuery`, { structuredQuery: { from: [{ collectionId: coll }], where: { fieldFilter: { field: { fieldPath: 'uid' }, op: 'EQUAL', value: { stringValue: uid } } } } });
+    return (Array.isArray(b) ? b : []).filter(x => x && x.document).map(x => x.document);
   }
+  const newId = rand => { let id = ''; for (let i = 0; i < 20; i++) id += ALNUM.charAt(Math.floor(rand() * ALNUM.length)); return id; };
+  const ts = x => Date.parse(x) || 0;
+  const msgOut = m => ({ mid: m._id, uid: m.uid || '', id: m.id || '', text: m.text || '', from: m.from || '', dev: m.dev || '', at: m.at || '', read: m.read === true });
+  const repOut = r => ({ rid: r._id, uid: r.uid || '', id: r.id || '', text: r.text || '', dec: DECS.includes(r.dec) ? r.dec : '', at: r.at || '', read: r.read === true });
 
   // 아이디 지우기(앱 안 계정 삭제): 보낸 문자·회원·아이디 문서와 익명 계정을 지우고 키체인을 비운다
   async function remove() {
     const s = await auth();
     // 문자는 먼저, 되는 만큼(문자 규칙을 아직 게시하지 않은 프로젝트에서도 아이디 지우기는 된다)
-    try { const names = await myMsgs(s.uid); for (let i = 0; i < names.length; i += 400) await req('POST', `${FS}:commit`, { writes: names.slice(i, i + 400).map(n => ({ delete: n })) }); } catch (e) { /* 건너뜀 */ }
+    for (const coll of ['msgs', 'replies']) {   // 보낸 문자·받은 답장
+      try { const names = (await mine(coll, s.uid)).map(d => d.name); for (let i = 0; i < names.length; i += 400) await req('POST', `${FS}:commit`, { writes: names.slice(i, i + 400).map(n => ({ delete: n })) }); } catch (e) { /* 건너뜀 */ }
+    }
     const m = await getDoc(`members/${enc(s.uid)}`);
     const writes = [{ delete: docName(`members/${s.uid}`) }];
     if (m && ID_RE.test(m.id)) writes.push({ delete: docName(`ids/${m.id}`) });
@@ -166,8 +173,7 @@ function createMember({ apiKey, projectId, fetch, store, now = () => Date.now(),
     const s = await auth();
     const m = await getDoc(`members/${enc(s.uid)}`);
     if (!m) throw new MemberError('noid', '아이디를 먼저 만들어 주세요');
-    let mid = '';
-    for (let i = 0; i < 20; i++) mid += ALNUM.charAt(Math.floor(rand() * ALNUM.length));
+    const mid = newId(rand);
     const fields = toFields({ uid: s.uid, id: m.id, text, from, dev: dev ? String(dev).slice(0, 60) : null, read: false });
     await req('POST', `${FS}:commit`, { writes: [{ update: { name: docName(`msgs/${mid}`), fields }, updateTransforms: [{ fieldPath: 'at', setToServerValue: 'REQUEST_TIME' }], currentDocument: { exists: false } }] });
     return mid;
@@ -203,19 +209,44 @@ function createMember({ apiKey, projectId, fetch, store, now = () => Date.now(),
   }
   async function delCode(code) { await req('DELETE', `codes/${enc(String(code).toUpperCase())}`); return true; }
 
-  // 관리자 문자함: 모든 문자(새것부터), 안 읽은 수, 읽음 표시, 지우기
-  async function msgs() {
+  // 관리자 문자함: 모든 문자·답장(새것부터), 안 읽은 수, 읽음 표시, 지우기
+  async function all(coll) {
     const out = [];
     let tok = '';
     for (let i = 0; i < 10; i++) {
-      const b = await req('GET', `msgs?pageSize=300${tok ? '&pageToken=' + enc(tok) : ''}`);
+      const b = await req('GET', `${coll}?pageSize=300${tok ? '&pageToken=' + enc(tok) : ''}`);
       out.push(...(b.documents || []).map(fromDoc));
       if (!b.nextPageToken) break;
       tok = b.nextPageToken;
     }
-    const t = x => Date.parse(x) || 0;
-    return out.map(m => ({ mid: m._id, uid: m.uid || '', id: m.id || '', text: m.text || '', from: m.from || '', dev: m.dev || '', at: m.at || '', read: m.read === true }))
-      .sort((a, b) => t(b.at) - t(a.at));
+    return out;
+  }
+  const msgs = async () => (await all('msgs')).map(msgOut).sort((a, b) => ts(b.at) - ts(a.at));
+  const replies = async () => (await all('replies')).map(repOut).sort((a, b) => ts(b.at) - ts(a.at));
+  // 관리자 답장: 승인·거절(dec)을 함께 하면 회원 상태와 답장을 commit 한 번으로. 글이 없으면 상태만, dec가 없으면 답장만. 답장 번호(글이 없으면 null)
+  async function reply(uid, rawText, dec, rand = Math.random) {
+    uid = String(uid || '');
+    if (!UID_RE.test(uid)) throw new MemberError('baduid', '잘못된 기기 번호예요');
+    const text = String(rawText || '').trim().slice(0, MSG_MAX);
+    dec = DECS.includes(dec) ? dec : '';
+    if (!text && !dec) throw new MemberError('empty', '답장을 적어 주세요');
+    const writes = [];
+    if (dec) writes.push({ update: { name: docName(`members/${uid}`), fields: toFields({ status: dec, decidedAt: new Date(now()) }) }, updateMask: { fieldPaths: ['status', 'decidedAt'] }, currentDocument: { exists: true } });
+    let rid = null;
+    if (text) {
+      const m = await getDoc(`members/${enc(uid)}`);
+      if (!m) throw new MemberError('noid', '아이디가 지워진 사람이에요');
+      rid = newId(rand);
+      writes.push({ update: { name: docName(`replies/${rid}`), fields: toFields({ uid, id: m.id, text, dec: dec || null, read: false }) }, updateTransforms: [{ fieldPath: 'at', setToServerValue: 'REQUEST_TIME' }], currentDocument: { exists: false } });
+    }
+    await req('POST', `${FS}:commit`, { writes });
+    return rid;
+  }
+  // 회원: 내가 보낸 문자와 받은 답장(새것부터). 답장 규칙을 게시하기 전이면 replies는 null
+  async function thread() {
+    const s = await auth();
+    const [ms, rs] = await Promise.all([mine('msgs', s.uid).catch(() => []), mine('replies', s.uid).catch(() => null)]);
+    return { msgs: ms.map(fromDoc).map(msgOut).sort((a, b) => ts(b.at) - ts(a.at)), replies: rs ? rs.map(fromDoc).map(repOut).sort((a, b) => ts(b.at) - ts(a.at)) : null };
   }
   async function unread() {
     const b = await req('POST', `${FS}:runAggregationQuery`, { structuredAggregationQuery: {
@@ -236,8 +267,20 @@ function createMember({ apiKey, projectId, fetch, store, now = () => Date.now(),
     if (ws.length) await req('POST', `${FS}:commit`, { writes: ws });
     return ws.length;
   }
+  // 회원: 받은 답장을 읽음으로(규칙이 자기 것을 읽음으로만 바꾸게 한다) · 관리자: 답장 지우기
+  async function readReplies(list) {
+    const ws = mids(list).map(rid => ({ update: { name: docName(`replies/${rid}`), fields: toFields({ read: true }) }, updateMask: { fieldPaths: ['read'] }, currentDocument: { exists: true } }));
+    if (ws.length) await req('POST', `${FS}:commit`, { writes: ws });
+    return ws.length;
+  }
+  async function delReplies(list) {
+    const ws = mids(list).map(rid => ({ delete: docName(`replies/${rid}`) }));
+    if (ws.length) await req('POST', `${FS}:commit`, { writes: ws });
+    return ws.length;
+  }
 
-  return { configured, auth, check, cached, register, remove, sendMsg, list, setStatus, removeMember, codes, addCode, delCode, msgs, unread, markRead, delMsgs, uid: () => session && session.uid };
+  return { configured, auth, check, cached, register, remove, sendMsg, list, setStatus, removeMember, codes, addCode, delCode, msgs, unread, markRead, delMsgs,
+    replies, reply, thread, readReplies, delReplies, uid: () => session && session.uid };
 }
 
-module.exports = { createMember, MemberError, cleanId, ID_RE, MSG_FROM, MSG_MAX };
+module.exports = { createMember, MemberError, cleanId, ID_RE, MSG_FROM, MSG_MAX, DECS };
