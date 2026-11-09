@@ -2192,6 +2192,20 @@ function runWeek(W, sets, st) {
     const st2 = clone(BLANK); st2.settings.start = '2026-10-22'; scene('2026-10-19T08:00:00', st2); await show('#today');
     ok(/준비 시작 전 · 10월 22일부터/.test(T_(V$())) && pe.taskList('2026-10-19').length === 0, '65-12. 같은 주 시작 전 날(10/19): "준비 시작 전 · 10월 22일부터", 할 일 없음');
     pe.goTab('today'); await sleep(40); }
+
+  // 66. 세트 화면의 주차는 앱 일정(시험 일정의 준비 시작일)으로 센다(3.1.2). 세트 파일의 week(예약 작업이 그때 일정으로 적은 값)와 다르면 머리 아래 한 줄,
+  //     저장소 일정이 앱과 다르면 변경 요청 안내와 시험 일정 링크. 숙제 단계도 앱 일정으로(적어 둔 S.wk[주].ph가 없을 때)
+  { const T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), V$ = () => d.querySelector('#view');
+    const head = () => T_(V$().querySelector('.lsub')), note = () => V$().querySelector('.note.setwk'), D9 = '2026-10-29';
+    const show = async h => { pe.SV()[D9] = 'cards'; await go(h); pe.render(); await sleep(10); };   /* ① 용어 탭(머리에 주차) */
+    scene('2026-10-29T07:00:00', BLANK); pe.SETS().plan = pe.planSig(pe.computePlan('2026-10-19')); await show('#set/2026-10-29');
+    ok(/^1주차/.test(head()) && !note() && pe.SETS().sets['2026-10-29'].week === 1, `66-1. 같은 일정(10/19 시작): 세트 머리 "${head()}", 안내 없음`);
+    const st = clone(BLANK); st.settings.start = '2026-10-26'; scene('2026-10-29T07:00:00', st); pe.SETS().plan = pe.planSig(pe.computePlan('2026-10-19')); await show('#set/2026-10-29');
+    ok(/^준비 주/.test(head()) && note() && /^예약 작업이 예전 일정의 1주차로 만든 세트예요\. 시험 일정의 변경 요청을 예약 작업에 붙여 넣으면 다음 세트부터 앱 주차와 맞아요\./.test(T_(note())) && note().querySelector('[data-act="go"][data-h="schedule"]') && pe.setPh('2026-10-29') === 0,
+      `66-2. 시작일을 10/26으로 바꾼 뒤(저장소는 10/19): 세트 머리 "${head()}", 안내 "${T_(note())}", 숙제 단계 ${pe.setPh('2026-10-29')}`);
+    pe.SETS().plan = pe.planSig(pe.computePlan('2026-10-26')); pe.SV()[D9] = 'cards'; pe.render(); await sleep(10);
+    ok(note() && !note().querySelector('button') && T_(note()) === '예약 작업이 예전 일정의 1주차로 만든 세트예요.', `66-3. 저장소도 새 일정이면 예전 세트에는 안내만 "${note() && T_(note())}"`);
+    pe.goTab('today'); await sleep(40); }
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);

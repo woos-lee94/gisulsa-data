@@ -14,7 +14,7 @@ const INTERVALS=[0,1,3,7,14,30,60];
 const REVIEW_STEPS=[1,3,7,14,30];
 const KEY='pe_state_v1', SKEY='pe_sets_v1';
 const DATA_DEFAULT='https://raw.githubusercontent.com/woos-lee94/gisulsa-data/main/data/';
-const APP_VER='3.1.1';
+const APP_VER='3.1.2';
 const MOCK_GRADE_SINCE='2026-11-01';            /* v3.0.0을 내는 날. 이 날짜 전 모의고사는 "채점 받았어요"를 묻지 않는다 */
 const BUDGET_DEF={wd:180,sat:300,sun:240};       /* 하루 공부 시간(분) 기본값: 평일·토요일·일요일과 공휴일(S.settings.budget, budgetOf) */
 const PLAN_START=(window.PE_EXAM&&PE_EXAM.defaults.start)||'2026-10-19';
@@ -562,8 +562,12 @@ function estMock(w){const r=weekRange(w),inW=d=>!!d&&d>=r[0]&&d<=r[1];
   if(t<=10)return 180;if([11,12,16,25].includes(t))return 130;if([13,14,15,17,26].includes(t))return 230;
   if((t>=18&&t<=24)||t===27)return 430;if(t===28)return 130;return 0;}
 /* 세트 숙제의 필수 칸 수(그 세트 주차의 단계, PE_HW 횟수보다 크지 않게) */
-/* 세트 숙제의 단계: 그 세트 주에 산 단계(시험 일정을 바꿔 계획을 갈아 끼울 때 지난 주마다 적어 둔 S.wk[주].ph). 없으면 지금 계획의 그 세트 주차 단계 */
-function setPh(d){const x=(S.wk||{})[wkStart(d)],s=SETS.sets[d];return x&&x.ph!=null?x.ph:phaseObj(s&&s.week!=null?s.week:weekIndex(d)).id;}
+/* 세트 숙제의 단계: 그 세트 주에 산 단계(시험 일정을 바꿔 계획을 갈아 끼울 때 지난 주마다 적어 둔 S.wk[주].ph). 없으면 지금 계획(앱)의 그 날 주차 단계.
+   세트 파일의 week는 예약 작업이 그때 일정으로 적은 값이라 앱에서 시작일을 바꾸면 다를 수 있어 쓰지 않는다(같은 일정이면 같은 값, 3.1.2) */
+function setPh(d){const x=(S.wk||{})[wkStart(d)];return x&&x.ph!=null?x.ph:phaseObj(wkIdx(d)).id;}
+/* 세트 파일의 주차(예약 작업 일정)가 앱 주차와 다르면 세트 화면 머리 아래 한 줄: 저장소 일정이 앱과 다르면 변경 요청 안내와 시험 일정 링크 */
+function setWkNote(d,w){const s=SETS.sets[d];if(!s||s.week==null||s.week===w)return'';const rp=repoPlanState();
+  return`<p class="note setwk">예약 작업이 예전 일정의 ${s.week<=0?'준비 주':s.week+'주차'}로 만든 세트예요.${rp==='diff'||rp==='sent'?` 시험 일정의 변경 요청을 예약 작업에 붙여 넣으면 다음 세트부터 앱 주차와 맞아요. <button class="lnk" data-act="go" data-h="schedule">시험 일정</button>`:''}</p>`;}
 function hwMin(d){const R=hwRule(d),M=Object.assign({},PE_HW_MIN[1],PE_HW_MIN[setPh(d)]||{});for(const k in M)M[k]=Math.min(M[k],R[k]||0);return M;}
 /* 세트 숙제를 할 일 단위로: n 필수 칸, N 학원 횟수 칸, k·K 한 칸(필수·전체까지만), u 칸당 분, f·F 낱말마다 필수·전체 횟수.
    restMin: 오늘 몫 밖의 나머지(복습 용어·그림·앞글자·세트만의 과제. 실전 쓰기는 essay 한 줄이 갖는다). 시험 전 3일 세트는 숙제가 없다 */
@@ -1658,7 +1662,7 @@ function hwStep(d,k,tg,q){if(k==='essay')return(spGet(d).essay||{}).done?null:{t
   if(k==='sl')return{t:'다 떠올렸어요',ks:['sl'],v:1};return null;}
 /* 세트 숙제 탭: 머리(필수 a/b · 전체 n/m, 단계와 필수 규칙, 숙제 원칙 6가지) → 필수 카드(학원 횟수 그대로, 앞쪽 필수 동그라미) → 더 하기(접음).
    오늘 줄·이번 주에서 연 카드는 펼쳐(.focus) "이렇게 해요" 세 단계와 그 버튼, 아래 막대가 그 칸의 "다 했어요" */
-function vHw(d){const s=SETS.sets[d],p=spGet(d),H=p.hw||{},R=hwRule(d),M=hwMin(d),its=hwItems(d),sm=hwSum(d),ah=hwAhead(),w=s.week!=null?s.week:weekIndex(d),P=hwParts(d),rp=reqParts(d),ra=rp.filter(x=>x.done).length,fo=hwFocus(d);
+function vHw(d){const s=SETS.sets[d],p=spGet(d),H=p.hw||{},R=hwRule(d),M=hwMin(d),its=hwItems(d),sm=hwSum(d),ah=hwAhead(),w=wkIdx(d),P=hwParts(d),rp=reqParts(d),ra=rp.filter(x=>x.done).length,fo=hwFocus(d);
   const KC={say:'fresh',write:'fresh',essay:'ew'},rk=new Set(rp.map(x=>KC[x.k]||x.k)),fk=fo&&fo.k?KC[fo.k]||fo.k:null,split=rp.length>0,ORD=['fresh','dd','eo','ew','fg','qz','sl'],XO=['rev','fg','mn','x','ew'];
   const vis=its.filter(it=>!(it.key==='x'&&figDup(d,it.task))),req=split?vis.filter(it=>rk.has(it.key)||it.key==='qz').sort((a,b)=>ORD.indexOf(a.key)-ORD.indexOf(b.key)):vis,ext=split?vis.filter(it=>!req.includes(it)).sort((a,b)=>XO.indexOf(a.key)-XO.indexOf(b.key)):[];
   const rm=rp.reduce((a,x)=>{const q=P[x.k];return a+Math.ceil(Math.max(0,q.n-q.k)*q.u);},0),xm=ext.filter(it=>!it.done).reduce((a,it)=>a+(it.min||0),0),dup=(s.tasks||[]).some((_,i)=>figDup(d,i));
@@ -1813,7 +1817,7 @@ const SV={};
 function vSet(){const d=R.a;const s=SETS.sets[d];
   if(!s)return topbar('세트')+`<div class="empty" style="margin-top:20px"><b>${esc(d||'')} 세트가 아직 없어요</b>앱이 저장소에서 받아 오지 못했어요.<div class="btns"><button class="btn" data-act="sync">지금 받아 오기</button></div></div>`;
   const p=sp(d);
-  const tab=SV[d]||'cards',st=setStatus(d),w=s.week!=null?s.week:weekIndex(d),ph=setPh(d),rp=reqParts(d),ra=rp.filter(x=>x.done).length,ed=!!(p.essay&&p.essay.done);
+  const tab=SV[d]||'cards',st=setStatus(d),w=wkIdx(d),ph=setPh(d),rp=reqParts(d),ra=rp.filter(x=>x.done).length,ed=!!(p.essay&&p.essay.done);
   let body='';
   if(tab==='cards'){const fr=resumeAt('flash:'+d),mr=resumeAt('memo:set:'+d);
     body=`<div class="btns stools"><button class="btn sm sec" data-act="set-flash" data-d="${d}">${fr?`카드 넘겨 보기 이어서 (${fr})`:'카드 넘겨 보기'}</button><button class="btn sm sec" data-act="memo-set" data-d="${d}">${mr?`가리며 외우기 이어서 (${mr})`:'가리며 외우기'}</button><button class="lnk" data-act="start-fill" data-d="${d}">빈칸 쓰기</button></div>
@@ -1837,7 +1841,7 @@ function vSet(){const d=R.a;const s=SETS.sets[d];
       <label class="check group" style="margin-top:12px;border-radius:14px"><input type="checkbox" data-act="set-essay-done" data-d="${d}" ${ed?'checked':''}><span>손글씨로 다 썼어요(사진을 찍어 Claude 프로젝트에 올리기)</span></label>`}`;}}
   else body=vHw(d);
   const tabs=[['cards','① 용어',st.read>=st.nc?'✓':`${st.read}/${st.nc}`],['quiz','② 퀴즈',!st.nq?'':st.qa>=st.nq?'✓':`${st.qa}/${st.nq}`],['tasks','③ 숙제',!rp.length?'':ra>=rp.length?'✓':`${ra}/${rp.length}`],['essay','④ 논술',!s.essay?'':ed?'✓':ph===2?'○':ph<=1||ph===3?'권장':'']];
-  const head=tab==='cards'?`<h1 class="ptitle">${esc(s.title||'오늘의 세트')}</h1><p class="lsub">${esc(weekLabel(w))}${s.units&&s.units.length?' · '+esc(s.units.map(unitName).join(', ')):''}</p>${s.goal?`<p class="lsub" style="margin-top:4px">${esc(s.goal)}</p>`:''}`:`<p class="lsub sone">${esc(s.title||'')}</p>`;
+  const head=tab==='cards'?`<h1 class="ptitle">${esc(s.title||'오늘의 세트')}</h1><p class="lsub">${esc(weekLabel(w))}${s.units&&s.units.length?' · '+esc(s.units.map(unitName).join(', ')):''}</p>${s.goal?`<p class="lsub" style="margin-top:4px">${esc(s.goal)}</p>`:''}${setWkNote(d,w)}`:`<p class="lsub sone">${esc(s.title||'')}</p>`;
   const foot=st.done?'<p class="note sfoot ok">이 세트 숙제까지 모두 끝냈어요. 세트를 처음 연 날로부터 1·3·7·14·30일 뒤에 세트 복습으로 돌아와요.</p>':st.core?`<p class="note sfoot">핵심 끝 ✓${(x=>x?' · '+x:'')(nextRevTxt(d))}</p>`:'';
   return topbar(korDate(d,true)+' 세트')+`<div class="seg sseg">${tabs.map(([k,n,v])=>`<button class="${tab===k?'on':''}" data-act="set-tab" data-d="${d}" data-t="${k}"><b>${n}</b>${v?` <small${v==='✓'?' class="ok"':''}>${v}</small>`:''}</button>`).join('')}</div>${head}${body}${foot}${setBarHTML(d)}`;}
 function quizBlock(d,i,q,ans){const opts=q.o||[];const answered=ans!=null;

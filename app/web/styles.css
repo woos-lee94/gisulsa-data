@@ -589,6 +589,7 @@ details.pf>.note{margin:8px 16px 0;padding-bottom:12px}
 .qline.two .chev{display:none}   /* 화살표(›)와 동그라미(○)가 한 글자처럼 붙어 보이던 것: 줄 가운데는 그대로 시험 일정으로 가고, 오늘의 .prow.two처럼 화살표 없이 */
 .schk{margin-top:12px}.schk .row .btn.sm{flex:none}.schk .pdn{flex:none;font-size:.86rem;font-weight:700;color:var(--ok)}
 /* 시험 일정 살펴보기(v3.1): 기다리는 바꾸기·되돌리기 줄, 회차 견주기(회색 · 지금/추천은 .tag), 미리 보기에 더한 줄. 빨강 없음 */
+.note.setwk{margin:8px 0 0}.note.setwk .lnk{display:inline-flex;align-items:center;min-height:44px;padding:6px 2px;vertical-align:middle}
 .schpend{margin-top:12px}.schln{margin:2px 0 0}.schln .lnk{min-height:44px;margin-left:2px}
 .schwhy{margin:0 4px 8px;color:var(--ink)}.schcmp .in-d .group{margin-top:0}.schopt .tt .tag{margin-left:8px}
 .ds.schl{margin:6px 0 0}.ds.schl .lnk{font-size:.86rem;padding:6px 2px;display:inline-flex;align-items:center;min-height:44px;vertical-align:middle}
