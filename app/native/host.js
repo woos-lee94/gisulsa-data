@@ -1,7 +1,7 @@
 // 앱 쪽 다리: 웹 페이지(web/bridge.js의 PE_IO)와 주고받는 규칙.
 // expo 모듈은 deps로 받으므로 같은 코드가 앱(App.js)과 Node 검사(tests/native.test.js)에서 돈다.
 const STORE_KEYS = ['pe_state_v1', 'pe_sets_v1', 'pe_state_prev'];   // pe_state_prev: 시작일을 다시 정하며 지운 기록(7일 동안 되돌리기, 3.1.3)
-const MEMBER_OPS = ['list', 'set', 'del', 'code-add', 'code-del', 'remove', 'unread', 'msg-read', 'msg-del', 'msg-send', 'reply', 'thread', 'reply-read'];
+const MEMBER_OPS = ['list', 'set', 'del', 'code-add', 'code-del', 'remove', 'unread', 'msg-read', 'msg-del', 'msg-send', 'reply', 'thread', 'reply-read', 'plan'];   // plan: 관리자 앱의 시험 일정을 예약 작업에 보냄(3.2.1)
 const NOTIF_DEFAULT = { wd: { on: false, time: '07:00' }, su: { on: false, time: '20:00' } };
 const UPDATE_OPS = ['check', 'apply', 'store'];   // 앱 업데이트(3.2.0): 지금 확인 · 최신 버전 받기(받아서 다시 열기) · App Store 열기
 

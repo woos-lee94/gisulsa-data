@@ -70,6 +70,7 @@ function open(opt = {}) {
       if (op === 'msg-del') { msgs = (msgs || []).filter(m => !a.mids.includes(m.mid)); replies = replies.filter(r => !(a.rids || []).includes(r.rid)); return a.mids.length; }
       if (op === 'msg-send') { if (dev.sendFail) throw new Error(dev.sendFail); return 'NEWID'; }
       if (op === 'code-add') return 'ABCD23';
+      if (op === 'plan') { if (dev.planFail) throw new Error(dev.planFail); return true; }   // 시험 일정 → config/plan(3.2.1)
       return true;
     },
   };
@@ -232,7 +233,7 @@ function open(opt = {}) {
   await B.go('#more');
   const appVer = require('../app.json').expo.version;
   ok(B.txt().includes('기술사 6개월 v' + appVer), '더보기 버전 = app.json 버전 ' + appVer);
-  ok(appVer === '3.2.0' && require('../package.json').version === appVer && require('../package-lock.json').version === appVer && require('../package-lock.json').packages[''].version === appVer, `버전 ${appVer}: app.json = package.json = package-lock(앱 줄)`);
+  ok(appVer === '3.2.1' && require('../package.json').version === appVer && require('../package-lock.json').version === appVer && require('../package-lock.json').packages[''].version === appVer, `버전 ${appVer}: app.json = package.json = package-lock(앱 줄)`);
   ok(B.errors.length === 0, '다시 연 화면 콘솔 오류 없음 ' + B.errors.slice(0, 3).join(' | '));
 
   // 예전(2.x) 기록이 든 휴대폰에서 3.0.0을 처음 열면 "바뀐 점" 창 한 번(기록은 그대로), 표시는 네이티브 저장소에 남아 다시 열면 없음
@@ -413,6 +414,45 @@ function open(opt = {}) {
     dev.answers.push(true); F.click('[data-act="restore-file"]'); await sleep(120);
     ok(F.pe.S().settings.newPerDay === 37 && /복원했어요/.test(F.toast()) && JSON.parse(disk.pe_state_v1).settings.newPerDay === 37, '확인 → 복원(네이티브 저장소에도)');
     ok(F.errors.length === 0, '파일 복원 콘솔 오류 없음 ' + F.errors.slice(0, 3).join(' | '));
+  }
+
+  // 7) 시험 일정을 예약 작업에 보내기(3.2.1): 관리자 앱만 config/plan에 쓰고, 저장소 일정과 다르면 시험 일정에 "보냈어요"
+  {
+    dev.member.length = 0;
+    const G = open({ member: { id: 'kim', admin: false, uid: 'U2' } });
+    await sleep(300);
+    ok(!dev.member.some(x => x[0] === 'plan'), '회원(관리자 아님) 앱은 시험 일정을 보내지 않음');
+    { const st = JSON.parse(disk.pe_state_v1); ok(!!st.settings.pushSig, '앞서 연 관리자 앱(승인 관리·문자함)도 열 때 보냈음'); delete st.settings.pushSig; delete st.settings.pushAt; disk.pe_state_v1 = JSON.stringify(st); }
+    dev.member.length = 0;
+    const P = open({ member: { id: 'boss', admin: true, uid: 'U1' } });
+    await sleep(300);
+    const S0 = P.pe.S(), PL = P.pe.PLAN(), pl = dev.member.filter(x => x[0] === 'plan');
+    ok(pl.length === 1 && pl[0][1].start === PL.start && pl[0][1].begin === S0.settings.start && pl[0][1].target === String(S0.settings.target || 'auto') && pl[0][1].tr === String(PL.target.r) && pl[0][1].exam === PL.target.d && pl[0][1].next === '' && pl[0][1].nfrom === '',
+      '관리자 앱을 열면 지금 시험 일정을 보냄(시작 주 월요일·준비 시작일·목표 회차·시험 날)');
+    ok(!!S0.settings.pushSig && !!S0.settings.pushAt, '보낸 일정과 날짜를 적어 둠');
+    P.d.dispatchEvent(new P.w.Event('visibilitychange')); await sleep(60);
+    ok(dev.member.filter(x => x[0] === 'plan').length === 1, '같은 일정은 다시 보내지 않음(앱이 앞으로 와도)');
+    P.pe.SETS().plan = { start: '2026-10-12', target: 142, exam: '2027-05-15', mock: null, mockDate: null };
+    await P.go('#more'); await P.go('#schedule');
+    ok(/예약 작업에 이 일정을 보냈어요/.test(P.txt()) && !P.d.querySelector('[data-act="plan-push"]') && P.d.querySelector('[data-act="sch-copy"]'), '저장소가 다르면: 회색 "예약 작업에 이 일정을 보냈어요"(3일 지나면 쓰는 변경 요청 복사 링크)');
+    dev.clip = null;
+    const se = P.d.querySelector('#schStart'); se.value = '2026-12-02'; se.dispatchEvent(new P.w.Event('change', { bubbles: true })); await sleep(20);
+    P.click('[data-act="sch-save"]'); await sleep(120);
+    const p2 = dev.member.filter(x => x[0] === 'plan').pop()[1];
+    ok(p2.begin === '2026-12-02' && p2.start === '2026-11-30' && /예약 작업에도 보냈어요/.test(P.toast()) && dev.clip === null, '시작일을 12/2(수)로 저장 → 그 주 월요일 11/30로 보내고 변경 요청은 복사하지 않음');
+    ok(/예약 작업에 이 일정을 보냈어요/.test(P.txt()), '저장한 뒤에도 회색 "보냈어요"');
+    dev.planFail = '권한 없음';
+    const se2 = P.d.querySelector('#schStart'); se2.value = '2026-12-09'; se2.dispatchEvent(new P.w.Event('change', { bubbles: true })); await sleep(20);
+    P.click('[data-act="sch-save"]'); await sleep(120);
+    ok(/set-plan --start 2026-12-07/.test(dev.clip || '') && /변경 요청을 복사했어요/.test(P.toast()) && /변경 요청을 복사해 두었어요/.test(P.txt()), '보내지 못하면(규칙 게시 전·인터넷 없음) 예전처럼 변경 요청을 복사');
+    delete P.pe.S().settings.schSent; P.pe.render(); await sleep(20);
+    ok(/예약 작업은 아직 이전 일정이에요/.test(P.txt()) && P.d.querySelector('[data-act="plan-push"]'), '보낸 것도 복사한 것도 없으면 빨강 + "예약 작업에 보내기"');
+    dev.planFail = null; P.click('[data-act="plan-push"]'); await sleep(80);
+    const p3 = dev.member.filter(x => x[0] === 'plan').pop()[1];
+    ok(p3.start === '2026-12-07' && /예약 작업에 보냈어요/.test(P.toast()) && /예약 작업에 이 일정을 보냈어요/.test(P.txt()), '"예약 작업에 보내기" → 보내고 회색으로');
+    P.pe.S().settings.pushAt = '2026-01-01'; P.pe.render(); await sleep(20);
+    ok(/예약 작업은 아직 이전 일정이에요/.test(P.txt()), '보낸 지 3일이 지나도 저장소가 그대로면 다시 빨강');
+    ok(P.errors.length === 0 && G.errors.length === 0, '시험 일정 보내기 콘솔 오류 없음 ' + P.errors.slice(0, 3).join(' | '));
   }
 
   // 앱 쪽 규칙

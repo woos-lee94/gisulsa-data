@@ -149,6 +149,36 @@ const owner = (method, path, body) => fetch(`${FS}/${path}`, { method, headers: 
   const z = await phone(zStore).check();
   ok(z.state === 'none' && z.uid !== 'gone', '무효 토큰(400): 새 계정으로 처음 화면');
 
+  // 시험 일정(config/plan, 3.2.1): 관리자만 쓰고, 예약 작업은 로그인 없이 읽는다
+  const plan = { start: '2026-11-09', begin: '2026-11-10', target: 'auto', rounds: '', tr: '142', exam: '2027-05-15', next: '', nfrom: '', nexam: '' };
+  ok(await phone().getPlan() === null, '일정을 보내기 전: config/plan 없음');
+  ok(await admin.setPlan(plan) === true, '관리자: 시험 일정 보내기');
+  const pub = await fetch(`${FS}/config/plan`);
+  const pj = await pub.json();
+  ok(pub.status === 200 && pj.fields.start.stringValue === '2026-11-09' && pj.fields.begin.stringValue === '2026-11-10' && !!pj.fields.at.timestampValue, '로그인 없이 읽기(예약 작업) → 일정과 서버 시각');
+  ok((await fetch(`${FS}/config/other`)).status === 403 && (await fetch(`${FS}/config`)).status === 403, 'config의 다른 문서·목록은 못 읽음');
+  await admin.setPlan({ ...plan, start: '2026-11-16', begin: '2026-11-18', rounds: '141=2027-01-30 142=2027-05-22', next: '143', nfrom: '2027-02-08', nexam: '2027-08-28' });
+  const p2 = await phone().getPlan();
+  ok(p2.start === '2026-11-16' && p2.rounds === '141=2027-01-30 142=2027-05-22' && p2.next === '143' && p2.nfrom === '2027-02-08', '다시 보내면 바뀐 일정(회차 날짜·다음 목표)');
+  await admin.setPlan(plan);
+  ok((await phone().getPlan()).next === '' && (await phone().getPlan()).rounds === '', '다음 목표·회차 날짜를 비우면 빈 칸으로');
+  ok(await err(A2.setPlan(plan)) === 'denied', '회원(관리자 아님)은 일정을 못 씀');
+  ok(await err(phone().setPlan(plan)) === 'denied', '아이디 없는 휴대폰도 못 씀');
+  ok(await err(admin.setPlan({ ...plan, start: '11/09' })) === 'badplan' && await err(admin.setPlan({ ...plan, next: '143' })) === 'badplan', '앱 쪽 형식 검사(날짜·다음 목표 짝)');
+  const as = await admin.auth();
+  const forgePlan = async (fields, transform = true) => (await fetch(`${FS}:commit`, { method: 'POST', headers: { Authorization: 'Bearer ' + as.idToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ writes: [{ update: { name: `projects/${PROJECT}/databases/(default)/documents/config/plan`, fields }, updateTransforms: transform ? [{ fieldPath: 'at', setToServerValue: 'REQUEST_TIME' }] : [] }] }) })).status;
+  const pf = Object.fromEntries(Object.entries(plan).map(([k, v]) => [k, { stringValue: v }]));
+  ok(await forgePlan(pf) === 200, '규칙대로 쓴 일정은 통과(대조군)');
+  ok(await forgePlan({ ...pf, start: { stringValue: '2026-11-09; rm' } }) === 403, '날짜 칸에 다른 글 → 거부');
+  ok(await forgePlan({ ...pf, target: { stringValue: 'auto --x' } }) === 403, '목표 칸에 다른 글 → 거부');
+  ok(await forgePlan({ ...pf, rounds: { stringValue: '141=2027-01-30 && ls' } }) === 403, '회차 날짜 칸에 다른 글 → 거부');
+  ok(await forgePlan({ ...pf, next: { stringValue: '143' } }) === 403, '다음 목표만 있고 날짜 없음 → 거부');
+  ok(await forgePlan({ ...pf, extra: { stringValue: 'x' } }) === 403, '다른 칸 넣기 → 거부');
+  ok(await forgePlan({ ...pf, at: { timestampValue: '2020-01-01T00:00:00Z' } }, false) === 403, '보낸 시각 꾸미기 → 거부');
+  const { tr, ...noTr } = pf;
+  ok(await forgePlan(noTr) === 403, '칸이 빠지면 → 거부');
+
   // 인터넷이 없으면: 확인은 실패하지만 마지막 상태는 남아 있다
   const off = phone(aStore, async () => { throw new TypeError('Network request failed'); });
   ok(await err(off.check()) === 'offline' && (await off.cached()).state === 'approved', '오프라인: 확인 실패, 마지막 승인 상태는 남음');

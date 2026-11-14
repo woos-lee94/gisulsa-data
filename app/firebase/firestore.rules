@@ -6,11 +6,13 @@ rules_version = '2';
 // admins/{uid}: 관리자(콘솔에서 직접 만든다)
 // msgs/{자동 ID}: 관리자에게 보낸 문자(3.0.1부터)
 // replies/{자동 ID}: 관리자가 보낸 답장(3.1.3부터, 승인·거절과 함께 보낼 수 있다)
+// config/plan: 관리자 앱의 시험 일정(3.2.1부터). 예약 작업(세트·모의고사를 만드는 Claude)이 로그인 없이 읽고 같은 일정으로 맞춘다
 service cloud.firestore {
   match /databases/{db}/documents {
     function signedIn() { return request.auth != null; }
     function isAdmin() { return signedIn() && exists(/databases/$(db)/documents/admins/$(request.auth.uid)); }
     function validId(id) { return id is string && id.size() >= 2 && id.size() <= 16 && id.matches('^[a-z0-9_가-힣]+$'); }
+    function isDate(s) { return s is string && s.matches('^20[0-9]{2}-[01][0-9]-[0-3][0-9]$'); }
 
     match /members/{uid} {
       allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
@@ -89,6 +91,26 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
         && request.resource.data.read == true;
       allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+    }
+
+    // config/plan: 관리자 앱이 시험 일정을 저장할 때 쓴다(관리자만, 칸과 형식이 정해진 문자열만, 서버 시각).
+    // 공개 저장소의 data/index.json에도 같은 일정이 있으므로 누구나 읽어도 된다(예약 작업은 로그인 없이 읽는다).
+    // start 예약 작업에 넣을 시작 주 월요일 · begin 앱의 준비 시작일 · target auto 또는 회차 · rounds "141=2027-01-30 142=…"(고친 회차 날짜)
+    // tr·exam 그 일정의 목표 회차·시험 날(확인용) · next·nfrom·nexam 월요일부터 바꾸기로 한 목표(없으면 빈 칸)
+    match /config/{doc} {
+      allow get: if doc == 'plan';
+      allow create, update: if doc == 'plan' && isAdmin()
+        && request.resource.data.keys().hasOnly(['start', 'begin', 'target', 'rounds', 'tr', 'exam', 'next', 'nfrom', 'nexam', 'at'])
+        && request.resource.data.keys().hasAll(['start', 'begin', 'target', 'rounds', 'tr', 'exam', 'next', 'nfrom', 'nexam', 'at'])
+        && isDate(request.resource.data.start) && isDate(request.resource.data.begin) && isDate(request.resource.data.exam)
+        && request.resource.data.target is string && request.resource.data.target.matches('^(auto|[0-9]{3})$')
+        && request.resource.data.tr is string && request.resource.data.tr.matches('^[0-9]{3}$')
+        && request.resource.data.rounds is string && request.resource.data.rounds.size() <= 300
+        && request.resource.data.rounds.matches('^([0-9]{3}=20[0-9]{2}-[01][0-9]-[0-3][0-9]( [0-9]{3}=20[0-9]{2}-[01][0-9]-[0-3][0-9])*)?$')
+        && request.resource.data.next is string && request.resource.data.next.matches('^([0-9]{3})?$')
+        && (request.resource.data.next == '' ? request.resource.data.nfrom == '' && request.resource.data.nexam == ''
+            : isDate(request.resource.data.nfrom) && isDate(request.resource.data.nexam))
+        && request.resource.data.at == request.time;
     }
   }
 }

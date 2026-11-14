@@ -15,7 +15,7 @@
   - `spec_set.md`, `spec_mock.md`: 파일 형식과 문체 규칙
   - `tool.py`: 브리프·검사·발행 도구(표준 라이브러리만 사용)
   - `curriculum.json`: 단원, 주차 틀 30개, 정기시험 규칙, 세트 규칙(앱 data_plan.js와 같은 값)
-  - `plan.json`: 준비 시작일과 목표 회차(앱 더보기 → 시험 일정과 같은 값). `tool.py set-plan`으로만 바꾼다
+  - `plan.json`: 시작 주 월요일(start)·앱의 준비 시작일(begin)·목표 회차(앱 더보기 → 시험 일정과 같은 값). 예약 작업이 세트를 만들기 전에 `tool.py sync-plan`으로 앱이 보낸 일정(Firestore `config/plan`)에 맞추고, 손으로는 `tool.py set-plan`으로만 바꾼다
   - `kichul.json`: 기출 문제 요지 마스터(제116~140회 775문항)
   - `deck.json`, `essays.json`: 앱에 이미 있는 카드·모범 목차(중복 방지용)
   - `backlog.json`: 아직 카드·목차가 없는 기출(세트가 우선 다룸)

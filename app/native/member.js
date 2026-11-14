@@ -9,6 +9,19 @@ const MSG_MAX = 500;
 const DECS = ['approved', 'rejected']; // 답장과 함께 하는 승인·거절
 const MID_RE = /^[A-Za-z0-9]{1,40}$/;
 const ALNUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+// 시험 일정(config/plan, 3.2.1): 규칙(firebase/firestore.rules)과 같은 형식만 보낸다
+const DATE_RE = /^20\d{2}-[01]\d-[0-3]\d$/;
+const ROUNDS_RE = /^(\d{3}=20\d{2}-[01]\d-[0-3]\d( \d{3}=20\d{2}-[01]\d-[0-3]\d)*)?$/;
+function planDoc(a) {
+  a = a && typeof a === 'object' ? a : {};
+  const s = k => String(a[k] == null ? '' : a[k]);
+  const o = { start: s('start'), begin: s('begin'), target: s('target'), rounds: s('rounds'), tr: s('tr'), exam: s('exam'), next: s('next'), nfrom: s('nfrom'), nexam: s('nexam') };
+  const ok = DATE_RE.test(o.start) && DATE_RE.test(o.begin) && DATE_RE.test(o.exam) && /^(auto|\d{3})$/.test(o.target) && /^\d{3}$/.test(o.tr)
+    && o.rounds.length <= 300 && ROUNDS_RE.test(o.rounds)
+    && (o.next === '' ? o.nfrom === '' && o.nexam === '' : /^\d{3}$/.test(o.next) && DATE_RE.test(o.nfrom) && DATE_RE.test(o.nexam));
+  if (!ok) throw new MemberError('badplan', '시험 일정 형식이 맞지 않아요');
+  return o;
+}
 
 function cleanId(s) { return String(s || '').trim().toLowerCase(); }
 
@@ -279,8 +292,18 @@ function createMember({ apiKey, projectId, fetch, store, now = () => Date.now(),
     return ws.length;
   }
 
+  // 관리자: 시험 일정을 config/plan에 쓴다(예약 작업이 읽어 같은 일정으로 맞춘다). 누구나 읽는 문서라 로그인 없이 확인도 한다
+  async function setPlan(a) {
+    const o = planDoc(a);
+    await req('POST', `${FS}:commit`, { writes: [{ update: { name: docName('config/plan'), fields: toFields(o) }, updateTransforms: [{ fieldPath: 'at', setToServerValue: 'REQUEST_TIME' }] }] });
+    return true;
+  }
+  async function getPlan() {
+    try { return fromDoc(await call(`${FS}/config/plan`, { method: 'GET' })); } catch (e) { if (e.code === 'notfound') return null; throw e; }
+  }
+
   return { configured, auth, check, cached, register, remove, sendMsg, list, setStatus, removeMember, codes, addCode, delCode, msgs, unread, markRead, delMsgs,
-    replies, reply, thread, readReplies, delReplies, uid: () => session && session.uid };
+    replies, reply, thread, readReplies, delReplies, setPlan, getPlan, uid: () => session && session.uid };
 }
 
-module.exports = { createMember, MemberError, cleanId, ID_RE, MSG_FROM, MSG_MAX, DECS };
+module.exports = { createMember, MemberError, cleanId, planDoc, ID_RE, MSG_FROM, MSG_MAX, DECS };

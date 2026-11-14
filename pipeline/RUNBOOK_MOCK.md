@@ -6,11 +6,17 @@
 
 ## 순서
 
+0. 앱 일정 맞추기(늘 먼저): `RUNBOOK_DAILY.md` 0단계와 같다.
+   ```
+   python3 pipeline/tool.py sync-plan
+   ```
+   `SYNC-CHANGED`면 출력 끝의 "다음:" 명령으로 바로 커밋해 main에 올리고 1단계로. `SYNC-SAME`·`SYNC-SKIP`은 그대로 1단계, `SYNC-FAIL`은 1단계로 가되 마지막 보고 끝에 "앱 일정과 맞추지 못했어요: <이유 한 줄>".
+
 1. 브리프 보기
    ```
    python3 pipeline/tool.py mock-brief
    ```
-   첫 줄이 `SKIP`이면 그 이유를 한 줄로 보고하고 끝낸다.
+   첫 줄이 `SKIP`이면 그 이유를 한 줄로 보고하고 끝낸다(0단계에서 일정을 바꿨으면 그 커밋은 이미 올라가 있어야 하고, 보고에 "앱 일정에 맞췄어요"를 한 줄 더한다).
    형식이 `문제 없음(notice만)`이면 `notice`와 `guide`만 쓴 파일을 만든다(실제 시험일 응원과 당일 체크 3가지).
 
 2. 문항 고르기와 목차 쓰기: `pipeline/spec_mock.md`를 따른다.

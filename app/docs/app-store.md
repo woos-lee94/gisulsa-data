@@ -334,6 +334,14 @@ The app is an independent study aid and is not affiliated with HRD Korea or any 
 가릴 곳을 살짝 꾹 눌렀다가 그으면 테이프가 붙고, 그냥 밀면 화면이 움직이도록 바꿨습니다.
 ```
 
+## 3.2.1 보내는 순서(심사 없음)
+
+화면·계산(`web/`)과 회원 요청(`native/member.js`·`host.js`·`App.js`의 JS)만 바뀌어 네이티브 지문이 3.2.0과 같다. App Store 빌드·심사 없이 `npm run ota`로 보낸다(3.2.0 빌드가 깔린 휴대폰만 받는다).
+
+1. Firebase 규칙 다시 게시(`docs/firebase-setup.md` 4-3, 맨 아래 `match /config/{doc}`가 있는 판).
+2. PowerShell 순서의 마지막 줄을 `npm run ota`로.
+3. App Privacy: 그대로. 관리자 휴대폰만 시험 일정(날짜·회차)을 올리고, 이 앱의 개발자(관리자) 자신의 일정이라 사용자에게서 모으는 데이터가 아니다. 개인정보 처리방침에는 한 줄 더했다(`docs/privacy.md`, main에 올라가면 같은 주소에 새 시행일로).
+
 ## 3.2.0 심사 제출 순서
 
 이번 버전은 앱 안 업데이트 장치(expo-updates)가 처음 들어가 App Store 빌드를 한 번 거친다. 그 뒤 화면과 계산만 바뀐 버전은 `npm run ota`로 보내고 심사·App Store 빌드가 필요 없다(CLAUDE.md "배포").

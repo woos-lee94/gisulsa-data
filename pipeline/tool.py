@@ -13,19 +13,24 @@
   python3 pipeline/tool.py add-round FILE.json              새 회차 기출 추가(제141회부터 실제 시행분)
   python3 pipeline/tool.py link 기출id 카드id|목차id        기존 카드·목차를 새 기출에 연결
   python3 pipeline/tool.py status                           일정·주차·덱 현황
-  python3 pipeline/tool.py set-plan --start YYYY-MM-DD [--target auto|회차] [--round 회차=YYYY-MM-DD ...]
+  python3 pipeline/tool.py set-plan --start YYYY-MM-DD [--begin YYYY-MM-DD] [--target auto|회차] [--round 회차=YYYY-MM-DD ...]
                                                             앱에서 바꾼 시험 일정을 저장소에 넣기
+  python3 pipeline/tool.py sync-plan [--url URL] [--json-file F] [--date YYYY-MM-DD]
+                                                            앱(관리자)이 보낸 시험 일정(Firestore config/plan)으로 맞추기
   python3 pipeline/tool.py kds "KDS 11 80 05" [검색어 ...]       국가건설기준(KDS·KCS) 현행 원문
   python3 pipeline/tool.py law "건설기술 진흥법 시행령" [검색어 ...] 현행 법령 조문
   python3 pipeline/tool.py admrul "고시·훈령 이름" [검색어 ...]      현행 행정규칙(고시·훈령·지침)
 """
+import contextlib
 import datetime as dt
 import html
+import io
 import json
 import os
 import re
 import signal
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -130,6 +135,16 @@ def add_months(d, n):
 
 def plan_conf():
     return load(p('pipeline', 'plan.json'), {'start': '2026-10-19', 'target': 'auto', 'rounds': {}})
+
+
+def begin_date():
+    """앱의 준비 시작일(plan.json begin). 시작 주 월요일(start)과 다를 때만 적혀 있고, 그 전 날은 세트·모의고사를 만들지 않는다
+    (앱이 시작일 전 세트를 보여 주지 않으므로 만들면 그 주제를 건너뛰게 된다)."""
+    b = plan_conf().get('begin')
+    try:
+        return max(START, dt.date.fromisoformat(b)) if b else START
+    except ValueError:
+        return START
 
 
 def round_list(ov=None):
@@ -389,8 +404,8 @@ def cmd_today():
     if d > EXAM:
         print(f'SKIP: 목표 시험(제{TR}회 {EXAM})이 지났습니다. 다음 목표로 이어 가려면 앱 더보기 → 시험 일정에서 새 일정을 정하고 set-plan을 실행하라고 보고하세요.')
         return 3
-    if d < START:
-        print(f'SKIP: 준비 시작일({START}) 전입니다. 시작일부터 세트를 만듭니다.')
+    if d < begin_date():
+        print(f'SKIP: 준비 시작일({begin_date()}) 전입니다. 시작일부터 세트를 만듭니다.')
         return 3
     if d.weekday() >= 5 and not force:
         print(f'SKIP: {d}는 주말입니다. 평일에만 세트를 만듭니다.')
@@ -727,8 +742,8 @@ def cmd_mock_brief():
     if d > EXAM:
         print(f'SKIP: 목표 시험(제{TR}회 {EXAM})이 지났습니다. 다음 목표로 이어 가려면 앱 더보기 → 시험 일정에서 새 일정을 정하고 set-plan을 실행하라고 보고하세요.')
         return 3
-    if d < START:
-        print(f'SKIP: 준비 시작일({START}) 전입니다.')
+    if d < begin_date():
+        print(f'SKIP: 준비 시작일({begin_date()}) 전입니다.')
         return 3
     if d.weekday() != 5 and not force:
         print(f'SKIP: {d}는 토요일이 아닙니다.')
@@ -982,11 +997,13 @@ def cmd_set_plan(a):
     global PLAN, START, EXAM, MOCK, TR, MR
     c = plan_conf()
     rounds = {} if '--clear-rounds' in a else dict(c.get('rounds', {}))
-    start, target = c.get('start'), c.get('target', 'auto')
+    start, target, begin = c.get('start'), c.get('target', 'auto'), None
     i = 0
     while i < len(a):
         if a[i] == '--start' and i + 1 < len(a):
             start = a[i + 1]; i += 2; continue
+        if a[i] == '--begin' and i + 1 < len(a):
+            begin = a[i + 1]; i += 2; continue
         if a[i] == '--target' and i + 1 < len(a):
             target = a[i + 1]; i += 2; continue
         if a[i] == '--round' and i + 1 < len(a):
@@ -1002,10 +1019,19 @@ def cmd_set_plan(a):
             sys.exit('--target 은 auto 또는 회차 번호')
         target = int(target)
     sd = dt.date.fromisoformat(start)
+    if begin is None and start == c.get('start'):
+        begin = c.get('begin')   # 시작 주가 그대로면 적어 둔 준비 시작일도 그대로
+    if begin is not None:
+        if not DATE_RE.match(begin) or not 0 <= (dt.date.fromisoformat(begin) - sd).days <= 6:
+            sys.exit(f'--begin 은 시작 주({start}) 월요일부터 그 일요일 사이 날짜여야 합니다(받은 값 {begin})')
     el = [x['r'] for x in eligible(sd, rounds)]
     if target != 'auto' and target not in el:
         sys.exit(f'제{target}회는 {start} 시작에서 {SCHED["minMonths"]}개월이 안 됩니다. 고를 수 있는 회차: {el[:6]}')
-    save(p('pipeline', 'plan.json'), {'note': '앱 더보기 → 시험 일정과 같은 값. set-plan 명령으로만 바꾼다.', 'start': start, 'target': target, 'rounds': rounds})
+    conf = {'note': '앱 더보기 → 시험 일정과 같은 값. set-plan·sync-plan 명령으로만 바꾼다. begin: 앱의 준비 시작일(그 전 날은 세트를 만들지 않음).', 'start': start}
+    if begin and begin != start:
+        conf['begin'] = begin
+    conf.update({'target': target, 'rounds': rounds})
+    save(p('pipeline', 'plan.json'), conf)
     PLAN = compute_plan()
     START, EXAM = PLAN['start'], PLAN['target']['d']
     MOCK = PLAN['mock']['d'] if PLAN['mock'] else None
@@ -1022,6 +1048,104 @@ def cmd_set_plan(a):
         r0 = START + dt.timedelta(weeks=a2)
         print(f'  {a2:>2}주차 {r0.month}/{r0.day} 단계{phase_of(a2)} {wk["title"]}' + (f' [{",".join(map(str, wk["u"]))}]' if wk.get('u') else ''))
     print('\n다음: git add -A && git commit -m "일정: ' + start + f' 시작, 제{TR}회 목표" && git fetch origin main && git rebase origin/main && git push origin HEAD:main')
+    return 0
+
+
+PLAN_URL_RE = re.compile(r'^https://firestore\.googleapis\.com/v1/projects/[a-z0-9-]{4,40}/databases/\(default\)/documents/config/plan$')
+
+
+def fs_val(v):
+    if not isinstance(v, dict):
+        return ''
+    for k in ('stringValue', 'integerValue', 'timestampValue'):
+        if k in v:
+            return str(v[k])
+    return ''
+
+
+def cmd_sync_plan(a):
+    """앱(관리자)이 Firestore config/plan에 보낸 시험 일정으로 plan.json·index.json을 맞춘다(set-plan과 같은 계산).
+    주소는 --url 또는 환경 변수 PE_PLAN_URL, 시험용으로 --json-file(Firestore 문서 JSON). 오늘은 --date(없으면 한국 날짜).
+    출력 첫 줄: SYNC-SAME(같음) · SYNC-CHANGED(바꿈 → 커밋·푸시) · SYNC-SKIP(못 읽음, 그대로) · SYNC-FAIL(맞출 수 없음, 그대로)."""
+    url, jf, i = os.environ.get('PE_PLAN_URL', '').strip(), None, 0
+    while i < len(a):
+        if a[i] == '--url' and i + 1 < len(a):
+            url = a[i + 1].strip(); i += 2; continue
+        if a[i] == '--json-file' and i + 1 < len(a):
+            jf = a[i + 1]; i += 2; continue
+        i += 1
+    keep = '일정은 그대로 두고 다음 단계로 갑니다.'
+    try:
+        if jf:
+            doc = load(jf)
+        elif url:
+            if not PLAN_URL_RE.match(url):
+                print('SYNC-SKIP: 앱 일정 주소 형식이 아닙니다(https://firestore.googleapis.com/v1/projects/<프로젝트>/databases/(default)/documents/config/plan). ' + keep)
+                return 0
+            doc = http_json(url)
+        else:
+            print('SYNC-SKIP: 앱 일정 주소가 없습니다(--url 또는 환경 변수 PE_PLAN_URL). ' + keep)
+            return 0
+    except urllib.error.HTTPError as e:
+        print(('SYNC-SKIP: 앱이 아직 시험 일정을 보내지 않았습니다. ' if e.code == 404 else f'SYNC-SKIP: 앱 일정을 읽지 못했습니다(HTTP {e.code}). ') + keep)
+        return 0
+    except Exception as e:  # 인터넷·JSON 문제
+        print(f'SYNC-SKIP: 앱 일정을 읽지 못했습니다({e.__class__.__name__}). ' + keep)
+        return 0
+    f = (doc or {}).get('fields') or {}
+    o = {k: fs_val(f.get(k)) for k in ('start', 'begin', 'target', 'rounds', 'tr', 'exam', 'next', 'nfrom', 'nexam', 'at')}
+    def day(s):
+        try:
+            return dt.date.fromisoformat(s) if DATE_RE.match(s or '') else None
+        except ValueError:
+            return None
+    rd = r'\d{3}=\d{4}-\d{2}-\d{2}'
+    ok = (day(o['start']) and day(o['begin']) and day(o['exam']) and re.fullmatch(r'auto|\d{3}', o['target']) and re.fullmatch(r'\d{3}', o['tr'])
+          and re.fullmatch(f'({rd}( {rd})*)?', o['rounds']) and all(day(x.split('=')[1]) for x in o['rounds'].split())
+          and ((o['next'] == '' and o['nfrom'] == '' and o['nexam'] == '') or (re.fullmatch(r'\d{3}', o['next']) and day(o['nfrom']) and day(o['nexam']))))
+    if not ok:
+        print('SYNC-SKIP: 앱 일정의 형식이 맞지 않습니다. ' + keep)
+        return 0
+    sd, bd = day(o['start']), day(o['begin'])
+    if sd.weekday() != 0 or not 0 <= (bd - sd).days <= 6:
+        print(f'SYNC-SKIP: 앱 일정의 시작 주({o["start"]})가 월요일이 아니거나 준비 시작일({o["begin"]})이 그 주가 아닙니다. ' + keep)
+        return 0
+    d = arg_date()
+    nx = bool(o['next']) and d >= day(o['nfrom'])   # 월요일부터 바꾸기로 한 목표는 그날부터
+    target = o['next'] if nx else o['target']
+    want = {'start': o['start'], 'target': int(o['next'] if nx else o['tr']), 'exam': o['nexam'] if nx else o['exam']}
+    rounds = dict(x.split('=') for x in o['rounds'].split())
+    c, s0 = plan_conf(), plan_sig()
+    cur = lambda: {k: plan_sig()[k] for k in want}
+    if cur() == want and c.get('rounds', {}) == rounds and c.get('begin', c.get('start')) == o['begin']:
+        print(f'SYNC-SAME: 앱 일정과 같습니다({o["start"]} 시작 주, 준비 시작일 {o["begin"]}, 제{want["target"]}회 {want["exam"]}). 바꿀 것이 없습니다.')
+        return 0
+    paths = [p('pipeline', 'plan.json'), p('data', 'index.json')]
+    snap = {x: open(x, encoding='utf-8').read() if os.path.exists(x) else None for x in paths}
+    def run(tg):
+        args = ['--start', o['start'], '--begin', o['begin'], '--target', tg, '--clear-rounds']
+        for r, dd in sorted(rounds.items()):
+            args += ['--round', f'{r}={dd}']
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                cmd_set_plan(args)
+            return None
+        except SystemExit as e:
+            return str(e.code)
+    err = run(target)
+    if err is None and target == 'auto' and cur() != want:
+        err = run(str(want['target']))   # 앱이 자동으로 고른 회차를 그대로
+    if err is not None or cur() != want:
+        for x, t in snap.items():
+            if t is not None:
+                with open(x, 'w', encoding='utf-8') as fh:
+                    fh.write(t)
+        got = '' if err else f' 계산 결과는 {plan_sig()["start"]} 시작, 제{plan_sig()["target"]}회 {plan_sig()["exam"]}.'
+        print(f'SYNC-FAIL: 앱 일정({o["start"]} 시작, 제{want["target"]}회 {want["exam"]})으로 맞추지 못했습니다. {err or ""}{got} 일정은 그대로 두었습니다. 사용자에게 앱 시험 일정의 "변경 요청 복사"를 붙여 달라고 보고하세요.')
+        return 1
+    print(f'SYNC-CHANGED: {s0["start"]} 시작, 제{s0["target"]}회 {s0["exam"]} → {o["start"]} 시작(준비 시작일 {o["begin"]}), 제{want["target"]}회 {want["exam"]}')
+    print_plan()
+    print(f'다음: git add pipeline/plan.json data/index.json && git commit -m "일정: 앱 시험 일정에 맞춤({o["begin"]} 시작, 제{want["target"]}회)" && git fetch origin main && git rebase origin/main && git push origin HEAD:main')
     return 0
 
 
@@ -1179,6 +1303,8 @@ def main():
         return cmd_status()
     if c == 'set-plan':
         return cmd_set_plan(a[1:])
+    if c == 'sync-plan':
+        return cmd_sync_plan(a[1:])
     if c == 'kds' and len(a) > 1:
         return cmd_kds(a[1], a[2:])
     if c == 'law' and len(a) > 1:

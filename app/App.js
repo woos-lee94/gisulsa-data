@@ -285,6 +285,7 @@ export default function App() {
       if (op === 'reply') return member.reply(String(a.uid || ''), String(a.text || ''), String(a.dec || ''));   // 관리자 답장(승인·거절과 함께)
       if (op === 'thread') return member.thread();
       if (op === 'reply-read') return member.readReplies(a.rids);
+      if (op === 'plan') return member.setPlan(a);   // 관리자: 시험 일정 → config/plan(예약 작업이 읽음, 3.2.1)
       if (op === 'msg-send') return sendMsg(String(a.text || ''), 'app');
       if (op === 'set') return member.setStatus(String(a.uid), String(a.status));
       if (op === 'del') return member.removeMember(String(a.uid), String(a.id || ''));

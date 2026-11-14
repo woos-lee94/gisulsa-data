@@ -14,7 +14,7 @@ const INTERVALS=[0,1,3,7,14,30,60];
 const REVIEW_STEPS=[1,3,7,14,30];
 const KEY='pe_state_v1', SKEY='pe_sets_v1';
 const DATA_DEFAULT='https://raw.githubusercontent.com/woos-lee94/gisulsa-data/main/data/';
-const APP_VER='3.2.0';
+const APP_VER='3.2.1';
 const MOCK_GRADE_SINCE='2026-11-01';            /* v3.0.0을 내는 날. 이 날짜 전 모의고사는 "채점 받았어요"를 묻지 않는다 */
 const BUDGET_DEF={wd:180,sat:300,sun:240};       /* 하루 공부 시간(분) 기본값: 평일·토요일·일요일과 공휴일(S.settings.budget, budgetOf) */
 const PLAN_START=(window.PE_EXAM&&PE_EXAM.defaults.start)||'2026-10-19';
@@ -126,10 +126,29 @@ const sigEq=(r,l)=>!!r&&!!l&&r.start===l.start&&Number(r.target)===Number(l.targ
 function repoWant(){const N=S.settings.nextTarget;return planSig(N?computePlan(S.settings.start,N.r):PLAN);}
 function repoPlanState(t){const r=SETS.plan;if(!r)return'unknown';const st=S.settings,N=st.nextTarget,cur=sigEq(r,planSig());
   if(cur)return N?'wait':'same';if(N&&sigEq(r,planSig(computePlan(st.start,N.r))))return'next';
+  if(pushed()&&(t||todayStr())<=addDays(st.pushAt,3))return'auto';
   const u=st.schUndo,last=[st.schSent,u&&u.at].filter(Boolean).sort().pop();return st.schSent&&sigEq(st.schSig,repoWant())&&(t||todayStr())<=addDays(last,7)?'sent':'diff';}
 /* 변경 요청을 복사했다고 적기(날짜와 그 요청의 일정) · 지우기 */
 function schSentSet(t){S.settings.schSent=t||todayStr();S.settings.schSig=repoWant();}
 function schSentDel(){delete S.settings.schSent;delete S.settings.schSig;}
+/* 예약 작업에 시험 일정 보내기(3.2.1): 관리자 앱이 Firestore config/plan에 지금 일정을 적어 두면, 예약 작업(pipeline/tool.py sync-plan)이
+   세트·모의고사를 만들기 전에 읽어 같은 일정(시작 주 월요일·목표·고친 회차 날짜, 기다리는 바꾸기는 그 월요일부터)으로 맞춘다.
+   보낸 일정은 S.settings.pushSig(그 문서 글)·pushAt(날짜). 저장할 때·받아 오기 끝·앱이 앞으로 올 때 달라졌으면 보낸다.
+   보낸 뒤 3일 안에 저장소가 아직 다르면 auto(회색, 다음 세트부터 맞춰요), 그 뒤엔 diff(빨강, 변경 요청 복사) */
+function planDocNow(){const st=S.settings,N=st.nextTarget,ov=st.roundDates||{};
+  const o={start:PLAN.start,begin:st.start,target:String(st.target||'auto'),rounds:Object.keys(ov).filter(r=>/^\d{3}$/.test(r)&&/^\d{4}-\d{2}-\d{2}$/.test(ov[r])).sort().map(r=>`${r}=${ov[r]}`).join(' '),tr:String(PLAN.target.r),exam:PLAN.target.d,next:'',nfrom:'',nexam:''};
+  if(N&&N.from){const P1=computePlan(st.start,N.r);o.next=String(P1.target.r);o.nfrom=N.from;o.nexam=P1.target.d;}return o;}
+function pushed(){const st=S.settings;return!!(st.pushSig&&st.pushAt)&&st.pushSig===JSON.stringify(planDocNow());}
+let PUSHING=null;
+function planPush(){if(!ibxOn())return Promise.resolve(false);const st=S.settings,o=planDocNow(),k=JSON.stringify(o);
+  if(st.pushSig===k&&st.pushAt)return Promise.resolve(true);if(PUSHING&&PUSHING.k===k)return PUSHING.p;
+  const p=PE_IO.memberCall('plan',o).then(()=>{st.pushSig=k;st.pushAt=todayStr();save();if(R.page==='schedule'||R.page==='more')softRender();return true;},()=>false).then(r=>{if(PUSHING&&PUSHING.k===k)PUSHING=null;return r;});
+  PUSHING={k,p};return p;}
+/* 시험 일정을 바꾼 뒤 알리기: 저장소 일정이 가야 할 일정과 다르면 관리자는 예약 작업에 보내고(못 보내면) 변경 요청을 복사한다 */
+function schTell(m,t){if(!(SETS.plan&&!sigEq(SETS.plan,repoWant()))){schSentDel();save();toast(m);planPush();return;}
+  const cp=()=>{schSentSet(t);save();softRender();PE_IO.copy(schReq()).then(()=>toast(m+'. 변경 요청을 복사했어요'),()=>{schSentDel();save();toast(m+'. 변경 요청은 복사하지 못했어요');render();});};
+  if(!ibxOn())return cp();
+  planPush().then(ok=>{if(ok){schSentDel();save();toast(m+'. 예약 작업에도 보냈어요');render();}else cp();});}
 function weekRange(w){const a=addDays(planMon0(),w*7);return[a,addDays(a,6)];}
 function md(s){const d=parse(s);return(d.getMonth()+1)+'/'+d.getDate();}
 function korDateY(s,withDow){return parse(s).getFullYear()+'년 '+korDate(s,withDow);}
@@ -366,6 +385,7 @@ async function sync(force){
   if(got.k&&!got.sets&&!got.mocks)invalidate();
   if(got.sets||got.mocks){invalidate();toast(got.sets&&got.mocks?`세트 ${got.sets}개, 모의고사 ${got.mocks}개를 받았어요`:got.sets?`새 세트 ${got.sets}개를 받았어요`:`모의고사 ${got.mocks}개를 받았어요`);}
   nextApply(todayStr());   /* 받아 오는 동안 기다린 시험 일정 바꾸기(복원한 기록의 지난 바꾸기도). 받은 세트로 캐시를 비운 뒤라 지난주 고정(weekSnap)이 새 자료로 센다 */
+  planPush();   /* 관리자: 보낸 일정과 달라졌으면 예약 작업에 보냄(복원·되돌리기·기다리던 바꾸기 뒤 포함) */
   softRender();}
 function syncLine(){const s=S.sync||{};const n=Object.keys(SETS.sets).length;
   if(syncing)return`<div class="syncline"><span class="spin"></span>받아 오는 중…</div>`;
@@ -633,7 +653,7 @@ function estMock(w){const r=weekRange(w),inW=d=>!!d&&d>=r[0]&&d<=r[1];
 function setPh(d){const x=(S.wk||{})[wkStart(d)];return x&&x.ph!=null?x.ph:phaseObj(wkIdx(d)).id;}
 /* 세트 파일의 주차(예약 작업 일정)가 앱 주차와 다르면 세트 화면 머리 아래 한 줄: 저장소 일정이 앱과 다르면 변경 요청 안내와 시험 일정 링크 */
 function setWkNote(d,w){const s=SETS.sets[d];if(!s||s.week==null||s.week===w)return'';const rp=repoPlanState();
-  return`<p class="note setwk">예약 작업이 예전 일정의 ${s.week<=0?'준비 주':s.week+'주차'}로 만든 세트예요.${rp==='diff'||rp==='sent'?` 시험 일정의 변경 요청을 예약 작업에 붙여 넣으면 다음 세트부터 앱 주차와 맞아요. <button class="lnk" data-act="go" data-h="schedule">시험 일정</button>`:''}</p>`;}
+  return`<p class="note setwk">예약 작업이 예전 일정의 ${s.week<=0?'준비 주':s.week+'주차'}로 만든 세트예요.${rp==='auto'?' 예약 작업에 지금 일정을 보냈어요. 다음 세트부터 앱 주차와 맞아요.':''}${rp==='diff'||rp==='sent'?` 시험 일정의 변경 요청을 예약 작업에 붙여 넣으면 다음 세트부터 앱 주차와 맞아요. <button class="lnk" data-act="go" data-h="schedule">시험 일정</button>`:''}</p>`;}
 function hwMin(d){const R=hwRule(d),M=Object.assign({},PE_HW_MIN[1],PE_HW_MIN[setPh(d)]||{});for(const k in M)M[k]=Math.min(M[k],R[k]||0);return M;}
 /* 세트 숙제를 할 일 단위로: n 필수 칸, N 학원 횟수 칸, k·K 한 칸(필수·전체까지만), u 칸당 분, f·F 낱말마다 필수·전체 횟수.
    restMin: 오늘 몫 밖의 나머지(복습 용어·그림·앞글자·세트만의 과제. 실전 쓰기는 essay 한 줄이 갖는다). 시험 전 3일 세트는 숙제가 없다 */
@@ -1985,7 +2005,7 @@ function revSheet(d){const s=SETS.sets[d];if(!s)return'';const step=reviewDue(d)
 /* 복습 탭: 상태 한 줄 → 세트 복습(5개까지, 파란 "세트 복습 시작"이 차례대로 잇는다, 카드 복습, 모두 가리며 외우기) → 오답 노트(늘) → 별표 카드(있을 때) → 지난 세트·보관함 */
 function vReview(){const t=todayStr(),L=revList(),N=cardsOut(t).length,wl=wrongList(),stars=deck().filter(c=>pget(c.id).star);
   const byT={card:0,quiz:0,cloze:0,fill:0,gq:0};wl.forEach(w=>byT[w.type]++);const rvIds=uniq([].concat(...L.map(x=>setIds(x.d)))),wIds=wrongCardIds(),mr=resumeAt('memo:rev');
-  const past=Object.keys(SETS.sets).filter(d=>d<t&&!L.some(x=>x.d===d)).sort().reverse().slice(0,5),   /* 지난 세트: 오늘 세트는 오늘 화면에서 */cat=[['card','카드'],['quiz','퀴즈'],['cloze','수치'],['fill','빈칸'],['gq','용어 퀴즈']].filter(([k])=>byT[k]).map(([k,l])=>l+' '+byT[k]).join(', ');
+  const past=Object.keys(SETS.sets).filter(d=>d<t&&d>=S.settings.start&&!L.some(x=>x.d===d)).sort().reverse().slice(0,5),   /* 지난 세트: 오늘 세트는 오늘 화면에서, 준비 시작일 전 세트(예전 일정으로 온 것)는 세트 보관함에만(3.2.1) */cat=[['card','카드'],['quiz','퀴즈'],['cloze','수치'],['fill','빈칸'],['gq','용어 퀴즈']].filter(([k])=>byT[k]).map(([k,l])=>l+' '+byT[k]).join(', ');
   const stl=[L.length?`세트 복습 ${L.length}`:'',N?`카드 복습 ${N}`:'',wl.length?`오답 ${wl.length}`:''].filter(Boolean).join(' · ')||'지금 다시 볼 것이 없어요';
   const rr=x=>row({t:`${esc(dlab(x.d))} ${x.step}일 차`,d:esc((SETS.sets[x.d]||{}).title||''),act:'rev-open',data:{d:x.d}});
   const pst=d=>{const c=setCore(d);return c.ok?'핵심 ✓':`용어 ${c.st.read}/${c.st.nc}${c.st.nq?` · 퀴즈 ${c.st.qa}/${c.st.nq}`:''}`;};
@@ -2759,13 +2779,16 @@ function vSchedule(){const ed=SCH||{start:S.settings.start,target:S.settings.tar
     ${changed?`<div class="btns schsv" style="margin-top:14px"><button class="btn" data-act="sch-save">${from?'<span>'+esc(dlab(from))+'부터 <span class="nw">이 일정으로</span></span>':'이 일정으로 저장'}</button><button class="btn ghost" data-act="sch-cancel">취소</button></div><p class="ds" style="margin:8px 0 0">${from?esc(dlab(from))+'부터 ':''}오늘 화면, 로드맵, 주차와 단계가 새 일정으로 바뀌어요.${stCh&&hasRec()&&!SCH.keep?'':' 카드·오답 기록은 그대로예요.'}</p>`:''}</div>
   ${sec('예약 작업 일정','',rp==='same'?`<div class="group">${row({ic:'check',tone:'ok',t:'예약 작업도 같은 일정이에요',d:'매일 세트와 주간 모의고사가 이 일정의 주차·단원으로 만들어져요'})}</div>`
     :rp==='unknown'?`<div class="group">${row({ic:'sync',tone:'gray',t:'아직 확인하지 못했어요',d:'받아 오기를 하면 저장소의 일정과 비교해요',act:'sync'})}</div>`
+    :rp==='wait'&&pushed()?`<div class="group">${row({ic:'cal',tone:'gray',t:esc(`예약 작업은 ${dlab(N.from)}부터 바꿔요`),d:'앱이 새 일정을 보내 두었어요. 그날 세트부터 새 일정으로 만들어요'})}</div>`
     :rp==='wait'?`<div class="group">${row({ic:'cal',tone:'gray',t:esc(`예약 작업은 ${dlab(N.from)}부터 바꿔요`),d:esc(`${dlab(addDays(N.from,-1))}에 변경 요청을 붙여 넣어요`)})}</div>
       <div class="btns"><button class="btn sec" data-act="sch-copy">변경 요청 복사</button></div><p class="note">그 전에 붙여 넣으면 이번 주 남은 세트가 새 일정으로 와요.</p>`
+    :rp==='auto'?`<div class="group">${row({ic:'sync',tone:'gray',t:'예약 작업에 이 일정을 보냈어요',d:'다음 세트(평일 06:21, 토요일 모의고사)부터 이 일정의 주차·단원으로 만들어요'})}</div>
+      <p class="note">${esc(dlab(addDays(S.settings.pushAt,3)))}이 지나도 이 표시가 그대로면 <button class="lnk" data-act="sch-copy">변경 요청 복사</button> 뒤 Claude Code에 붙여 넣어요.</p>`
     :rp==='next'?`<div class="group">${row({ic:'check',tone:'ok',t:'예약 작업은 이미 새 일정이에요',d:esc(`앱은 ${dlab(N.from)}부터 새 일정이에요`)})}</div>`
     :rp==='sent'?`<div class="group">${row({ic:'sync',tone:'gray',t:'변경 요청을 복사해 두었어요',d:'Claude Code에 붙여 넣으면 다음 받아 오기 때 맞춰져요'})}</div>
       <div class="btns"><button class="btn sec" data-act="sch-copy">다시 복사</button></div>`
     :`<div class="group">${row({ic:'x',tone:'red',t:'예약 작업은 아직 이전 일정이에요',d:`저장소: ${esc(R0.start)} 시작, 제${esc(R0.target)}회 ${esc(R0.exam)}. 바꾸기 전까지 매일 세트의 주차·단원이 앱과 어긋날 수 있어요`})}</div>
-      <div class="btns"><button class="btn sec" data-act="sch-copy">변경 요청 복사</button></div><p class="note">서버가 없어 앱이 저장소를 직접 고칠 수 없어요. 복사한 요청을 Claude Code에 붙여 넣으면 저장소 일정이 바뀌고, 다음 받아 오기 때 이 표시가 사라져요.</p>`)}
+      ${ibxOn()?`<div class="btns"><button class="btn sec" data-act="plan-push">예약 작업에 보내기</button></div><p class="note">보내 두면 예약 작업이 세트를 만들기 전에 읽어 같은 일정으로 맞춰요. 보내지 못하거나 며칠이 지나도 그대로면 <button class="lnk" data-act="sch-copy">변경 요청 복사</button> 뒤 Claude Code에 붙여 넣어요.</p>`:''}${ibxOn()?'':`<div class="btns"><button class="btn sec" data-act="sch-copy">변경 요청 복사</button></div><p class="note">서버가 없어 앱이 저장소를 직접 고칠 수 없어요. 복사한 요청을 Claude Code에 붙여 넣으면 저장소 일정이 바뀌고, 다음 받아 오기 때 이 표시가 사라져요.</p>`}`)}
   ${sec('정기시험 일정','기술사 필기, 해마다 3회',`<div class="group">${list.map(x=>row({ic:'cal',tone:x.r===P.target.r?'red':P.mock&&x.r===P.mock.r?'amber':'gray',t:`제${x.r}회 ${esc(korDateY(x.d,true))}`,d:esc([x.est?'예상':x.user?'직접 입력':'확정',x.r===P.target.r?'목표':P.mock&&x.r===P.mock.r?'실전 모의':'',x.d<t?'지남':'',x.note].filter(Boolean).join(', '))})).join('')}</div>
     <p class="note">예상일은 2023·2025·2026년 시행 패턴(2월 초·5월 셋째·8월 넷째 토요일, 설 연휴 회피)으로 잡았어요. 다음 해 일정은 보통 11월 말~12월 큐넷에 공고돼요.</p>
     <details class="d" style="margin-top:10px"><summary>큐넷 공고 날짜로 고치기</summary><div class="in-d">
@@ -3475,9 +3498,7 @@ document.addEventListener('click',e=>{
     /* 준비 시작일을 다시 정하면 이전 공부 기록을 지우고 새로 시작(3.1.3, "기록은 그대로 두기"를 고르지 않았을 때) */
     if(SCH.start!==S.settings.start&&hasRec()&&!SCH.keep){const ns=SCH.start,tg=SCH.target||'auto';
       return PE_IO.ask(`이전 공부 기록(${WIPE_TXT})을 지우고 ${korDate(ns)}부터 새로 시작할까요? 설정과 내 카드는 그대로이고, 지운 기록은 7일 동안 더보기 → 백업에서 되돌릴 수 있어요.`,()=>{
-        SCH=null;restartRec(ns,tg);const m='이전 기록을 지우고 '+korDate(ns)+'부터 새로 시작해요',t=todayStr();
-        if(SETS.plan&&!sigEq(SETS.plan,repoWant())){schSentSet(t);save();PE_IO.copy(schReq()).then(()=>toast(m+'. 변경 요청을 복사했어요'),()=>{schSentDel();save();toast(m+'. 변경 요청은 복사하지 못했어요');render();});}
-        else toast(m);render();});}
+        SCH=null;restartRec(ns,tg);schTell('이전 기록을 지우고 '+korDate(ns)+'부터 새로 시작해요',todayStr());render();});}
     const t=todayStr(),st=S.settings,pre=planPre(),prev=st.target||'auto',tg=SCH.target||'auto',stCh=SCH.start!==st.start,P1=stCh?null:computePlan(st.start,tg);
     if(P1&&P1.target.r===PLAN.target.r){SCH=null;return render();}
     const from=stCh?null:schFrom(PLAN,P1,t);
@@ -3485,8 +3506,7 @@ document.addEventListener('click',e=>{
     if(from){st.nextTarget={r:tg,from,prev,at:t};SCH=null;save();}
     else{lockLived(PLAN,wkIdx(t)+(stCh?1:0));if(stCh){st.start=SCH.start;delete st.schUndo;}else st.schUndo={r:prev,at:t};st.target=tg;delete st.nextTarget;SCH=null;recalcPlan();phaseReset(t);save();planChanged('sched',pre);}
     const msg=from?`${dlab(from)}부터 제${nextR(st.nextTarget)}회 일정이에요`:'시험 일정을 바꿨어요';
-    if(SETS.plan&&!sigEq(SETS.plan,repoWant())){schSentSet(t);save();const m2=from||stCh?msg:`제${PLAN.target.r}회로 바꿨어요`;PE_IO.copy(schReq()).then(()=>toast(m2+'. 변경 요청을 복사했어요'),()=>{schSentDel();save();toast(m2+'. 변경 요청은 복사하지 못했어요');render();});}
-    else{schSentDel();save();toast(msg);}
+    schTell(SETS.plan&&!sigEq(SETS.plan,repoWant())&&!from&&!stCh?`제${PLAN.target.r}회로 바꿨어요`:msg,t);
     return render();}
   case'sch-cancel':SCH=null;return render();
   case'sch-keep':if(SCH){SCH.keep=!SCH.keep;}return render();   /* 시작일을 바꿀 때 이전 기록 지우기 ↔ 그대로 두기 */
@@ -3494,11 +3514,12 @@ document.addEventListener('click',e=>{
   case'rec-undo':{const p=prevRec();if(!p)return toast('되돌릴 기록이 없어요');
     return PE_IO.ask(`${korDate(p.at)}에 지운 공부 기록으로 되돌릴까요? 그 뒤에 한 공부 기록은 없어져요.`,()=>{adoptState(p.state);try{PE_IO.set(PREV_KEY,'');}catch(e){}recalcPlan();flush();invalidate();applyLook();flowReset();toast('지운 기록을 되돌렸어요');sync(true);nav('today');});}
   case'sch-pick':SCH={start:S.settings.start,target:D.r==='auto'?'auto':Number(D.r)};SV.scrollTo='#schPrev';render();return scrollDo();   /* 회차 견주기·되돌리기 줄 → 미리 보기 */
-  case'sch-next-cancel':delete S.settings.nextTarget;save();toast('지금 일정 그대로 둬요');return render();   /* 기다리던 새 일정을 미리 붙여 넣었으면(next) 저장소가 지금 일정과 달라 diff(빨강, 변경 요청 복사): 복사한 요청은 새 일정의 것(schSig) */
+  case'sch-next-cancel':delete S.settings.nextTarget;save();toast('지금 일정 그대로 둬요');planPush();return render();   /* 기다리던 새 일정을 미리 붙여 넣었으면(next) 저장소가 지금 일정과 달라 diff(빨강, 변경 요청 복사): 복사한 요청은 새 일정의 것(schSig) */
   case'slip-no':{const t=todayStr(),c=slipCheck(t);S.settings.slipNo={at:t,avg:c&&c.avg!=null?c.avg:null};save();toast('4주 동안 다시 묻지 않을게요');return render();}
+  case'plan-push':{const st=S.settings;delete st.pushSig;delete st.pushAt;return planPush().then(ok=>{toast(ok?'예약 작업에 보냈어요. 다음 세트부터 이 일정으로 만들어요':'보내지 못했어요. 인터넷을 확인하거나 변경 요청을 복사해 붙여 넣으세요');render();});}
   case'sch-copy':return PE_IO.copy(schReq()).then(()=>{schSentSet();save();toast('변경 요청을 복사했어요. Claude Code에 붙여 넣으세요');render();},()=>toast('복사하지 못했어요'));
-  case'sch-round-set':{const r=Number($('#schRound').value),d=$('#schRoundDate').value;if(!r||!/^\d{4}-\d{2}-\d{2}$/.test(d))return toast('회차와 날짜를 고르세요');const pre=planPre();S.settings.roundDates[r]=d;delete S.settings.slipNo;recalcPlan();save();planChanged('sched',pre);toast(`제${r}회를 ${d}로 고쳤어요`);return render();}
-  case'sch-round-reset':{const r=Number($('#schRound').value);if(!r)return;const pre=planPre();delete S.settings.roundDates[r];delete S.settings.slipNo;recalcPlan();save();planChanged('sched',pre);toast(`제${r}회를 예상일로 되돌렸어요`);return render();}
+  case'sch-round-set':{const r=Number($('#schRound').value),d=$('#schRoundDate').value;if(!r||!/^\d{4}-\d{2}-\d{2}$/.test(d))return toast('회차와 날짜를 고르세요');const pre=planPre();S.settings.roundDates[r]=d;delete S.settings.slipNo;recalcPlan();save();planChanged('sched',pre);toast(`제${r}회를 ${d}로 고쳤어요`);planPush();return render();}
+  case'sch-round-reset':{const r=Number($('#schRound').value);if(!r)return;const pre=planPre();delete S.settings.roundDates[r];delete S.settings.slipNo;recalcPlan();save();planChanged('sched',pre);toast(`제${r}회를 예상일로 되돌렸어요`);planPush();return render();}
   case'backup-copy':{const[j,undo]=backupJSON();return PE_IO.copy(j).then(()=>{backupDone();toast('백업을 복사했어요. 메모 앱에 붙여 두세요');},()=>{undo();toast('복사하지 못했어요');});}
   case'backup-dl':{const[j,undo]=backupJSON();PE_IO.saveFile('gisulsa-backup-'+todayStr()+'.json',j).then(backupDone,()=>{undo();toast('파일로 저장하지 못했어요');});return;}
   case'restore':return restoreFrom($('#restoreText').value);
@@ -3520,7 +3541,7 @@ document.addEventListener('keydown',e=>{const t=e.target;if(e.key!=='Enter'||!t.
   const all=Array.from(document.querySelectorAll('.fill-in'));const k=all.indexOf(t);if(k<all.length-1)all[k+1].focus();else fillCheck(false);});
 $('#nav').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b)goTab(b.dataset.tab);});
 let calHid=0;
-document.addEventListener('visibilitychange',()=>{if(document.hidden){memoPause();calHid=Date.now();}if(!document.hidden){if(Date.now()-calHid>10*60000)calOpen();sync(false);IBX.at=0;MT.at=0;nextApply(todayStr());if(!R.page)render();}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){memoPause();calHid=Date.now();}if(!document.hidden){if(Date.now()-calHid>10*60000)calOpen();sync(false);IBX.at=0;MT.at=0;nextApply(todayStr());planPush();if(!R.page)render();}});
 /* 관리자에게 보낼 말은 다시 그려도 남게 */
 document.addEventListener('input',e=>{if(e.target&&e.target.id==='msgText')SV.msgDraft=e.target.value;if(e.target&&e.target.id==='rpText')SV['rp:'+e.target.dataset.uid]=e.target.value;});
 window.addEventListener('online',()=>sync(true));
