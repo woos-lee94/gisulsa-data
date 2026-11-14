@@ -580,6 +580,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   await go('#test'); ok(!view().querySelector('[data-h="guide"]'), '테스트 탭에는 답안 작성 요령 줄이 없음(더보기·④ 논술·모의고사 화면에 있음)');
   await go('#mock/2026-10-24'); ok(view().querySelector('[data-h="guide"]'), '모의고사 화면 → 답안 작성 요령');
   await go('#more'); ok(view().querySelector('[data-h="guide"]'), '더보기 → 답안 작성 요령');
+  ok(!/앱 업데이트/.test(txt()) && !view().querySelector('[data-act^="upd-"]'), '브라우저(앱이 아닌 곳)에는 앱 업데이트 줄이 없음(3.2.0)');
 
   // 가리며 외우기: 보기 → 가림을 정한 시간마다 반복(시계는 검사에서 직접 돌린다)
   {
@@ -1140,7 +1141,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(!S().today || S().today.sig !== 'x', '복원 뒤 오늘 화면은 백업의 고정 목록이 아니라 새로 짠 오늘 몫');
     const old = JSON.parse(JSON.stringify(bk)); delete old.state.tk; delete old.state.today; delete old.state.wk; delete old.state.settings.budget;
     await go('#backup'); d.querySelector('#restoreText').value = JSON.stringify(old); click('[data-act="restore"]'); const oT = S().today, oW = JSON.stringify(S().wk), oK = JSON.stringify(S().tk); await sleep(40);
-    ok(oK === JSON.stringify({ 'seen:v3': bk.state.tk['seen:v3'] }) && bk.state.tk['seen:v3'] && oT === null && oW === '{}' && JSON.stringify(S().settings.budget) === '{"wd":180,"sat":300,"sun":240}' && Object.keys(S().cards).length === Object.keys(bk.state.cards).length && JSON.stringify(S().sp) === JSON.stringify(bk.state.sp), '예전 백업(새 열쇠 없음)을 복원하면 tk·today·wk·공부 시간은 기본값(tk에는 이 휴대폰의 "바뀐 점" 표시만), 나머지 기록은 그대로');
+    ok(oK === JSON.stringify({ 'seen:v3': bk.state.tk['seen:v3'], ver: require('../app.json').expo.version }) && bk.state.tk['seen:v3'] && oT === null && oW === '{}' && JSON.stringify(S().settings.budget) === '{"wd":180,"sat":300,"sun":240}' && Object.keys(S().cards).length === Object.keys(bk.state.cards).length && JSON.stringify(S().sp) === JSON.stringify(bk.state.sp), '예전 백업(새 열쇠 없음)을 복원하면 tk·today·wk·공부 시간은 기본값(tk에는 이 휴대폰의 "바뀐 점" 표시와 연 버전만), 나머지 기록은 그대로');
     const K = JSON.parse(keep); Object.keys(K).forEach(k => { S()[k] = K[k]; }); pe.render(); await go('#today');
   }
 

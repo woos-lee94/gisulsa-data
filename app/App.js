@@ -1,6 +1,7 @@
 // 기술사 6개월 아이폰 앱: web/ 웹앱을 앱 안에 넣어 WebView 화면 전체로 띄운다.
 // 화면과 계산은 모두 web/app.js가 하고, 이 파일은 저장·복사·파일·확인 창·화면 켜 두기·받아 오기·알림만 잇는다(native/host.js).
 // 관리자가 승인한 휴대폰만 연다(native/member.js, Firebase). 승인 전에는 회원 화면(native/Gate.js)만 보인다.
+// 화면·계산 코드(web 묶음 포함)는 EAS Update로 App Store 없이 받는다(native/updates.js, 3.2.0). 네이티브가 바뀐 빌드만 App Store로.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, Linking, Platform, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import Constants from 'expo-constants';
@@ -9,12 +10,14 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as SecureStore from 'expo-secure-store';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import * as Updates from 'expo-updates';
 import { WebView } from 'react-native-webview';
 import { bootScript, createHost, jsLiteral } from './native/host';
 import { pickFile, prepareWeb, readNotifConfig, readStore, saveFile, writeStore } from './native/files';
 import * as notify from './native/notify';
 import { createMember } from './native/member';
 import Gate from './native/Gate';
+import { CHECK_EVERY, STORE_EVERY, STORE_LOOKUP, parseStore, updState, verOf } from './native/updates';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -45,9 +48,25 @@ const isLocal = url => /^file:\/\//.test(url || '');
 
 // 회원: Firebase 설정은 EAS 환경 변수(EXPO_PUBLIC_FIREBASE_*)로 빌드에 들어간다. 계정 열쇠는 이 기기 키체인에만 둔다.
 const KC = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY };
+// 빌드에 든 Firebase 설정을 키체인에도 적어 둔다. 앱 안 업데이트로 받은 코드에 값이 빠졌으면(eas update를 --environment 없이 올린 경우) 적어 둔 값으로 연다
+const FB_KEY = 'pe_fbcfg';
+function fbConfig() {
+  const env = { apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || '', projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || '' };
+  try {
+    if (env.apiKey && env.projectId) {
+      const t = JSON.stringify(env);
+      if (SecureStore.getItem(FB_KEY, KC) !== t) SecureStore.setItem(FB_KEY, t, KC);
+      return env;
+    }
+    const kept = JSON.parse(SecureStore.getItem(FB_KEY, KC) || 'null');
+    if (kept && kept.apiKey && kept.projectId) return kept;
+  } catch (e) { /* 키체인을 못 읽으면 빌드 값 그대로 */ }
+  return env;
+}
+const FB = fbConfig();
 const member = createMember({
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  apiKey: FB.apiKey,
+  projectId: FB.projectId,
   // API 키를 iOS 앱으로 제한해 두면(Google Cloud 콘솔) 이 머리글이 있는 요청만 받는다
   fetch: (url, opt) => fetch(url, { ...opt, headers: { ...(opt && opt.headers), 'X-Ios-Bundle-Identifier': (Constants.expoConfig && Constants.expoConfig.ios && Constants.expoConfig.ios.bundleIdentifier) || '' } }),
   store: { get: k => SecureStore.getItemAsync(k, KC), set: (k, v) => SecureStore.setItemAsync(k, v, KC), del: k => SecureStore.deleteItemAsync(k, KC) },
@@ -59,6 +78,12 @@ async function sendMsg(text, from) {
   try { return await member.sendMsg(text, from, DEV); } catch (e) { throw new Error(sendErr(e)); }
 }
 const memberState = e => (e && e.code === 'offline' ? { state: 'offline' } : e && e.code === 'nocfg' ? { state: 'nocfg' } : { state: 'error', msg: String((e && e.message) || e) });
+
+// 앱 업데이트: 개발 실행·업데이트 설정이 없는 빌드에서는 쓰지 않는다. RUNNING은 지금 도는 버전(앱 안 업데이트로 받은 것이면 그 버전)
+const UPD_ON = !!Updates.isEnabled && !__DEV__;
+const RUNNING = (Constants.expoConfig && Constants.expoConfig.version) || '';
+const BUNDLE_ID = (Constants.expoConfig && Constants.expoConfig.ios && Constants.expoConfig.ios.bundleIdentifier) || '';
+const pause = ms => new Promise(r => setTimeout(r, ms));
 
 async function fetchText(url) {
   const r = await fetch(url, { headers: { 'Cache-Control': 'no-cache' } });
@@ -85,6 +110,45 @@ export default function App() {
 
   const inject = useCallback(code => { if (web.current) web.current.injectJavaScript(code); }, []);
   const go = useCallback(h => inject(`window.PE_IO&&PE_IO._go(${jsLiteral(h)});true;`), [inject]);
+
+  // 앱 업데이트(3.2.0): 켤 때는 expo-updates가 알아서 확인하고 받아 둔다(ON_LOAD, 다음에 켤 때 적용). 다시 볼 때 30분마다 확인해 받아 두고,
+  // 상태를 웹 화면에 알린다(오늘 화면 "새 버전을 받아 두었어요 · 최신 버전 받기", 더보기 "앱 업데이트"). App Store에만 있는 새 버전은 12시간마다 조회
+  const U = Updates.useUpdates();
+  const [storeVer, setStoreVer] = useState(null);
+  const lastUpd = useRef(Date.now());
+  const lastStore = useRef(0);
+  const bgRef = useRef(BG.light);
+  const upd = useMemo(() => updState(U, { enabled: UPD_ON, store: storeVer, running: RUNNING }), [U, storeVer]);
+  const updRef = useRef(upd);
+  updRef.current = upd;
+  const pushUpd = useCallback(() => inject(`window.PE_IO&&PE_IO._update&&PE_IO._update(${jsLiteral(updRef.current)});true;`), [inject]);
+  useEffect(() => { if (loaded.current) pushUpd(); }, [upd.s, upd.v, upd.at, upd.err, pushUpd]);
+  // 새 버전 확인 → 있으면 받아 둔다(받는 중·받아 둠은 useUpdates로 알린다)
+  const checkUpd = useCallback(async () => {
+    lastUpd.current = Date.now();
+    const r = await Updates.checkForUpdateAsync();
+    const found = !!(r.isAvailable || r.isRollBackToEmbedded);   // 되돌리기(올린 사람이 앱에 든 버전으로 되돌림)도 받아 둔다
+    if (found) Updates.fetchUpdateAsync().catch(() => {});
+    return { found, v: verOf(r) };
+  }, []);
+  const checkStore = useCallback(async () => {
+    if (!UPD_ON || !BUNDLE_ID || Date.now() - lastStore.current < STORE_EVERY) return;
+    lastStore.current = Date.now();
+    try { const r = await fetchText(STORE_LOOKUP + encodeURIComponent(BUNDLE_ID)); if (r.ok) setStoreVer(parseStore(r.text)); } catch (e) { /* 다음 조회 때 */ }
+  }, []);
+  // "최신 버전 받기": 받는 중이면 다 받을 때까지(최대 2분), 받아 둔 것이 없으면 확인·받기 → 앱을 다시 연다(웹 화면이 기록을 먼저 저장해 둔다)
+  const applyUpd = useCallback(async () => {
+    for (let i = 0; i < 400 && updRef.current.s === 'busy'; i++) await pause(300);
+    if (updRef.current.s !== 'ready') {
+      lastUpd.current = Date.now();
+      const r = await Updates.checkForUpdateAsync();
+      if (!r.isAvailable && !r.isRollBackToEmbedded) return { s: 'none' };
+      const f = await Updates.fetchUpdateAsync();
+      if (!f.isNew && !f.isRollBackToEmbedded) return { s: 'none' };
+    }
+    setTimeout(() => { Updates.reloadAsync({ reloadScreenOptions: { backgroundColor: bgRef.current, fade: true } }).catch(() => {}); }, 150);
+    return { s: 'reload' };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -192,10 +256,14 @@ export default function App() {
       if (s === 'inactive' || s === 'background') inject('window.PE_IO&&PE_IO._hide();true;');
       if (s === 'active' && prev === 'background') inject('window.PE_IO&&PE_IO._wake();true;');
       if (s === 'active' && member.configured() && Date.now() - lastCheck.current > 30000) recheck(true);
+      if (s === 'active' && prev === 'background' && UPD_ON) {
+        if (Date.now() - lastUpd.current > CHECK_EVERY && updRef.current.s !== 'busy' && updRef.current.s !== 'ready') checkUpd().catch(() => {});
+        checkStore();
+      }
       prev = s;
     });
     return () => sub.remove();
-  }, [inject, recheck]);
+  }, [inject, recheck, checkUpd, checkStore]);
 
   const host = useMemo(() => createHost({
     inject,
@@ -225,7 +293,14 @@ export default function App() {
       if (op === 'remove') { const r = await member.remove(); setM(r); return true; }
       throw new Error('모르는 요청: ' + op);
     },
-  }), [inject]);
+    update: async op => {
+      if (!UPD_ON) throw new Error('이 빌드는 앱 안 업데이트를 쓰지 않아요');
+      if (op === 'check') return checkUpd();
+      if (op === 'apply') return applyUpd();
+      if (op === 'store') { const u = updRef.current; if (u.s === 'store' && u.url) await Linking.openURL(u.url); return true; }
+      throw new Error('모르는 요청: ' + op);
+    },
+  }), [inject, checkUpd, applyUpd]);
 
   // 웹뷰에는 앱에 넣은 파일(file://)만 띄운다. 바깥 주소는 사파리 등 기본 앱으로 열고, 메시지도 앱 파일에서 온 것만 받는다.
   const onMessage = useCallback(e => { if (isLocal(e.nativeEvent.url)) host(e.nativeEvent.data); }, [host]);
@@ -245,9 +320,11 @@ export default function App() {
   const onLoadEnd = useCallback(() => {
     loaded.current = true;
     pushMember();
+    pushUpd();
+    checkStore();
     SplashScreen.hideAsync().catch(() => {});
     if (pendingHash.current) { go(pendingHash.current); pendingHash.current = null; }
-  }, [go, pushMember]);
+  }, [go, pushMember, pushUpd, checkStore]);
 
   // 웹뷰 프로세스가 메모리 부족으로 꺼지면, 최신 기록을 다시 넣어 새로 띄운다
   const onTerminate = useCallback(() => { loaded.current = false; setGen(g => g + 1); }, []);
@@ -258,6 +335,7 @@ export default function App() {
 
   const isDark = dark == null ? system === 'dark' : dark;
   const bg = isDark ? BG.dark : BG.light;
+  bgRef.current = bg;   // 업데이트로 다시 열 때 잠깐 보이는 화면 색
 
   if (error) {
     return (

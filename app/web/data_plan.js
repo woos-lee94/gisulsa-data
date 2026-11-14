@@ -56,6 +56,12 @@ window.PE_SCORE = {1:{core:25,mock:25,hand:30,hw:{dd:12,eo:9,w:9},rev:15,close:5
   2:{core:20,mock:20,hand:40,hw:{essay:20,dd:10,w:5,eo:5},rev:15,close:5},
   3:{core:10,mock:35,hand:35,hw:{redo:20,dd:10,fg:5},rev:15,close:5},
   4:{core:10,mock:20,hand:25,hw:{redo:15,dd:10},rot:30,rev:10,close:5}};
+// 아는 만큼 공부 시간(3.2.0): 주간 모의고사를 "공부하며 풀기"로 할 때(1·2단계 기본, 3단계부터는 실전처럼 시험 시간) 문제 하나의 걸음별 분.
+// 아는 정도 n 모름 · p 조금 · k 앎. 걸음 rd 이해(카드·교재·모범 목차 읽기) · wr 필기(손으로 요점 정리) · mz 암기(가리고 떠올리기) · sp 발설(안 보고 소리 내어 말하기) · an 답안 쓰기(시험 시간 그대로).
+// 단답은 키워드 5개, 논술은 목차 7줄을 기준으로 필기·암기를 0.8~1.4배, 논술 그림이 있으면 모름·조금에 그림 fig분. 공부 속도(pace)는 답안 쓰기를 뺀 걸음에 곱한다
+window.PE_STUDY = {dd:{n:{rd:5,wr:8,mz:6,sp:3,an:10},p:{rd:2,wr:5,mz:3,sp:2,an:10},k:{an:10}},
+  es:{n:{rd:10,wr:20,mz:12,sp:5,an:25},p:{rd:5,wr:10,mz:6,sp:3,an:25},k:{an:25}},fig:5,
+  pace:{fast:.8,mid:1,slow:1.3}};
 // 아직 오지 않은 것의 어림(분): 평일 세트 핵심(읽기 10 + 퀴즈 5; 시험 전 3일은 10). 이번 주 모의의 어림은 app.js의 estMock(w)
 window.PE_EST = {core:15,coreExam:10};
 // 단계 첫 주(월요일부터)에 한 줄

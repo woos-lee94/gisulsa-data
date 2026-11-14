@@ -73,6 +73,9 @@ const BLANK = (() => { const s = clone(ST); s.sp = {}; s.cards = {}; s.mockp = {
 let appJs = fs.readFileSync(path.join(SITE, 'app.js'), 'utf8');
 const gradeRe = /const MOCK_GRADE_SINCE='[^']*'/;
 const gradePatched = gradeRe.test(appJs); appJs = appJs.replace(gradeRe, "const MOCK_GRADE_SINCE='2026-10-31'");
+// 공부하며 풀기(3.2.0)는 STUDY_SINCE부터 온 모의만: 예시 계산(1~67)은 예전처럼 시험 시간으로 두고, 68부터 pe.studySince로 앞당겨 본다
+const studyRe = /let STUDY_SINCE='[^']*'/;
+const studyPatched = studyRe.test(appJs); appJs = appJs.replace(studyRe, "let STUDY_SINCE='9999-12-31'");
 // 무거운 기록 계산을 부른 횟수(검사 24): 숙제 항목(hwItems)·간격 온 카드(dueCards)·다시 볼 세트(dueSetReviews)
 const CNT = ['function hwItems(d){', 'function dueCards(units){', 'function dueSetReviews(){'], cntPatched = CNT.every(f => appJs.split(f).length === 2);
 CNT.forEach((f, i) => { appJs = appJs.replace(f, f + `(window.__cnt=window.__cnt||[0,0,0])[${i}]++;`); });
@@ -161,6 +164,7 @@ function runWeek(W, sets, st) {
   await sleep(700);
   pe = w.__pe;
   ok(gradePatched, '예시 계산용 MOCK_GRADE_SINCE를 2026-10-31로 맞춤');
+  ok(studyPatched, '예시 계산은 시험 시간으로(STUDY_SINCE를 9999-12-31로)');
   ok(cntPatched, '검사용 호출 수 세기(hwItems·dueCards·dueSetReviews)를 붙임');
   // 예전(2.x) 기록으로 3.0.0을 처음 열면 "바뀐 점" 창 한 번. 본 것(S.tk['seen:v3'])은 사용자가 닫을 때 적어 다시 뜨지 않음(점검 3-2):
   // 알림을 눌러 연 앱(App.js onLoadEnd → PE_IO._go)이 다른 화면으로 가도 창은 그 화면 위에 그대로, 본 것도 아직 아님
@@ -2252,6 +2256,88 @@ function runWeek(W, sets, st) {
     const fr = clone(BLANK); fr.cal = { '2026-11-08': { in: ['09:00'], x: {} } }; scene('2026-11-09T09:00:00', fr);
     ok(!pe.hasRec(), '67-14. 앱을 연 것만으로는 공부 기록이 아님');
     w.confirm = c0; w.localStorage.removeItem('pe_state_prev'); pe.goTab('today'); await sleep(40); }
+  // 68. 아는 만큼 공부 시간(3.2.0): 1·2단계 모의는 "공부하며 풀기" — 문제마다 아는 정도(이어진 카드·목차 기록, 직접 고침)로 걸음(이해·필기·암기·발설·그림·답안 쓰기) 분을 세고,
+  //     오늘 줄·이번 주 모의 줄·모의 화면·공부 속도가 같은 셈을 쓴다. "실전처럼 풀기"로 바꾸면 예전 시험 시간(1교시 100분·논술 문제당 25분)
+  { const T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), V$ = () => d.querySelector('#view'), show = async h => { await go(h); pe.render(); await sleep(10); };
+    const tap = async (s, r) => { click(s, r); await sleep(60); }, MD = '2026-10-31', PID = 'mock:' + MD + ':p1', row = () => pe.S().today.rows.find(r => r.id === PID);
+    const nb = () => d.querySelector('.nextbar [data-act]'), cur = () => V$().querySelector('.sq.cur'), J = x => JSON.stringify(x);
+    // 68-1. STUDY_SINCE 뒤에 온 1·2단계 모의는 공부하며 풀기(그 전 모의·3단계부터는 실전처럼)
+    pe.studySince('2026-11-01'); scene('2026-10-31T08:00:00', ST);
+    ok(pe.mockMode(MD) === 'exam' && pe.mockMin(pe.SETS().mocks[MD], 'p1', MD) === 100, '68-1. 공부하며 풀기 전에 온 모의는 예전처럼 시험 시간(1교시 100분)');
+    pe.studySince('2026-10-01'); scene('2026-10-31T08:00:00', ST);
+    const m = pe.SETS().mocks[MD], Q = pe.mockQs(MD, 'p1'), Q2 = pe.mockQs(MD, 'p2'), qn = Q.find(x => x.l === 'n'), qp = Q.find(x => x.l === 'p');
+    ok(pe.mockMode(MD) === 'study', '68-1. 1·2단계 모의는 공부하며 풀기');
+    // 68-2. 문제마다: 모름 = 이해 5 + 필기 8 + 암기 6 + 발설 3 + 답안 10(키워드 3개라 필기·암기 0.8배), 조금 = 2 + 5 + 3 + 2 + 10, 논술 모름 = 이해 10 + 필기 20 + 암기 12 + 발설 5 + 그림 5 + 답안 25(목차 6줄 6/7배)
+    ok(Q.length === 13 && J(qn.steps) === '[["rd",5],["wr",6],["mz",5],["sp",3],["an",10]]' && qn.min === 29 && J(qp.steps) === '[["rd",2],["wr",4],["mz",2],["sp",2],["an",10]]' && qp.min === 20
+      && Q.every(x => x.auto && (x.l === 'n' ? x.min === 29 : x.l === 'p' && x.min === 20)) && qp.why === '이어진 카드를 본 적 있어요',
+      `68-2. 1교시 문제마다 아는 정도로 분: 모름 ${J(qn.steps)} = ${qn.min}분, 조금 ${J(qp.steps)} = ${qp.min}분`);
+    ok(Q2.length === 2 && Q2.every(x => x.l === 'n' && x.min === 72 && J(x.steps) === '[["rd",10],["wr",17],["mz",10],["sp",5],["fg",5],["an",25]]'), `68-2. 2교시 논술 모름 ${J(Q2[0].steps)} = ${Q2[0].min}분`);
+    const t1 = Q.reduce((a, x) => a + x.min, 0), t2 = Q2.reduce((a, x) => a + x.min, 0);
+    ok(t1 === 323 && t2 === 144 && pe.mockTot(m, 'p1', MD) === t1 && pe.mockMin(m, 'p2', MD) === t2, `68-2. 1교시 공부 ${t1}분(시험 시간 100분 대신), 2교시 ${t2}분(50분 대신)`);
+    // 68-3. 토요일 오늘 몫: 1교시 공부(오늘 공부 시간 300분을 넘어도 한 교시는 오늘), 2교시·채점은 내일(일) 밀린 핵심
+    const P = pe.dayPlan(SAT), r1 = P.rows.find(r => r.id === PID), mv = id => (P.moved.find(x => x.id === id) || {}).dest, tk = pe.taskList(SAT).find(x => x.id === PID);
+    ok(r1 && r1.m === 323 && tk.label === '주간 모의고사 1교시 단답 공부 · 13문' && tk.sub === '모름 7 · 조금 6' && mv('mock:' + MD + ':p2') === '내일(일) 밀린 핵심' && mv('mock.g:' + MD) === '내일(일) 밀린 핵심',
+      `68-3. 토 오늘 몫 "${tk.label}"(${tk.sub}) ${r1 && r1.m}분, 2교시 → ${mv('mock:' + MD + ':p2')}, 채점 → ${mv('mock.g:' + MD)}`);
+    // 68-4. 이번 주 모의 줄: 공부 분(1교시 323 + 2교시 144 + 채점 30)
+    const ml = line(pe.weekBoard(SAT), 'mock');
+    ok(ml.B === 323 + 144 + 30 && ml.ratio === 0, `68-4. 이번 주 모의 줄 ${ml.B}분(시험 시간이면 180분)`);
+    // 68-5. 오늘 화면: 칸 머리 "1교시 단답 공부 · 5시간 23분", 줄 버튼 "1교시 공부 시작" → 모의 화면
+    pe.goTab('today'); await sleep(40); await show('#today');
+    const pr0 = [...V$().querySelectorAll('.prow')].find(x => x.dataset.task === PID), bh = [...V$().querySelectorAll('.blk')].map(T_).find(t => /1교시 단답 공부/.test(t)) || '';
+    ok(pr0 && T_(pr0.querySelector('.btn')) === '1교시 공부 시작' && /5시간 23분/.test(bh), `68-5. 오늘: 칸 머리 "${bh.slice(0, 40)}", 줄 버튼 "${T_(pr0 && pr0.querySelector('.btn'))}"`);
+    await tap('.prow[data-task="' + PID + '"] .btn');
+    ok(w.location.hash === '#mock/' + MD && T_(V$().querySelector('.seg.mmode button.on')) === '공부하며 풀기' && cur() && /^1/.test(T_(cur().querySelector('.sqn'))) && cur().querySelectorAll('.sqs li').length === 5
+      && T_(nb()) === '1번 다 했어요' && /^1교시 단답 공부/.test(T_(V$().querySelector('.mstudy h2')).replace('지금: ', '')) && !V$().querySelector('.mtip'),
+      `68-5. 모의 화면: 공부하며 풀기, 1번만 펼쳐 걸음 ${cur() && cur().querySelectorAll('.sqs li').length}개, 아래 막대 "${T_(nb())}"(09:00 안내 없음)`);
+    // 68-6. "1번 다 했어요" → 다 한 문제 기록([시각, 속도 뺀 걸음 분, 답안 분]), 다음 문제가 펼쳐짐, 오늘 한 분 = 1번 어림
+    await tap('.nextbar [data-act="mock-q"]');
+    const q0 = ((pe.S().mockp[MD] || {}).q || {})['p1:0'];
+    ok(Array.isArray(q0) && q0[0] === NOW && q0[1] === Q[0].min - 10 && q0[2] === 10 && /^2/.test(T_(cur().querySelector('.sqn'))) && T_(nb()) === '2번 다 했어요' && V$().querySelector('.sq.done [data-act="mock-q"]')
+      && pe.planDoneMin(pe.S().today) === Q[0].min && pe.mockMin(m, 'p1', MD) === 323 - Q[0].min,
+      `68-6. 1번 다 함 → 기록 ${J(q0)}, 다음은 2번, 오늘 한 분 ${pe.planDoneMin(pe.S().today)}분`);
+    // 68-7. 아는 정도를 고치면(앎·뺌·자동으로) 그 문제의 분과 오늘 줄이 바뀌고 오늘 한 분은 그대로
+    const m0 = row().m, i1 = Q[1];
+    await tap(`[data-act="mock-kn"][data-i="1"][data-l="k"]`);
+    const k1 = pe.mockQs(MD, 'p1')[1];
+    ok(pe.S().know[i1.key] === 'k' && k1.l === 'k' && !k1.auto && k1.min === 10 && J(k1.steps) === '[["an",10]]' && row().m === m0 - (i1.min - 10) && pe.planDoneMin(pe.S().today) === Q[0].min
+      && /직접 정함/.test(T_(cur().querySelector('.sqw'))) && cur().querySelector('[data-act="mock-kn"][data-l="auto"]'),
+      `68-7. 2번 "앎" → 답안 쓰기만 ${k1.min}분, 오늘 줄 ${m0} → ${row().m}분, 오늘 한 분 그대로`);
+    await tap(`[data-act="mock-kn"][data-i="2"][data-l="x"]`);
+    const x2 = pe.mockQs(MD, 'p1')[2];
+    ok(x2.skip && x2.min === 0 && pe.S().mockp[MD].skip['p1:2'] === 1 && V$().querySelector('.sq.skip') && pe.planDoneMin(pe.S().today) === Q[0].min, '68-7. 3번 "뺌" → 0분, 줄이 흐려짐');
+    await tap('.sq.cur [data-act="mock-kn"][data-l="auto"]');
+    ok(!(i1.key in pe.S().know) && pe.mockQs(MD, 'p1')[1].min === i1.min && pe.planDoneMin(pe.S().today) === Q[0].min, '68-7. "자동으로" → 어림으로 되돌림');
+    // 68-8. 실전처럼 풀기로 바꾸면 시험 시간·교시 타이머(오늘 한 분은 그대로), 다시 공부하며 풀기
+    await tap(`[data-act="mock-mode"][data-v="exam"]`);
+    ok(pe.mockMode(MD) === 'exam' && pe.mockMin(m, 'p1', MD) === 100 && /^1교시 시작 · 타이머 100분$/.test(T_(nb())) && !V$().querySelector('.sq') && pe.planDoneMin(pe.S().today) === Q[0].min && !row().st,
+      `68-8. 실전처럼 → 1교시 100분, 아래 막대 "${T_(nb())}", 오늘 한 분 ${pe.planDoneMin(pe.S().today)}`);
+    await tap(`[data-act="mock-mode"][data-v="study"]`);
+    ok(pe.mockMode(MD) === 'study' && row().st === 1 && pe.planDoneMin(pe.S().today) === Q[0].min && T_(nb()) === '2번 다 했어요', '68-8. 다시 공부하며 풀기 → 이어서 2번');
+    // 68-9. 뺀 것 빼고 다 하면 그 교시를 다 한 것(pr.p1, 달력 "1교시 공부 다 함"), 2교시가 지금 교시
+    for (let n = 0; n < 13 && nb() && nb().dataset.act === 'mock-q' && nb().dataset.k === 'p1'; n++) await tap('.nextbar [data-act="mock-q"]');
+    const ce = ((pe.S().cal[SAT] || {}).x || {});
+    ok(pe.S().mockp[MD].p1 === true && /1교시 공부 다 함/.test((ce[PID] || [])[1] || '') && /1교시 공부 12문/.test((ce['mq:' + MD + ':p1'] || [])[1] || '') && /1교시 단답 공부 · 다 했어요/.test(T_(V$().querySelector('.mdone')))
+      && T_(nb()) === '✓ 끝 · 오늘 몫 끝 · 오늘로' && T_(V$().querySelector('.mpart [data-act="mock-pick"][data-k="p2"]')) === '2교시 공부 시작',
+      `68-9. 1교시 다 함 → 달력 "${(ce[PID] || [])[1]}"·"${(ce['mq:' + MD + ':p1'] || [])[1]}", 오늘 몫 끝(2교시는 내일 · 접은 칸에 "2교시 공부 시작")`);
+    await tap('.mpart [data-act="mock-pick"][data-k="p2"]');
+    ok(/지금: 2교시 논술 공부/.test(T_(V$().querySelector('.mstudy h2'))) && T_(nb()) === '1번 다 했어요' && T_(cur().querySelector('.sqs')).includes('그림 5분'), `68-9. 2교시를 고르면 논술 1번부터(그림 걸음 포함), 아래 막대 "${T_(nb())}"`);
+    // 68-10. 공부 속도: 자동은 다 했다고 누른 사이 시간(3개부터 가운데값), 설정에서 고르면 그 배수(답안 쓰기는 그대로)
+    { const S = pe.S(), t0 = NOW - 3 * 3600e3, qd = {}; let t = t0; [0, 1, 2, 3].forEach(i => { t += (10 + 19 * 1.5) * 60e3; qd['p1:' + i] = [t, 19, 10]; });
+      S.mockp['2026-10-24'] = { q: qd }; pe.invalidate();
+      const pf = pe.paceF(), qa = pe.mockQs(MD, 'p2')[0];
+      ok(pf.src === 'auto' && pf.n === 3 && pf.f === 1.5 && J(qa.steps) === '[["rd",15],["wr",26],["mz",15],["sp",8],["fg",8],["an",25]]', `68-10. 자동: 지난 기록 ${pf.n}개 → ${pf.f}배, 논술 모름 ${J(qa.steps)}`);
+      await show('#settings'); const sn = [...V$().querySelectorAll('.sec')].find(x => /공부 속도/.test(T_(x)));
+      ok(sn && /자동: 문제마다/.test(T_(sn)), `68-10. 설정 공부 속도: "${T_(sn).slice(0, 160)}"`);
+      await tap('[data-act="pace"][data-v="slow"]');
+      ok(S.settings.pace === 'slow' && pe.paceF().f === 1.3 && pe.mockQs(MD, 'p2')[0].steps.find(s => s[0] === 'an')[1] === 25, '68-10. 천천히 → 1.3배(답안 쓰기 25분 그대로)'); }
+    // 68-11. 아직 오지 않은 모의(다음 주)의 어림도 공부 분: 이번 주 단원 카드·목차의 아는 정도로(시험 시간 180분보다 큼)
+    scene('2026-11-02T08:00:00', ST); const w2 = pe.weekIndex('2026-11-02'), es = pe.estStudy(w2), ml2 = line(pe.weekBoard('2026-11-02'), 'mock');
+    ok(es && es.n === 2 && es.m > pe.estMock(w2) && ml2.B === es.m, `68-11. 다음 주 모의 어림 ${es && es.m}분(시험 시간 ${pe.estMock(w2)}분), 이번 주 모의 줄 ${ml2.B}분`);
+    // 68-12. 이 버전을 받기 전에 시험 시간으로 고정한 오늘 줄은 공부하며 풀기 분으로 고침(같은 날 다시 열 때)
+    pe.studySince('9999-12-31'); scene('2026-10-31T08:00:00', ST); pe.planToday(SAT); const e1 = Object.assign({}, row());
+    pe.studySince('2026-10-01'); pe.planToday(SAT); const e2 = row();
+    ok(e1 && e1.m === 100 && !e1.st && e2 && e2.m === 323 && e2.st === 1, `68-12. 예전 줄 ${e1 && e1.m}분 → ${e2 && e2.m}분(공부하며)`);
+    pe.studySince('9999-12-31'); pe.goTab('today'); await sleep(40); }
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);

@@ -48,6 +48,9 @@ const IO={
   member(){return(N&&N.member&&N.member.id)?N.member:null;},
   memberCall(op,args){return N?call('member',{op,args:args||{}}):Promise.reject(new Error('앱에서만 쓸 수 있어요'));},
   settingsHTML(){return N?`<section class="sec" id="peNotif">${notifHTML()}</section>`:'';},
+  /* 앱 업데이트(3.2.0, 앱 전용): 앱이 알려 준 상태 {s, v, at, err}(native/updates.js). 확인·최신 버전 받기·App Store 열기는 앱에 부탁. 브라우저에서는 null */
+  update(){return N?(N.update||{s:'idle'}):null;},
+  updateCall(op){return N?call('update',{op}):Promise.reject(new Error('앱에서만 쓸 수 있어요'));},
   /* 앱이 부르는 것 */
   _reply(r){const w=wait[r.id];if(!w)return;delete wait[r.id];r.ok?w.res(r.v):w.rej(new Error(r.err||'실패'));},
   _hide(){hideFns.forEach(f=>{try{f();}catch(e){}});},
@@ -55,6 +58,9 @@ const IO={
   _toast(m){toast(m);},
   /* 알림을 눌러 연 화면: 앱의 라우터로(탭은 탭 첫 화면으로 바꿔 씀, 방문 기록을 늘리지 않음) */
   _go(h){const pe=window.__pe;if(pe&&pe.go)return pe.go(h);location.replace('#'+String(h||'today').replace(/^#/,''));},
+  /* 앱 업데이트 상태가 바뀌면(새 버전을 찾음·받는 중·받아 둠) 앱이 알려 준다. 오늘·더보기 화면이면 다시 그린다(입력 중이면 그대로) */
+  _update(u){if(!N)return;N.update=u&&typeof u==='object'&&u.s?u:null;const h=location.hash.replace(/^#\/?/,'').split('/')[0]||'today',a=document.activeElement;
+    if(['today','more'].includes(h)&&window.__pe&&!(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)))window.__pe.render();},
   /* 승인·관리자 상태가 바뀌면(콘솔에서 관리자 지정 등) 앱이 알려 준다. 아이디가 보이는 화면이면 바로 다시 그린다 */
   _member(m){if(!N)return;N.member=m&&m.id?m:null;const h=location.hash.replace(/^#\/?/,'').split('/')[0]||'today';
     if(['more','settings','admin','inbox','msg','today','week','review','practice','study','test'].includes(h)&&window.__pe)window.__pe.render();}

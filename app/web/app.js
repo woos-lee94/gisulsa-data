@@ -14,7 +14,7 @@ const INTERVALS=[0,1,3,7,14,30,60];
 const REVIEW_STEPS=[1,3,7,14,30];
 const KEY='pe_state_v1', SKEY='pe_sets_v1';
 const DATA_DEFAULT='https://raw.githubusercontent.com/woos-lee94/gisulsa-data/main/data/';
-const APP_VER='3.1.3';
+const APP_VER='3.2.0';
 const MOCK_GRADE_SINCE='2026-11-01';            /* v3.0.0을 내는 날. 이 날짜 전 모의고사는 "채점 받았어요"를 묻지 않는다 */
 const BUDGET_DEF={wd:180,sat:300,sun:240};       /* 하루 공부 시간(분) 기본값: 평일·토요일·일요일과 공휴일(S.settings.budget, budgetOf) */
 const PLAN_START=(window.PE_EXAM&&PE_EXAM.defaults.start)||'2026-10-19';
@@ -552,7 +552,72 @@ const hmOf=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart
 const isStudy=k=>k==='wd'||k==='pre3'||k==='holi';
 const weekMock=t=>{const F=wkFrom(wkStart(t));return Object.keys(SETS.mocks).filter(D=>/^\d{4}-\d\d-\d\d$/.test(D)&&D>=F&&D<=t).sort().pop()||null;};
 const mockParts=m=>['p1','p2','p3','p4'].filter(k=>m&&Array.isArray(m[k])&&m[k].length);
-const mockMin=(m,k)=>k==='p1'?MIN_PER.p1:m[k].length<6?MIN_PER.essayQ*m[k].length:MIN_PER.essayPart;
+/* ── 11-0c. 아는 만큼 공부 시간(3.2.0) ──
+   주간 모의고사 "공부하며 풀기": 문제마다 아는 정도(모름·조금·앎)를 카드·목차 기록으로 어림하고(사용자가 고치면 S.know[문제 키] = n·p·k),
+   걸음(이해·필기·암기·발설·그림·답안 쓰기)마다 PE_STUDY 분 × 키워드·목차 길이 × 공부 속도(설정, 자동이면 지난 기록)로 센다. 이번엔 안 할 문제는 뺌(S.mockp[D].skip['p1:3']).
+   다 한 문제는 S.mockp[D].q['p1:3'] = [다 한 시각 ms, 속도를 빼고 센 걸음 분, 답안 쓰기 분](공부 속도 자동 셈에 쓴다). 교시의 문제를 다 하면(뺀 것 빼고) 그 교시를 다 쓴 것(pr.p1, 예전과 같은 칸).
+   1·2단계 모의는 공부하며 풀기, 3단계부터는 실전처럼(시험 시간)이 기본이고 모의 화면에서 바꾼다(S.mockp[D].mode). STUDY_SINCE 전에 온 모의는 예전처럼 시험 시간 */
+let STUDY_SINCE='2026-11-14';
+const KN_TXT={n:'모름',p:'조금',k:'앎',x:'뺌'},STEP_TXT={rd:'이해',wr:'필기',mz:'암기',sp:'발설',fg:'그림',an:'답안 쓰기'};
+const STEP_HOW={dd:{rd:'카드·교재로 뜻과 원리를 잡아요',wr:'정의·키워드를 손으로 요점 정리해요',mz:'키워드를 가리고 세 번 떠올려요',sp:'안 보고 소리 내어 설명해요',an:'답안지에 시험처럼 써요'},
+  es:{rd:'모범 목차와 채점 포인트를 읽어요',wr:'목차와 핵심 내용을 손으로 정리해요',mz:'목차를 가리고 순서대로 떠올려요',sp:'목차 흐름을 소리 내어 말해요',fg:'그림·표를 그려 봐요',an:'답안지에 시험처럼 써요'}};
+function mockMode(D){const pr=(S.mockp||{})[D]||{};if(pr.mode==='study'||pr.mode==='exam')return pr.mode;
+  if(!/^\d{4}-\d\d-\d\d$/.test(String(D))||D<STUDY_SINCE)return'exam';return phaseObj(wkIdx(D)).id<=2?'study':'exam';}
+const mockStudy=D=>!!D&&mockMode(D)==='study';
+const qText=q=>typeof q==='string'?q:(q&&q.t)||'';
+const qKey=(pk,q)=>(pk==='p1'?'d:':'e:')+normTerm(qText(q));
+/* 카드 하나의 아는 정도: 안 봄 → 모름, 간격 7일 넘게 맞혀 옴(box 3 이상)이고 오답 노트에 없음 → 앎, 그 밖에 본 카드 → 조금 */
+function cardLv(id){const p=pget(id);if(!p.seen)return'n';return p.box>=3&&!(S.wrong||{})['C:'+id]?'k':'p';}
+/* 논술 목차 하나: 목차 떠올리기에서 잘함 2번 이상 → 앎, 떠올려 봤거나 세트 숙제로 목차를 옮겨 적었으면 → 조금 */
+function essayLv(e){const st=(S.essayStat||{})[e.id];if(st&&st.good>=2)return'k';if(st&&(st.good||st.weak))return'p';
+  if(e.src==='set'&&e.date&&Number((spGet(e.date).hw||{}).eo)>0)return'p';return'n';}
+const LV_ORD={n:0,p:1,k:2};
+/* 모의에서 공부하며 다 한 문제(같은 문제 글) → 그 모의 날짜들 */
+function studiedKeys(){return pm('ks',()=>{const o={};Object.keys(S.mockp||{}).forEach(D=>{const q=(S.mockp[D]||{}).q,m=q&&mockObj(D);if(!m)return;
+  Object.keys(q).forEach(k=>{const[pk,i]=k.split(':'),it=(m[pk]||[])[Number(i)];if(it){const K=qKey(pk,it);(o[K]=o[K]||[]).push(D);}});});return o;});}
+/* 문제 하나의 아는 정도 어림(사용자가 고치기 전): 단답은 기출 번호·이름으로 이은 카드, 논술은 이 모의 목차·같은 기출·같은 문제 글의 목차. 다른 모의에서 공부한 문제는 적어도 조금 */
+function knowAuto(pk,q,D,i){let l='n',why='이어진 카드·목차가 없어요';
+  if(pk==='p1'){if(!_deck)buildDeck();const ids=new Set();[].concat((q&&q.x)||[]).forEach(x=>(_kxRev[x]||[]).forEach(id=>ids.add(id)));const nn=_byNorm[normTerm(qText(q))];if(nn)ids.add(nn);
+    const ls=[...ids].filter(id=>_byId[id]&&!S.hidden[id]).map(cardLv);
+    if(ls.length){l=ls.every(x=>x==='k')?'k':ls.some(x=>x!=='n')?'p':'n';why=l==='k'?'이어진 카드를 간격 7일 넘게 맞혀 왔어요':l==='p'?'이어진 카드를 본 적 있어요':'이어진 카드를 아직 안 봤어요';}}
+  else{const own=/^\d{4}-\d\d-\d\d$/.test(String(D))?'ME'+D.replace(/-/g,'')+pk+i:null,n=normTerm(qText(q)),xs=[].concat((q&&q.x)||[]);
+    const es=essays().filter(e=>e.id===own||normTerm(e.t)===n||xs.some(x=>(e.x||[]).includes(x)));
+    if(es.length){l=es.map(essayLv).reduce((a,b)=>LV_ORD[b]>LV_ORD[a]?b:a,'n');why=l==='k'?'이 목차를 떠올리기에서 두 번 넘게 잘했어요':l==='p'?'이 목차를 떠올려 보거나 옮겨 적은 적 있어요':'이어진 목차를 아직 공부하지 않았어요';}}
+  const sd=(studiedKeys()[qKey(pk,q)]||[]).filter(x=>x!==D).sort().pop();if(sd&&l==='n'){l='p';why=`${md(sd)} 모의에서 공부했어요`;}
+  return{l,why};}
+/* 공부 속도(이해·필기·암기·발설·그림에 곱함, 답안 쓰기는 시험 시간 그대로): 설정 S.settings.pace(fast·mid·slow). 자동(기본)이면 공부하며 푼 문제를 다 했다고 누른 사이 시간으로
+   (같은 교시에서 잇닿은 두 문제, 그 사이가 답안 쓰기보다 짧거나 걸음 어림의 3배를 넘으면 쉰 것으로 보고 뺌, 최근 12개, 3개부터 가운데값, 0.6~1.8배) */
+function paceSamples(){return pm('pc',()=>{const out=[];Object.keys(S.mockp||{}).sort().forEach(D=>{const q=(S.mockp[D]||{}).q;if(!q)return;const by={};
+  Object.keys(q).forEach(k=>{const v=q[k],pk=k.split(':')[0];if(Array.isArray(v)&&v.length>=3&&v[1]>0)(by[pk]=by[pk]||[]).push(v);});
+  Object.keys(by).sort().forEach(pk=>{const a=by[pk].sort((x,y)=>x[0]-y[0]);for(let i=1;i<a.length;i++){const dt=(a[i][0]-a[i-1][0])/60000,st=a[i][1],an=a[i][2];if(dt>=an&&dt<=an+st*3)out.push((dt-an)/st);}});});return out.slice(-12);});}
+function paceF(){const P=PE_STUDY.pace,v=(S.settings||{}).pace||'auto';if(P[v])return{f:P[v],src:v,n:0};const sm=paceSamples();if(sm.length<3)return{f:1,src:'auto',n:sm.length};
+  const a=sm.slice().sort((x,y)=>x-y),h=a.length>>1,med=a.length%2?a[h]:(a[h-1]+a[h])/2;return{f:Math.min(1.8,Math.max(.6,Math.round(med*10)/10)),src:'auto',n:sm.length};}
+const paceTxt=()=>{const p=paceF();return p.src==='auto'?(p.n>=3?`자동 ${p.f}배`:'자동(보통)'):({fast:'빠르게',mid:'보통',slow:'천천히'})[p.src];};
+/* 문제 하나의 걸음 [[걸음, 분]]: 단답은 키워드 5개, 논술은 목차 7줄 기준으로 필기·암기를 0.8~1.4배, 논술 그림은 모름·조금에. f는 공부 속도(답안 쓰기에는 곱하지 않음) */
+function qSteps(pk,q,l,f){const es=pk!=='p1',T=PE_STUDY[es?'es':'dd'],L=T[l]||T.n;if(f==null)f=paceF().f;
+  const sz=Math.min(1.4,Math.max(.8,es?((q&&q.o)||[]).length/7||1:((q&&q.k)||[]).length/5||1)),out=[];
+  ['rd','wr','mz','sp'].forEach(s=>{if(L[s])out.push([s,Math.max(1,Math.round(L[s]*f*(s==='wr'||s==='mz'?sz:1)))]);});
+  if(es&&q&&q.fig&&l!=='k')out.push(['fg',Math.max(1,Math.round(PE_STUDY.fig*f))]);
+  out.push(['an',L.an]);return out;}
+/* 그 모의 교시의 문제마다 {i, id 'p1:3', q, key, l 아는 정도, auto 어림인지, why, skip 뺌, min 어림 분, steps, done} */
+function mockQs(D,pk){const m=mockObj(D),pr=(S.mockp||{})[D]||{},qd=pr.q||{},sk=pr.skip||{},f=paceF().f;
+  return((m&&m[pk])||[]).map((q,i)=>{const id=pk+':'+i,key=qKey(pk,q),u=(S.know||{})[key],A=u?null:knowAuto(pk,q,D,i),l=LV_ORD[u]!=null?u:A?A.l:'n',skip=!!sk[id],st=skip?[]:qSteps(pk,q,l,f);
+    return{i,id,q,key,l,auto:!u,why:A?A.why:'',skip,min:st.reduce((a,s)=>a+s[1],0),steps:st,done:!!qd[id]};});}
+const knowSum=Q=>['n','p','k'].map(l=>[l,Q.filter(x=>!x.skip&&x.l===l).length]).filter(a=>a[1]).map(a=>KN_TXT[a[0]]+' '+a[1]).join(' · ');
+/* 교시의 분: 실전처럼은 시험 시간(1교시 100, 논술 6문 미만은 문제당 25, 6문이면 100), 공부하며는 문제 어림의 합. mockMin은 남은 분(공부하며 푼 교시는 다 한 문제를 빼고, 다 쓴 교시는 0) */
+function mockTot(m,k,D){if(mockStudy(D))return mockQs(D,k).filter(x=>!x.skip).reduce((a,x)=>a+x.min,0);return k==='p1'?MIN_PER.p1:m[k].length<6?MIN_PER.essayQ*m[k].length:MIN_PER.essayPart;}
+function mockMin(m,k,D){if(!mockStudy(D))return mockTot(m,k,D);if(((S.mockp||{})[D]||{})[k])return 0;return mockQs(D,k).filter(x=>!x.skip&&!x.done).reduce((a,x)=>a+x.min,0);}
+/* 아직 오지 않은 모의의 교시(pipeline mock_format과 같은 틀) */
+function mockShape(w){const r=weekRange(w),inW=d=>!!d&&d>=r[0]&&d<=r[1];if(inW(PLAN.mock&&PLAN.mock.d)||inW(PLAN.target.d)||w>=PLAN.E)return null;if(w<=0)return{p1:13};
+  const m=weekObj(w),t=m.tpl;if(m.pre)return{p1:13,p2:6,p3:6,p4:6};if(t<=10)return{p1:13,p2:2};if([11,12,16,25].includes(t))return{p2:6};if([13,14,15,17,26].includes(t))return{p1:13,p2:6};
+  if((t>=18&&t<=24)||t===27)return{p1:13,p2:6,p3:6,p4:6};if(t===28)return{p1:13};return null;}
+/* 오지 않은 이번 주 모의를 공부하며 풀 때의 어림(채점 30 포함): 이번 주 단원 카드·목차의 아는 정도 비율로 문제 하나의 기대 분(단답 키워드 5개·논술 목차 7줄·그림 있음 기준).
+   실전처럼(3단계부터·리허설) 주와 시작 전은 null(estMock 그대로). 준비 주 모의도 mockMode처럼 공부하며 */
+function estStudy(w){const sh=mockShape(w);if(!sh||w<0||weekObj(w).pre||addDays(weekRange(w)[0],5)<STUDY_SINCE||phaseObj(w).id>2)return null;
+  const U=(weekObj(w).u||[]).map(Number),inU=x=>!U.length||U.includes(Number(x.u)),f=paceF().f;
+  const avg=(ls,pk,q)=>{const c={n:0,p:0,k:0};ls.forEach(l=>c[l]++);const N=ls.length,one=l=>qSteps(pk,q,l,f).reduce((a,s)=>a+s[1],0);return N?['n','p','k'].reduce((a,l)=>a+c[l]/N*one(l),0):one('n');};
+  const dd=avg(deck().filter(inU).map(c=>cardLv(c.id)),'p1',{k:[1,2,3,4,5]}),ee=avg(essays().filter(inU).map(essayLv),'p2',{o:[1,2,3,4,5,6,7],fig:1});
+  return{m:Math.round((sh.p1||0)*dd+((sh.p2||0)+(sh.p3||0)+(sh.p4||0))*ee)+MIN_PER.grade,n:Object.keys(sh).length};}
 const exWeek=t=>{const W=wkStart(t),E=addDays(W,6);return[PLAN.mock&&PLAN.mock.d,PLAN.target&&PLAN.target.d].some(d=>d&&d>=W&&d<=E);};
 const redoDone=W=>Object.keys(S.tk||{}).filter(k=>{const m=/^x\.redo:(\d{4}-\d\d-\d\d)(:\d+)?$/.exec(k);return m&&m[1]>=W&&m[1]<=addDays(W,6);}).length;
 const revMin=d=>{const s=SETS.sets[d];return Math.ceil(MIN_PER.revItem*(s?(s.cards||[]).length+(s.quiz||[]).length:15));};
@@ -682,8 +747,10 @@ function taskCalc(t){const w=wkIdx(t),kind=dayKind(t),W=wkStart(t),dw=parse(t).g
      늘 넣는 것은 그날의 교시와 그 뒤 채점뿐. 일요일의 토요일 안 쓴 교시는 밀린 핵심(P1)으로 남은 시간 안에서, 못 넣으면 "→ 다음 모의 전까지" */
   const D=weekMock(t);
   if(wkend){if(D){const m=SETS.mocks[D],pr=S.mockp[D]||{},ps=mockParts(m),rh=!!weekObj(w).pre,sunP=k=>(k==='p3'||k==='p4')&&!rh,hasSun=ps.some(sunP),own=k=>kind==='sat'||sunP(k);
-      ps.forEach((k,i)=>{if(kind==='sat'&&sunP(k))return;const n=m[k].length;mk({id:`mock:${D}:${k}`,k:'mock',d:D,pk:k,mock:1,paper:1,blk:own(k)?k:'core',o:i,p:1,always:own(k)?1:0,
-        label:k==='p1'?'주간 모의고사 1교시 단답 · 13문 중 10문':`주간 모의고사 ${k[1]}교시 논술 ${n<6?n+'문':'6문 중 4문'}`,sub:k==='p1'&&kind==='sat'?'09:00에 시작하면 실제 시험과 같아요':'',min:mockMin(m,k),roll:'다음 모의 전까지',done:!!pr[k]});});
+      const st=mockStudy(D);   /* 공부하며 풀기(3.2.0): 줄 이름 "… 공부 · n문", 아래 줄에 아는 정도 수, 다 한 문제 수, 분은 남은 문제의 어림 */
+      ps.forEach((k,i)=>{if(kind==='sat'&&sunP(k))return;const n=m[k].length,Q=st?mockQs(D,k).filter(x=>!x.skip):null;mk({id:`mock:${D}:${k}`,k:'mock',d:D,pk:k,mock:1,paper:1,study:st?1:0,blk:own(k)?k:'core',o:i,p:1,always:own(k)?1:0,
+        label:st?`주간 모의고사 ${MKP[k]} ${k==='p1'?'단답':'논술'} 공부 · ${Q.length}문`:k==='p1'?'주간 모의고사 1교시 단답 · 13문 중 10문':`주간 모의고사 ${k[1]}교시 논술 ${n<6?n+'문':'6문 중 4문'}`,
+        sub:st?knowSum(Q):k==='p1'&&kind==='sat'?'09:00에 시작하면 실제 시험과 같아요':'',prog:st?[Q.filter(x=>x.done).length,Q.length]:null,min:mockMin(m,k,D),roll:'다음 모의 전까지',done:!!pr[k]});});
       if(D>=MOCK_GRADE_SINCE&&ps.length&&D!==(PLAN.mock&&PLAN.mock.d)&&D!==PLAN.target.d&&!(kind==='sat'&&hasSun))mk({id:'mock.g:'+D,k:'mock.g',d:D,mock:1,blk:kind==='sat'?'grade':hasSun?'p4':'core',o:9,p:1,always:kind==='sat'||hasSun?1:0,label:'채점 요청 → 채점 받았어요',min:MIN_PER.grade,roll:'다음 모의 전까지',done:!!pr.g});}
     else if(kind==='sat'){const ws=mockWait(t);mk({id:'wait.mock',k:'wait',info:1,sync:1,label:/아직/.test(ws)?'주간 모의고사가 아직 없어요 · 밀린 것부터 해요':'주간 모의고사를 기다리는 중',sub:/아직/.test(ws)?'':/만드는/.test(ws)?'만드는 중이에요. 보통 30분 안에 와요.':'토요일 06:21에 만들기 시작해요.'});}}   /* 9시가 지나도 없으면 평일 세트처럼 "아직 없어요"(늘 지금 받아 오기) */
   /* 주말·공휴일 손글씨 몫: 이번 주 지난 세트의 필수 칸 중 남은 것(이번 단계 약속에 있는 줄만, 오래된 세트부터 세트째로).
@@ -713,7 +780,7 @@ function taskCalc(t){const w=wkIdx(t),kind=dayKind(t),W=wkStart(t),dw=parse(t).g
   const LW=addDays(W,-7),LF=wkFrom(LW),ls=Object.keys(SETS.sets).filter(d=>d>=LF&&d<W).sort().reverse().filter(d=>!setCore(d).ok).slice(0,3);
   if(ls.length)mk({id:'carry.sets:'+W,k:'carry.sets',ds:ls,blk:'catch',o:60,need:'권장',fold:kind==='sat'?0:1,label:`지난주 세트 읽기·퀴즈 ${ls.length}개`,sub:ls.map(dlab).join(' · '),min:ls.reduce((a,d)=>a+setCore(d).gap,0),roll:'이번 일요일까지'});
   const lm=Object.keys(SETS.mocks).filter(x=>/^\d{4}-/.test(x)&&x>=LF&&x<W).sort().pop();
-  if(lm&&!D){const m=SETS.mocks[lm],pr=S.mockp[lm]||{},lf=mockParts(m).filter(k=>!pr[k]);if(lf.length)mk({id:'carry.mock:'+lm,k:'carry.mock',d:lm,fold:1,need:'권장',never:1,label:`지난주 모의고사 이어 쓰기 · ${md(lm)}`,min:lf.reduce((a,k)=>a+mockMin(m,k),0),roll:'토요일 새 모의 전까지'});}
+  if(lm&&!D){const m=SETS.mocks[lm],pr=S.mockp[lm]||{},lf=mockParts(m).filter(k=>!pr[k]);if(lf.length)mk({id:'carry.mock:'+lm,k:'carry.mock',d:lm,fold:1,need:'권장',never:1,label:`지난주 모의고사 이어 ${mockStudy(lm)?'하기':'쓰기'} · ${md(lm)}`,min:lf.reduce((a,k)=>a+mockMin(m,k,lm),0),roll:'토요일 새 모의 전까지'});}
   if(study&&!pre){const nn=Math.min(newRoom(),newCards(rangeUnits(S.range)).length);if(nn)mk({id:'new:'+t,k:'new',fold:1,need:'여유',p:7,label:`새 카드 ${nn}장`,min:Math.ceil(nn*.7),roll:''});}
   return T;}
 /* 고른 줄의 남은 분과 끝: 숙제 칸은 고정한 목표(full·floor)까지, 손글씨 몫은 고정할 때 고른 세트의 칸만(그 세트의 칸에서 바로 셈), 목록에서 사라진 일은 끝 */
@@ -764,7 +831,8 @@ function dayPlan(t,o){o=o||{};t=t||todayStr();const kind=dayKind(t),W=wkStart(t)
   if(o.noFill)pool.forEach(x=>rest.push(x.quota?Object.assign(x,{msets:x.list.map(s=>s.d)}):x));   /* 손글씨 몫은 남은 세트 날짜까지(같은 이름의 오늘 숙제 줄과 갈리게) */
   else{/* 1) 늘 넣음: 날짜 일(P0), 그날의 모의 교시·그 뒤 채점·주간 리포트(P1), 오늘 세트 읽기·퀴즈, 오늘 단답, 자기 전. 줄인 날 안 들어가는 모의 교시는 내일로.
        그다음 늘 넣지 않는 P1(일요일의 토요일 안 쓴 교시·채점)은 남은 시간 안에서만 */
-    pool.filter(x=>x.always).sort(ord).forEach(x=>{if(off&&x.blk!=='pin')return rest.push(x);if(x.mock&&user&&used+x.min>capLeft)return rest.push(x);pick.push(x);used+=x.min;});   /* 쉬는 날은 날짜 일(핀)만 */
+    pool.filter(x=>x.always).sort(ord).forEach(x=>{if(off&&x.blk!=='pin')return rest.push(x);if(x.mock&&(user||x.study&&pick.some(y=>y.study))&&used+x.min>capLeft)return rest.push(x);
+      if(x.k==='mock.g'&&rest.some(y=>y.study&&y.d===x.d))return rest.push(x);pick.push(x);used+=x.min;});   /* 쉬는 날은 날짜 일(핀)만. 공부하며 푸는 모의는 첫 교시만 늘, 다음 교시는 남은 시간에 들어갈 때만(못 넣으면 채점과 함께 내일·다음 모의 전까지) */
     pool.filter(x=>!x.always&&x.p<=1).sort(ord).forEach(x=>{if(used+x.min>capLeft)return rest.push(x);pick.push(x);used+=x.min;});
     /* 2) 손글씨 바닥: 오늘 단답도, 오늘 몫의 모의 답안·48시간 복기도 없으면 가장 오래된 단답 몫에서 1문(놓아준 날에도) */
     const paper=pick.some(x=>x.paper||x.k==='hw.dd'||x.k==='recap')||T.some(x=>x.k==='hw.dd'&&x.done)||(o.keep||[]).some(r=>/^(mock:|hw\.dd:|q\.|recap:)/.test(r.id));
@@ -804,7 +872,14 @@ function dayPlan(t,o){o=o||{};t=t||todayStr();const kind=dayKind(t),W=wkStart(t)
    받아 온 뒤 그 자료로 고정한다(sync 끝에서 다시 그림). 9시 규칙은 받아 온 뒤에도 없는 자료에만 */
 function canFreeze(t,now){const k=dayKind(t);if(syncing)return false;if(now>=9*60||k==='sun'||k==='exam')return true;if(isStudy(k))return!!SETS.sets[t];if(k==='sat')return!!weekMock(t);return true;}
 const daySig=t=>[SETS.sets[t]?1:0,weekMock(t)||'',Object.keys(SETS.sets).filter(d=>d>=wkStart(t)&&d<=t).length].join('|');
-const rowRec=r=>{const o={id:r.id,m:r.m,tgt:r.tgt||null,blk:r.blk,o:r.o||0};if(r.q)o.q=r.q;if(r.dep)o.dep=r.dep;return o;};
+const rowRec=r=>{const o={id:r.id,m:r.m,tgt:r.tgt||null,blk:r.blk,o:r.o||0};if(r.q)o.q=r.q;if(r.dep)o.dep=r.dep;if(r.task?r.task.study:r.st)o.st=1;return o;};   /* st: 공부하며 푸는 모의 교시로 고정한 줄 */
+/* 고정한 오늘 몫의 모의 교시 줄이 지금 풀기 방식(공부하며·실전처럼)과 다르면(새 판으로 처음 연 날, 다른 기기에서 바꾼 기록 복원) 분을 지금 셈의 남은 분으로 다시 적는다(st 표시) */
+function mockRowsSync(F){if(!F||!F.rows)return 0;let ch=0;const T=taskList(F.d);F.rows.forEach(r=>{if(!/^mock:/.test(r.id))return;const x=T.find(y=>y.id===r.id);if(!x)return;const st=x.study?1:0;
+  if((r.st||0)!==st){if(!x.done)r.m=x.min;if(st)r.st=1;else delete r.st;ch=1;}});return ch;}
+/* 아는 정도·뺌·공부 속도·풀기 방식을 바꿀 때: 바꾸기 전후 그 모의 교시의 남은 분 차이만큼 고정한 오늘 줄의 분을 고친다(오늘 한 분이 부풀거나 줄지 않게). Ds 없으면 모든 모의 */
+function mockAdj(Ds,fn){const F=S.today&&S.today.d===todayStr()?S.today:null,L=()=>{const o={};(F?F.rows:[]).forEach(r=>{const a=r.id.split(':');if(a[0]!=='mock'||Ds&&!Ds.includes(a[1]))return;
+    const m=mockObj(a[1]);if(m&&m[a[2]])o[r.id]=mockMin(m,a[2],a[1]);});return o;};
+  const b=L();fn();PLN++;const a=L();if(F)F.rows.forEach(r=>{if(r.id in b&&r.id in a){r.m=Math.max(0,r.m+a[r.id]-b[r.id]);const st=mockStudy(r.id.split(':')[1]);if(st)r.st=1;else delete r.st;}});}
 /* 줄인 목표는 그 주 동안 그대로(오늘 시간으로 줄인 날은 걸지 않음). 건 단계를 cph에 적어 두고, 시험 일정이 바뀌어 단계가 달라지면 푼다 */
 function ratchet(t,lv,user){if(dayOff(t))return;   /* 쉬는 날에 고정한 단계는 줄인 목표·lvx에 넣지 않는다(같은 날 "다시 공부할래요"로 되돌릴 수 있게) */const W=wkStart(t),x=S.wk[W]||(S.wk[W]={});x.lvx=Math.max(x.lvx||0,lv||0);   /* lvx: 그 주에 고정한 가장 높은 단계(지난주 기록) */
   if(lv<2||user)return;if(!x.cut){x.cut=true;x.cph=phaseObj(wkIdx(t)).id;}}
@@ -817,6 +892,7 @@ function depInsert(t,F){let ch=0;const T=taskList(t);F.rows.slice().forEach(r=>{
 function planToday(t,o){o=o||{};t=t||todayStr();const now=o.now!=null?o.now:nowMin(),W=wkStart(t),sig=daySig(t);S.wk=S.wk||{};S.tk=S.tk||{};
   if(UI.d!==t){UI.d=t;UI.later={};UI.act=null;UI.open={};}if(o.replan==='reset')UI.later={};
   nextApply(t);weekSnap(t);let F=S.today;   /* 기다리던 시험 일정이 이번 월요일부터면 지난주를 지금 계획으로 고정한 뒤 넣는다(오늘 몫을 고정해 두었으면 다시 고름) */if(F&&(F.d!==t||F.v!==PLAN_V))F=S.today=null;
+  if(F&&mockRowsSync(F))save(1);
   if(!F){/* "오늘 시간"을 고르면 자료를 기다리지 않고 바로 고정(고른 시간을 S.today.user에 둔다) */
     const user=o.replan==='cap'&&o.user||null,P=dayPlan(t,{now,user});if(!user&&!dayOff(t)&&!canFreeze(t,now))return planView(t,P,null,now);   /* 쉬는 날은 자료를 기다리지 않고 바로 고정 */
     F=S.today={d:t,at:hmOf(now),v:PLAN_V,lv:P.lv,cap:P.capLeft,user,sig,dm:0,rows:P.rows.map(rowRec)};ratchet(t,P.lv,user);save(1);}
@@ -875,9 +951,9 @@ function wbCalc(t){const W=wkStart(t),E=addDays(W,6),w=wkIdx(t);if(w<0||t>PLAN.t
   {let B=0,r=0,a=0;const gaps=[];exp.forEach(x=>{if(!x.have){B+=x.pre?PE_EST.coreExam:PE_EST.core;return;}const c=setCore(x.d),st=c.st;B+=c.gap;r+=.5*(st.nc?Math.min(1,st.read/st.nc):1)+.5*(st.nq?Math.min(1,st.qa/st.nq):1);if(c.ok)a++;else gaps.push(x.d);});
     L.push({k:'core',n:1,label:'세트 핵심(용어 읽기·세트 퀴즈)',a,b:exp.length,B,ratio:exp.length?r/exp.length:null,gaps});}
   if(!chk){const D0=weekMock(t),D=D0&&mockParts(SETS.mocks[D0]).length?D0:null;   /* 문제가 없는 모의(알림뿐)는 이번 주 줄도 채점도 없다 */
-    if(D){const m=SETS.mocks[D],pr=S.mockp[D]||{},ps=mockParts(m),g=D>=MOCK_GRADE_SINCE,gd=g&&!!pr.g;let tot=0,dn=0,a=0;ps.forEach(k=>{const x=mockMin(m,k);tot+=x;if(pr[k]){dn+=x;a++;}});
+    if(D){const m=SETS.mocks[D],pr=S.mockp[D]||{},ps=mockParts(m),g=D>=MOCK_GRADE_SINCE,gd=g&&!!pr.g;let tot=0,dn=0,a=0;ps.forEach(k=>{const x=mockTot(m,k,D),l=pr[k]?0:mockMin(m,k,D);tot+=x;dn+=x-l;if(pr[k])a++;});   /* 공부하며 푼 교시는 다 한 문제만큼 */
       L.push({k:'mock',n:2,label:'주간 모의고사 + 채점',D,a:a+(gd?1:0),b:ps.length+(g?1:0),B:tot-dn+(g&&!gd?MIN_PER.grade:0),ratio:tot?(g?.8*dn/tot+(gd?.2:0):dn/tot):(gd?1:0),ps:ps.map(k=>[k,!!pr[k]]),g:gd});}
-    else if(!D0&&addDays(W,5)>=F){const em=estMock(w);if(em)L.push({k:'mock',n:2,label:'주간 모의고사 + 채점',est:1,a:0,b:em>=430?5:em>=180?3:2,B:em,ratio:0});}
+    else if(!D0&&addDays(W,5)>=F){const es=estStudy(w),em=es?es.m:estMock(w);if(em)L.push({k:'mock',n:2,label:'주간 모의고사 + 채점',est:1,study:es?1:0,a:0,b:es?es.n+1:em>=430?5:em>=180?3:2,B:em,ratio:0});}
     (QORD[cp]||[]).forEach(q=>{const u=MIN_PER[QK[q][2]],pk=QK[q][3];let n=0,dn=0;
       if(q==='redo'){n=5;dn=redoDone(W);}else exp.forEach(x=>{if(x.pre)return;if(x.have){const p=hwParts(x.d)[pk];if(p){n+=p.n;dn+=Math.min(p.k,p.n);}}else n+={dd:M0.dd,eo:M0.eo,w:M0.w*fr0,essay:M0.ew?1:0,fg:M0.fg||0}[q]||0;});
       const nc=q==='essay'||q==='redo'?Math.min(n,3):Math.ceil(n*.6),b=cut?nc:n;L.push({k:q,n:QLINE[q][1],label:QLINE[q][0],hw:1,a:Math.min(dn,b),b,B:Math.max(0,b-dn)*u,full:n,cut:cut&&nc<n});});
@@ -896,7 +972,7 @@ function wbCalc(t){const W=wkStart(t),E=addDays(W,6),w=wkIdx(t);if(w<0||t>PLAN.t
   /* 3·4단계 일요일: 그날의 3·4교시와 그 뒤 채점은 늘 넣는 고정 분이라 단계를 셀 때 B와 C 양쪽에서 뺀다. 그날 남는 시간이 거의 없어
      세트 복습(못 하면 "내일 다시 나와요")도 단계에 넣지 않는다(다 지킨 주의 일요일이 핵심만이 되지 않게, 단계는 마감·손글씨 몫으로) */
   let Bl=B,Cl=C;if(t===E&&!chk){const D=weekMock(t),m=D&&SETS.mocks[D],pr=S.mockp[D]||{},rh=!!weekObj(w).pre,sk=m?mockParts(m).filter(k=>(k==='p3'||k==='p4')&&!rh):[];
-    if(sk.length){const M=sk.filter(k=>!pr[k]).reduce((a,k)=>a+mockMin(m,k),0)+(D>=MOCK_GRADE_SINCE&&!pr.g?MIN_PER.grade:0),rv=L.find(x=>x.k==='rev');Bl=Math.max(0,B-M-(rv?rv.B:0));Cl=Math.max(0,C-M);}}
+    if(sk.length){const M=sk.filter(k=>!pr[k]).reduce((a,k)=>a+mockMin(m,k,D),0)+(D>=MOCK_GRADE_SINCE&&!pr.g?MIN_PER.grade:0),rv=L.find(x=>x.k==='rev');Bl=Math.max(0,B-M-(rv?rv.B:0));Cl=Math.max(0,C-M);}}
   const r=Cl?Bl/Cl:(Bl?9:0),lv=r<=.8?0:r<=1?1:r<=1.5?2:3,G=k=>L.find(x=>x.k===k);let pct=null,reach=null,parts=[];
   if(sc){const hl=L.filter(x=>x.hw&&x.b>0),hw=hl.reduce((s,x)=>s+(sc.hw[x.k]||0),0),hand=hw?hl.reduce((s,x)=>s+(sc.hw[x.k]||0)*Math.min(1,x.a/x.b),0)/hw:null,rot=G('rot'),rv=G('rev'),cl=G('close');
     const P=[['core',sc.core,G('core').ratio],['mock',sc.mock,G('mock')?G('mock').ratio:null],['hand',sc.hand,hand],['rot',sc.rot||0,rot?Math.min(1,rot.a/rot.b):null],['rev',sc.rev,rv.ratio],['close',sc.close,cl.ratio]].filter(x=>x[1]&&x[2]!=null);
@@ -956,9 +1032,9 @@ function ahCalc(t,o){const b=weekBoard(t);if(b.w<0||t>PLAN.target.d)return null;
   const ml=b.lines.find(l=>l.k==='mock');
   if(ml&&ml.B){const rh=!!weekObj(b.w).pre;let sunM=0;const satP=[];
     if(ml.D){const m=SETS.mocks[ml.D],pr=S.mockp[ml.D]||{},sp=['p3','p4'].filter(k=>m[k]&&m[k].length&&!rh),g=ml.D>=MOCK_GRADE_SINCE&&!pr.g;
-      sunM=sp.filter(k=>!pr[k]).reduce((a,k)=>a+mockMin(m,k),0)+(sp.length&&g?MIN_PER.grade:0);
-      mockParts(m).filter(k=>!sp.includes(k)&&!pr[k]).forEach(k=>satP.push(mockMin(m,k)));if(!sp.length&&g)satP.push(MIN_PER.grade);}
-    else{if(ml.B>=430&&!rh)sunM=230;let r=ml.B-sunM;const g=!sunM&&r>MIN_PER.grade?MIN_PER.grade:0;r-=g;while(r>0){satP.push(Math.min(100,r));r-=100;}if(g)satP.push(g);}   /* 오지 않은 모의: 1교시 100 · 논술 교시 100까지 · 채점 30 */
+      sunM=sp.filter(k=>!pr[k]).reduce((a,k)=>a+mockMin(m,k,ml.D),0)+(sp.length&&g?MIN_PER.grade:0);
+      mockParts(m).filter(k=>!sp.includes(k)&&!pr[k]).forEach(k=>satP.push(mockMin(m,k,ml.D)));if(!sp.length&&g)satP.push(MIN_PER.grade);}
+    else{if(ml.B>=430&&!rh&&!ml.study)sunM=230;let r=ml.B-sunM;const g=!sunM&&r>MIN_PER.grade?MIN_PER.grade:0;r-=g;while(r>0){satP.push(Math.min(100,r));r-=100;}if(g)satP.push(g);}   /* 오지 않은 모의: 1교시 100 · 논술 교시 100까지 · 채점 30 */
     if(Sat>=t){satP.forEach(m=>own[Sat].push({k:'mock',m,p:1}));if(sunM)own[E].push({k:'mock',m:sunM,p:1});}
     else{if(sunM)own[E].push({k:'mock',m:sunM,p:1});satP.forEach(m=>mockQ.push({k:'mock',m,origin:Sat}));}}
   /* 주간 리포트: 일요일(일요일이 쉬는 날이면 토요일) */
@@ -1183,11 +1259,11 @@ function rowTxt(x,o){o=o||{};x=x||{};const k=x.k||String(o.id||'').split(':')[0]
   if(o.q&&QK[k.slice(2)]){const K=QK[k.slice(2)],n=o.q.reduce((a,e)=>a+e[1],0),lu=Math.round((o.left||0)/MIN_PER[K[2]]);t=`${K[0]} ${n}${K[1]}`;
     sub=k==='q.redo'?'지난 모의 틀린 문제':o.q.map(([d,c])=>dlab(d)+(c>1?' '+c+K[1]:'')).join(' · ');pg=[n-Math.min(n,lu),n];}
   if(k==='mock'&&x.pk==='p1'&&tLive({kind:'mock',D:x.d,pk:'p1'}))sub='';
-  if(k==='mock'&&x.pk!=='p1'){const qs=(SETS.mocks[x.d]||{})[x.pk]||[];sub=qs.length<6?qs.map(q=>shortQ(typeof q==='string'?q:q.t)).join(' · '):'문제당 25분';}
+  if(k==='mock'&&x.pk!=='p1'&&!x.study){const qs=(SETS.mocks[x.d]||{})[x.pk]||[];sub=qs.length<6?qs.map(q=>shortQ(typeof q==='string'?q:q.t)).join(' · '):'문제당 25분';}
   if(x.note)sub=[sub,x.note].filter(Boolean).join(' · ');
   const rl=x.need==='필수'&&x.roll?(sun&&x.roll==='일요일까지'?'오늘 밤까지':x.roll):'';
-  return{t,sub,pg:pg&&pg[1]>1?pg[0]+'/'+pg[1]:'',min:o.left!=null?o.left:x.min||0,rl,tag:x.need==='권장'||x.need==='여유'?x.need:'',paper:!!x.paper};}
-const minTxt=o=>o.paper?Math.round(o.min)+'분':mfmt(o.min);
+  return{t,sub,pg:pg&&pg[1]>1?pg[0]+'/'+pg[1]:'',min:o.left!=null?o.left:x.min||0,rl,tag:x.need==='권장'||x.need==='여유'?x.need:'',paper:!!x.paper,study:!!x.study};}
+const minTxt=o=>o.paper&&!o.study?Math.round(o.min)+'분':mfmt(o.min);   /* 시험 시간은 "100분", 공부하며 푸는 모의는 "4시간 10분" */
 /* 보이는 순서의 오늘 몫을 번호 줄로. 한 블록의 밀린 세트, 오늘 순서에서 잇닿은 같은 꼬리표(필수·권장)의 세트 복습이 2개 이상이면 한 줄로 묶는다
    ("시작"은 첫 세트부터, 끝 화면이 그 묶음의 다음 세트로만 잇는다). 날짜 일 핀은 번호 없이 맨 위에 따로 */
 function planItems(V){const L=planOrder(V).filter(r=>r.blk!=='pin'),out=[],kOf=r=>r.task?r.task.k:r.id.split(':')[0];
@@ -1226,6 +1302,7 @@ function goOf(it,src){const r=it.rows.find(q=>!q.done)||it.rows[0],x=r.task||{},
   if(k==='q.redo')return['한 편 다 썼어요','redo-tick'];   /* 모의 오답 다시 쓰기: 앱이 볼 수 없는 손글씨라 이 버튼(또는 동그라미)으로만 한 편씩 친다 */
   const L={'mock.g':'채점하기',report:'복사하기',gq:'이어 풀기',kichul:'기출 보기',backup:'백업하기',budget:'정하기',goal:'목표 보기','x.trend':'점수 적기'};
   if(k==='set.read'){const c=setCore(x.d);return[c&&c.st.read?`이어서 · ${firstUnread(x.d)+1}번째 용어부터`:'시작','task'];}
+  if(k==='mock'&&x.study){const Q=mockQs(x.d,x.pk).filter(q=>!q.skip),c=Q.find(q=>!q.done);return[c&&Q.some(q=>q.done)?`이어서 · ${c.i+1}번부터`:`${MKP[x.pk]||''} 공부 시작`,'task'];}
   if(k==='mock')return[tLive({kind:'mock',D:x.d,pk:x.pk})?`이어서 · ${MKP[x.pk]||''}`:`${MKP[x.pk]||''} 시작`,'task'];   /* 그 교시 타이머가 돌거나 멈췄거나 막 끝났으면 "이어서"(모의 화면의 그 타이머로) */if(k==='cards')return[`시작 · ${x.kc}장`,'task'];if(k==='wrong')return[`시작 · ${x.n}개`,'task'];
   if(k==='x.outline')return[`시작 · ${/5문/.test(x.label)?5:3}문`,'task'];if(k==='x.rot')return[`시작 · ${x.n||50}장`,'task'];
   if(k==='carry.sets')return[`시작 · ${md(x.ds[x.ds.length-1])} 세트부터`,'task'];if(x.to==='schedule')return['확인하기','task'];
@@ -1243,7 +1320,8 @@ function planRowHTML(it,c){const o=itemTxt(it),now=c.ai===it,r0=it.rows[0],x=r0.
   return`<button class="prow${dn?' done':''}" data-act="task" data-id="${esc(ids.split(' ')[0])}" data-ids="${esc(ids)}" data-task="${esc(id)}">${pn}<span class="pb">${tx}</span>${right?`<span class="pv">${right}</span>`:''}</button>`;}
 /* 블록 머리: 이름·어디서(주말 교시는 분), 지금 표시, 한 수/전체 · 남은 분. 다 하면 "✓ 끝"으로 접는다. 4줄이 넘으면 나머지는 접어 둔다 */
 function blkName(vb,V,its){let[n,cu]=String(PLAN_BLK[vb]||vb).split(' · ');
-  if(/^p[234]$/.test(vb))cu=mfmt(its.reduce((a,i)=>a+i.rows.reduce((s,r)=>s+r.m,0),0));
+  if(/^p[1234]$/.test(vb)&&its.some(i=>i.rows.some(r=>r.task&&r.task.study))){n=`${MKP[vb]} ${vb==='p1'?'단답':'논술'} 공부`;cu=mfmt(its.reduce((a,i)=>a+i.rows.reduce((s,r)=>s+r.m,0),0));}   /* 공부하며 푸는 모의 */
+  else if(/^p[234]$/.test(vb))cu=mfmt(its.reduce((a,i)=>a+i.rows.reduce((s,r)=>s+r.m,0),0));
   if(vb==='core')cu=its.some(i=>i.rows.some(r=>r.task&&r.task.paper))?'책상':'휴대폰';
   if(vb==='bed'&&V.notes&&V.notes.bed)cu=V.notes.bed;return[n,cu||''];}
 /* 접는 칸(details)의 열림: 기본으로 열 때(펼친 줄이 안에 있거나 오늘 몫을 다 했을 때) 또는 이 앱 세션에서 연 칸(UI.open: 요약을 누를 때 적고, 날이 바뀌면 비움).
@@ -1399,7 +1477,7 @@ function vToday(){const t=todayStr(),V=planToday(t),w=wkIdx(t),de=Math.max(0,dif
   const ex=kind==='exam'?[PLAN.mock,PLAN.target].find(x=>x&&x.d===t):null,hol=KR_HOLI[t],mn=monNotice(t),ph=V.info.find(x=>x.k==='phase');
   const NT=S.settings.nextTarget,sub=esc(ex?korDate(t,true)+' · '+weekLabel(w):w<0||post?weekLabel(w):uniq([weekLabel(w),sun?'주간 마감일':phaseObj(w).n]).join(' · '))+(NT?` · <span class="nw">${esc(`${md(NT.from)}부터 제${nextR(NT)}회`)}</span>`:'');   /* 바꾸기를 기다리는 시험 일정(접수한 목표 시험 뒤 기다릴 때도, 한 덩이로) */
   const top=`<div class="ltitle today"><div class="ltl">${calIconHTML()}<div><h1>${esc(ex?`오늘 제${ex.r}회 시험${ex===PLAN.mock?'(실전 응시)':''}`:korDate(t,true))}${!ex&&hol?`<span class="hol"><span class="vh"> · </span>${esc(hol)}</span>`:''}</h1><p class="lsub">${sub}</p></div></div><div class="dday"><span>제${PLAN.target.r}회${post?'':'까지'}</span><b class="num">${post?'시험 후':'D-'+de}</b></div></div>
-  ${V.rows.filter(r=>r.blk==='pin').map(pinHTML).join('')}${mn?monNoticeHTML(mn,ph):ph?noticeHTML(ph):''}`;
+  ${updNoteHTML()}${V.rows.filter(r=>r.blk==='pin').map(pinHTML).join('')}${mn?monNoticeHTML(mn,ph):ph?noticeHTML(ph):''}`;
   if(oop)return top+norowsHTML(V,t);   /* 준비 시작 전·본시험 뒤(복기 이틀 뒤부터): 머리와 카드 하나뿐(오늘 시간·다시 짜기 없음) */
   if(ex||post)return top+resumeRowHTML(src,null)+(ex?examHTML(t):norowsHTML(V,t))+weekSecHTML(V,b,t,c);   /* 시험 날·본시험 뒤 복기 날: 블록·오늘 시간·다시 짜기 없이 시험 카드(또는 카드 하나)와 이번 주 체크. 하다 만 흐름은 이어서 줄로 */
   planCal(t,V,its,nd);
@@ -2385,29 +2463,64 @@ function mockWant(D){const F=FLOW&&FLOW.at==='mock/'+D?FLOW:null,w=SV['mkw:'+D];
   const n=flowNext(F.id),x=n&&n.row.task||{};return x.d===D&&x.k==='mock'?x.pk:x.d===D&&x.k==='mock.g'?'g':'-';}
 /* 아래 막대: 지금 교시를 시작(타이머) → 그 교시 타이머가 돌거나 끝났으면 다 썼어요 → 채점 받았어요 → 오늘 줄에서 왔으면 다음 오늘 줄, 아니면 돌아가기 */
 function mockNext(D){const{m,ps,cur}=mockStep(D),e=esc(D);if(!ps.length)return null;
+  if(cur&&cur!=='g'&&mockStudy(D)){const c=mockQs(D,cur).find(x=>!x.skip&&!x.done);return c?{t:`${c.i+1}번 다 했어요`,a:`data-act="mock-q" data-d="${e}" data-k="${cur}" data-i="${c.i}"`}:{t:`${MKP[cur]} 공부 다 했어요`,a:`data-act="mock-part" data-d="${e}" data-k="${cur}"`};}   /* 공부하며 풀기: 지금 문제 다 했어요 */
   if(cur&&cur!=='g')return tLive({kind:'mock',D,pk:cur})?{t:`${MKP[cur]} 다 썼어요`,a:`data-act="mock-part" data-d="${e}" data-k="${cur}"`}:{t:`${MKP[cur]} 시작 · 타이머 ${mockPre(m,cur).mins}분`,a:`data-act="mock-start" data-d="${e}" data-k="${cur}"`};
   if(cur==='g')return{t:'채점 받았어요',a:`data-act="mock-graded" data-d="${e}"`};
   const F=FLOW&&FLOW.at==='mock/'+D?FLOW:null,n=F&&flowNext(F.id),a=`data-act="mock-next" data-d="${e}"`;
   return n?{t:`✓ 끝 · ${n.t} · ${mfmt(n.row.left)}`,a,go:()=>flowGo(n.row)}:F?{t:'✓ 끝 · 오늘 몫 끝 · 오늘로',a,go:()=>goTab('today')}:{t:'모의고사 끝 · 돌아가기',a,go:()=>goUp()};}
 function mockStart(D,pk){const m=mockObj(D);if(!m||!((m[pk]||[]).length))return render();const P=mockPre(m,pk);
   return setPresetAsk(P.k,()=>{tStart();render();tlShow();},{ctx:{kind:'mock',D,pk,label:MOCK_LAB[pk],short:MKP[pk]},no:render,mins:P.k==='custom'?P.mins:undefined,parts:P.parts,name:MOCK_LAB[pk],n:P.mins});}
+/* 공부하며 풀기(3.2.0)의 지금 교시: 문제마다 아는 정도(모름·조금·앎·뺌, 누르면 고침)와 어림 분, 다 한 문제는 한 줄(✓·되돌리기).
+   지금 문제(다 하지 않은 첫 문제)만 펼쳐 걸음(이해·필기·암기·발설·그림·답안 쓰기)마다 분과 도구(카드 보기·키워드/목차 보기·답안지·타이머). 파란 버튼은 아래 막대 "n번 다 했어요" */
+function studyPartHTML(D,k){const Q=mockQs(D,k),act=Q.filter(x=>!x.skip),dn=act.filter(x=>x.done).length,left=act.filter(x=>!x.done).reduce((a,x)=>a+x.min,0),cur=act.find(x=>!x.done),e=esc(D);
+  return`<section class="mcur mstudy"><div class="sec-h"><h2>지금: ${esc(MOCK_LAB[k])} 공부</h2><span class="meta">${dn}/${act.length}문</span></div>
+  <p class="ds msum">${act.length?`남은 약 ${esc(mfmt(left))} · ${esc(knowSum(act.filter(x=>!x.done))||'다 했어요')}`:'모든 문제를 뺐어요'} · <span class="nw">공부 속도 ${esc(paceTxt())}</span></p>
+  <div class="group sql">${Q.map(x=>sqHTML(D,k,x,x===cur)).join('')}</div>
+  <p class="mnot"><button class="lnk" data-act="mock-part" data-d="${e}" data-k="${k}">${cur?'남은 문제는 두고 ':''}${MKP[k]} 공부 다 했어요</button></p></section>`;}
+/* 단답 문제에 이어진 카드(기출 번호·이름) */
+function qCardIds(q){if(!_deck)buildDeck();const ids=[];[].concat((q&&q.x)||[]).forEach(x=>(_kxRev[x]||[]).forEach(id=>ids.includes(id)||ids.push(id)));const n=_byNorm[normTerm(qText(q))];if(n&&!ids.includes(n))ids.unshift(n);
+  return ids.filter(id=>_byId[id]&&!S.hidden[id]);}
+function sqHTML(D,k,x,open){const e=esc(D),es=k!=='p1',q=x.q||{},t=qText(q),xl=q.x?`<span class="u">기출 ${esc([].concat(q.x).map(kLabelShort).join(', '))}</span>`:'',a=`data-d="${e}" data-k="${k}" data-i="${x.i}"`;
+  if(x.done)return`<div class="sq done"><span class="sqn">✓</span><span class="sqt">${x.i+1}. ${esc(t)}</span><button class="lnk" data-act="mock-q" ${a}>되돌리기</button></div>`;
+  const chips=`<div class="kn" role="group" aria-label="${x.i+1}번 아는 정도">${['n','p','k','x'].map(l=>{const on=l==='x'?x.skip:!x.skip&&x.l===l;return`<button class="${on?'on':''}${l==='x'?' kx':''}" data-act="mock-kn" ${a} data-l="${l}" aria-pressed="${on}">${KN_TXT[l]}</button>`;}).join('')}</div>`;
+  const head=`<div class="sqh"><span class="sqn">${x.i+1}</span><span class="sqt">${esc(t)}${xl}</span><span class="sqm">${x.skip?'뺌':'약 '+esc(mfmt(x.min))}</span></div>`;
+  if(!open)return`<div class="sq${x.skip?' skip':''}">${head}${chips}</div>`;
+  const how=STEP_HOW[es?'es':'dd'],cid=es?null:qCardIds(q)[0]||null,sk='sqs:'+D+':'+x.id,shown=!!SV[sk];
+  const tool=s=>s==='rd'&&cid?`<button class="btn sm sec" data-act="card-modal" data-id="${esc(cid)}">카드 보기</button>`
+    :s==='wr'?`<button class="btn sm sec" data-act="sq-show" ${a}>${shown?(es?'목차 접기':'키워드 접기'):(es?'목차 보기':'키워드 보기')}</button>`
+    :s==='an'?(cid?`<button class="btn sm sec" data-act="go" data-h="dandap/${esc(encodeURIComponent(cid))}">답안지</button>`:'')+timerInlineHTML({kind:'mq',D:D+':'+x.id},{p:es?'one2':'one1',l:es?'타이머 25분':'타이머 10분'}):'';
+  const steps=x.steps.map(([s,mn],j)=>`<li><span class="sst"><b>${j+1}. ${STEP_TXT[s]} ${mn}분</b> ${esc(s==='fg'&&q.fig?how.fg+' · '+q.fig:how[s])}</span>${tool(s)?`<span class="sto">${tool(s)}</span>`:''}</li>`).join('');
+  const kw=shown?`<div class="sqk">${es?(q.o||[]).map(o=>`<p>${esc(o)}</p>`).join('')+(q.fig?`<p>그림·표: ${esc(q.fig)}</p>`:''):`<p>${esc((q.k||[]).join(' · ')||'키워드가 없어요')}</p>`}</div>`:'';
+  return`<div class="sq cur${x.skip?' skip':''}">${head}${chips}<p class="sqw">${x.auto?'자동':'직접 정함'} · ${esc(x.auto?x.why:'아는 정도를 직접 정했어요')}${x.auto?'':` <button class="lnk" data-act="mock-kn" ${a} data-l="auto">자동으로</button>`}</p>${x.skip?'':`<ol class="sqs">${steps}</ol>${kw}`}</div>`;}
+/* 공부하며 푸는 교시: 뺀 것 빼고 모든 문제를 다 하면 그 교시를 다 한 것으로(pr.p1, 달력), 다 하지 않은 문제가 생기면 지운다 */
+function mockAuto(D,k){if(!mockStudy(D))return;const pr=S.mockp[D]||(S.mockp[D]={}),all=mockQs(D,k).filter(x=>!x.skip).every(x=>x.done);
+  if(all&&!pr[k]){pr[k]=true;touchDay();calMark('mock:'+D+':'+k,'mock',`${mockName(D)} ${MKP[k]} 공부 다 함`);}else if(!all&&pr[k]){delete pr[k];calUnmark('mock:'+D+':'+k);}}
+/* 달력: 그날 그 교시에서 다 한 문제 수(한 줄) */
+function mqCal(D,k){const t=todayStr(),q=(S.mockp[D]||{}).q||{},n=Object.keys(q).filter(id=>id.split(':')[0]===k&&Array.isArray(q[id])&&fmt(new Date(q[id][0]))===t).length,key='mq:'+D+':'+k;
+  if(n)calMark(key,'mock',`${mockName(D)} ${MKP[k]} 공부 ${n}문`);else calUnmark(key);}
 function vMock(){const d=R.a,{m,ps,pr,g,cur}=mockStep(d),e=esc(d);
   if(!m)return topbar('모의고사')+`<div class="empty" style="margin-top:20px"><b>모의고사가 없어요</b><div class="btns"><button class="btn" data-act="gen-mock">앱이 만들기</button></div></div>`;
   const head=topbar(mockName(d))+`<h1 class="ptitle">${esc(m.title||'모의고사')}</h1>`;
   if(!ps.length)return head+`<div class="empty" style="margin-top:12px"><b>이번엔 문제가 없어요</b>${esc(m.notice||'')}</div>`;
-  const all=ps.every(k=>pr[k]),reveal=SV['mk:'+d],lab={p1:'1교시',p2:'2교시',p3:'3교시',p4:'4교시'};
+  const all=ps.every(k=>pr[k]),reveal=SV['mk:'+d],lab={p1:'1교시',p2:'2교시',p3:'3교시',p4:'4교시'},st=mockStudy(d);
+  /* 풀기 방식(3.2.0): 공부하며 풀기(아는 만큼 공부 시간) · 실전처럼 풀기(시험 시간·교시 타이머) */
+  const mmode=`<div class="seg mmode">${[['study','공부하며 풀기'],['exam','실전처럼 풀기']].map(([v,l])=>`<button class="${(st?'study':'exam')===v?'on':''}" data-act="mock-mode" data-d="${e}" data-v="${v}" aria-pressed="${(st?'study':'exam')===v}">${l}</button>`).join('')}</div><p class="note mmnote">${st?'모르는 문제는 이해 → 필기 → 암기 → 발설 → 답안 쓰기, 아는 문제는 답안만 써요. 문제마다 아는 정도로 공부 시간을 셉니다.':'시험처럼 교시마다 타이머로 써요(1교시 100분, 논술 문제당 25분).'}</p>`;
   const qs=k=>`<div class="group">${m[k].map((q,i)=>`<div class="paper-q"><span class="n">${i+1}</span><span class="q">${esc(typeof q==='string'?q:q.t)}${q&&q.x?`<span class="u">기출 ${esc([].concat(q.x).map(kLabelShort).join(', '))}</span>`:''}</span></div>`).join('')}</div>`;
   const live=cur&&cur!=='g'&&tLive({kind:'mock',D:d,pk:cur}),tm=!!TM.ctx&&TM.ctx.kind==='mock'&&TM.ctx.D===d&&tLive(TM.ctx);
   /* 단계 줄: 안 쓴 다른 교시를 누르면 그 교시가 지금 교시(이 모의 타이머가 있는 동안은 그 교시 그대로) */
   const steps=ps.map(k=>[MKP[k],!!pr[k],k===cur,k]).concat(g?[['채점',!!pr.g,cur==='g','g']]:[]);
   const stepper=steps.length<2?'':`<ol class="stepper">${steps.map(([l,dn,c,k],i)=>{const pk=!dn&&!c&&!tm&&k!=='g',in_=`<i>${dn?'✓':i+1}</i><span>${l}</span>`;
     return`<li class="${dn?'done':c?'cur':pk?'pick':''}">${pk?`<button data-act="mock-pick" data-d="${e}" data-k="${k}" aria-label="${l}부터 하기">${in_}</button>`:in_}</li>`;}).join('')}</ol>`;   /* 단계가 하나면(채점을 묻지 않는 1교시만) 단계 줄은 없이 */
-  const tip=cur==='p1'&&!live?'<p class="note mtip">09:00에 시작하면 실제 시험과 같아요 · 문제 고르기 3분 → 시간 엄수 → 공란 금지</p>':'';
-  const guide=(m.guide||[]).length?`<ul class="mguide">${m.guide.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'';
+  const tip=!st&&cur==='p1'&&!live?'<p class="note mtip">09:00에 시작하면 실제 시험과 같아요 · 문제 고르기 3분 → 시간 엄수 → 공란 금지</p>':'';
+  const guide=!st&&(m.guide||[]).length?`<ul class="mguide">${m.guide.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'';
   /* 오늘의 "채점하기" 줄로 왔는데 안 쓴 교시가 있으면: 그 교시를 펼치고 한 줄 안내(채점 칸은 접은 채) */
   const gF=!!(FLOW&&FLOW.at==='mock/'+d&&/^mock\.g:/.test(FLOW.id)),gNote=gF&&cur&&cur!=='g'?'<p class="note mgn">채점은 다 쓴 뒤에 해요. 먼저 이 교시를 써요.</p>':'';
   /* 안 쓴 교시마다 시작 · 타이머와 타이머 없이 다 썼어요(지금 교시는 아래 막대가 파란 버튼, 접은 교시는 보조 버튼) */
-  const part=(k,i)=>{const brk=i&&!pr[k]?'<p class="brk">쉬는 시간 · 답안 사진 찍기</p>':'',nt=`<button class="lnk" data-act="mock-part" data-d="${e}" data-k="${k}">타이머 없이 다 썼어요</button>`;
+  const part=(k,i)=>{if(st){if(pr[k])return`<div class="mdone"><span class="mdk">✓</span><span class="mdt">${esc(MOCK_LAB[k])} 공부 · 다 했어요</span><button class="lnk" data-act="mock-undo" data-d="${e}" data-k="${k}">되돌리기</button></div>`;
+      if(k===cur)return studyPartHTML(d,k);const Q=mockQs(d,k).filter(x=>!x.skip),ks=knowSum(Q);
+      return`<details class="d mpart"${foldAt('mp:'+d+':'+k)}><summary><span class="fs">${esc(MOCK_LAB[k])} 공부<small>${Q.length}문 · 약 ${esc(mfmt(mockMin(m,k,d)))}${ks?' · '+esc(ks):''}</small></span></summary><div class="in-d">
+      <div class="btns mpgo"><button class="btn sm sec" data-act="mock-pick" data-d="${e}" data-k="${k}">${MKP[k]} 공부 시작</button></div>${qs(k)}</div></details>`;}
+    const brk=i&&!pr[k]?'<p class="brk">쉬는 시간 · 답안 사진 찍기</p>':'',nt=`<button class="lnk" data-act="mock-part" data-d="${e}" data-k="${k}">타이머 없이 다 썼어요</button>`;
     if(pr[k])return`<div class="mdone"><span class="mdk">✓</span><span class="mdt">${esc(mockTitle(m,k))} · 다 썼어요</span><button class="lnk" data-act="mock-undo" data-d="${e}" data-k="${k}">되돌리기</button></div>`;
     if(k===cur)return brk+`<section class="mcur"><div class="sec-h"><h2>지금: ${esc(mockTitle(m,k))}</h2><span class="meta">${esc(mockSub(m,k))}</span></div>${gNote}${live?timerInlineHTML({kind:'mock',D:d,pk:k}):''}${qs(k)}
       ${live?'':`<p class="mnot">${nt}</p>`}</section>`;
@@ -2424,7 +2537,7 @@ function vMock(){const d=R.a,{m,ps,pr,g,cur}=mockStep(d),e=esc(d);
       return`<div class="row noic" style="align-items:flex-start"><span class="tx"><span class="tt">${lab[k]} ${i+1}. ${esc(q.t)}</span><span class="ds">${esc((q.o||[]).join(' / '))}${q.fig?'<br>그림·표: '+esc(q.fig):''}</span></span></div>`;}).join('')).join('')}</div>`
     :`<button class="btn sec" data-act="mock-reveal" data-d="${e}">${pr.g?'키워드·목차 열기':'채점 전에는 보지 마세요 — 열기'}</button>`}</div></details>`;
   const n=mockNext(d);
-  return head+stepper+tip+guide+ps.map(part).join('')+`<div class="mfold">${grade}${rev}</div>`
+  return head+mmode+stepper+tip+guide+ps.map(part).join('')+`<div class="mfold">${grade}${rev}</div>`
     +`<p class="mlinks"><button class="lnk" data-act="copy-mock-q" data-d="${e}">문제만 복사</button><span>·</span><button class="lnk" data-act="go" data-h="guide">답안 작성 요령</button></p>`
     +(n?`<div class="nextbar"><button class="btn" ${n.a}>${esc(n.t)}</button></div>`:'');}
 function appMockObj(){const m=S.lastMock;if(!m)return null;const toQ=(arr,isP1)=>(arr||[]).map(t=>{if(isP1){const c=deck().find(x=>x.t===t);return{t,k:c?(c.k||[]).slice(0,3):[]};}const e=essays().find(x=>x.t===t);return{t,o:e?e.o:[],fig:''};});
@@ -2487,7 +2600,7 @@ function vMore(){const s=S.sync||{};const rp=repoPlanState(),N=S.settings.nextTa
   ${sec('시험 일정','',`<div class="group">${row({ic:'flag',tone:rp==='diff'?'red':'',t:'준비 시작일·목표 회차',d:`${esc(korDate(S.settings.start))} 시작 · ${PLAN.E}주<br><span class="nw">제${PLAN.target.r}회</span> · <span class="nw">${esc(korDate(PLAN.target.d))}(${DAYK[parse(PLAN.target.d).getDay()]}${esc(estTag(PLAN.target).replace(/^\((.+)\)$/,', $1'))})</span>${rp==='diff'?'<br><b style="color:var(--red)">예약 작업 일정과 달라요</b>':''}${l3?`<br><span class="nw">${esc(l3)}</span>`:''}`,act:'go',data:{h:'schedule'}})}</div>`)}
   ${sec('공부 도구','',`<div class="group">${row({ic:'caldot',t:'학습 달력',d:'접속한 날과 끝낸 공부',act:'go',data:{h:'cal'}})}${row({ic:'cal',t:PLAN.E+'주 로드맵',d:'단계·주차별 목표와 학원 대체표',act:'go',data:{h:'plan'}})}${row({ic:'pen',t:'답안 작성 요령',d:'모범 답안으로 보는 답안지 쓰는 법',act:'go',data:{h:'guide'}})}${row({ic:'timer',t:'교시 타이머',d:'100분, 문제 경계마다 알림',act:'go',data:{h:'timer'}})}${row({ic:'chat',t:'Claude 프롬프트',d:'첨삭·카드 생성·주간 리포트 등 10개',act:'go',data:{h:'prompts'}})}</div>`)}
   ${sec('데이터','',`<div class="group">${row({ic:'sync',t:'지금 받아 오기',d:syncing?'받아 오는 중…':s.last&&!s.ok?'<span class="sfail">받아 오지 못했어요</span>':'',act:'sync'})}${row({ic:'imp',t:'카드·목차 가져오기',d:'Claude가 만든 JSON 붙여넣기',act:'go',data:{h:'imp'}})}${row({ic:'save',t:'백업·복원',d:(S.tk||{}).backup?'마지막 백업 '+md(S.tk.backup):'아직 백업한 적이 없어요',act:'go',data:{h:'backup'}})}</div>`)}
-  ${sec('앱','',`<div class="group">${row({ic:'gear',t:'설정',d:'하루 공부 시간, 새 카드 수, 글자 크기, 테마',act:'go',data:{h:'settings'}})}${row({ic:'info',t:'콘텐츠 출처',d:'카드·기출·세트가 어디서 왔는지',act:'go',data:{h:'about'}})}${me&&!me.admin?row({ic:'mail',t:'관리자와 문자',d:`<span data-mtn>${mtTxt()}</span>`,act:'go',data:{h:'msg'}}):''}</div>`)}
+  ${sec('앱','',`<div class="group">${row({ic:'gear',t:'설정',d:'하루 공부 시간, 새 카드 수, 글자 크기, 테마',act:'go',data:{h:'settings'}})}${row({ic:'info',t:'콘텐츠 출처',d:'카드·기출·세트가 어디서 왔는지',act:'go',data:{h:'about'}})}${updRowHTML()}${me&&!me.admin?row({ic:'mail',t:'관리자와 문자',d:`<span data-mtn>${mtTxt()}</span>`,act:'go',data:{h:'msg'}}):''}</div>`)}
   <p class="note">기록은 이 휴대폰에만 저장돼요. 1~2주에 한 번 백업해 두세요.</p><p class="note vfoot">기술사 6개월 v${APP_VER}</p>`;}
 /* 학습 달력: 앱을 연 날(접속 시각)과 그날 끝낸 공부를 종류별 동그라미로 */
 const CAL_K=[['term','용어'],['essay','논술'],['quiz','퀴즈·테스트'],['mock','모의고사'],['todo','할 일']];
@@ -2667,9 +2780,12 @@ function vImport(){return topbar('가져오기')+`<h1 class="ptitle">카드·목
   ${sec('내 카드',S.userCards.length+'장',S.userCards.length?`<div class="group">${S.userCards.map(c=>`<div class="row noic"><span class="tx"><span class="tt">${esc(c.t)}</span><span class="ds">${esc(unitName(c.u))}</span></span><button class="btn sm ghost" data-act="del-card" data-id="${c.id}">삭제</button></div>`).join('')}</div>`:'<div class="empty">아직 없어요</div>')}
   ${Object.keys(S.hidden).length?`<div class="btns"><button class="btn sec" data-act="unhide">숨긴 카드 ${Object.keys(S.hidden).length}장 되돌리기</button></div>`:''}`;}
 const BUDGET_OPT=[['wd','평일',[120,150,180,240]],['sat','토요일',[180,240,300,360]],['sun','일요일·공휴일',[120,180,240,300]]];
+/* 설정 → 공부 속도(3.2.0) 아래 한 줄 */
+function paceNote(){const p=paceF(),v=(S.settings||{}).pace||'auto';return'주간 모의고사를 공부하며 풀 때 이해·필기·암기·발설 시간에 곱해요(답안 쓰기는 시험 시간 그대로). '+(v==='auto'?(p.n>=3?`자동: 문제마다 다 했어요를 누른 사이 시간으로 셈 · 지금 ${p.f}배(문제 ${p.n}개)`:`자동: 다 했어요를 누른 사이 시간이 3번 모이면 내 속도로 셈 · 지금은 보통 1배(${p.n}/3)`):({fast:'빠르게: 0.8배',mid:'보통: 1배',slow:'천천히: 1.3배'})[v]);}
 function vSettings(){const s=S.settings,bg=Object.assign({},BUDGET_DEF,s.budget||{});
   return topbar('설정')+`<h1 class="ptitle">설정</h1>
   ${sec('하루 공부 시간','',BUDGET_OPT.map(([k,l,vs])=>`<label class="f">${l}</label><div class="seg">${vs.map(v=>`<button class="${Number(bg[k])===v?'on':''}" data-act="budget" data-k="${k}" data-v="${v}">${mfmt(v)}</button>`).join('')}</div>`).join('')+`<p class="note">오늘 몫과 '이번 주' 계산이 이 시간을 써요. 바꾸면 오늘 몫을 다시 짜요.</p>`+daysSetHTML())}
+  ${sec('공부 속도','',`<div class="seg">${[['auto','자동'],['fast','빠르게'],['mid','보통'],['slow','천천히']].map(([v,l])=>`<button class="${(s.pace||'auto')===v?'on':''}" data-act="pace" data-v="${v}">${l}</button>`).join('')}</div><p class="note">${esc(paceNote())}</p>`)}
   <label class="f">글자 크기</label><div class="seg">${[['m','보통'],['l','크게'],['xl','아주 크게']].map(x=>`<button class="${(s.fs||'m')===x[0]?'on':''}" data-act="fs" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>
   <label class="f">화면</label><div class="seg">${[['auto','기기 설정 따라'],['light','밝게'],['dark','어둡게']].map(x=>`<button class="${(s.theme||'auto')===x[0]?'on':''}" data-act="theme" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>
   <label class="f">어려운 낱말 형광펜</label><div class="seg">${[['on','켜기'],['off','끄기']].map(x=>`<button class="${(s.gloss||'on')===x[0]?'on':''}" data-act="gloss" data-v="${x[0]}">${x[1]}</button>`).join('')}</div><p class="note">용어 설명 속 다른 카드 용어에 아직 모르는 것은 형광펜, 아는 것은 점선을 그어요. 형광펜과 상관없이 모르는 낱말은 꾹 누르면 카드나 앱 사전의 풀이가 나와요.</p>
@@ -2704,7 +2820,7 @@ function restoreFrom(text,name){let j,st;try{j=JSON.parse(String(text||'').repla
   const bd=(st.tk||{}).backup;
   return PE_IO.ask(name?`${bd?korDate(bd)+' 백업 파일':'고른 백업 파일'}로 지금 기록을 덮어씁니다. 계속할까요? 파일: ${name}`:'지금 기록을 덮어씁니다. 계속할까요?',()=>{try{adoptState(st);if(j.sets)SETS=setsMerge(SETS,j.sets);recalcPlan();flush();invalidate();applyLook();flowReset();toast('복원했어요');sync(true);nav('today');}catch(err){toast('백업 형식이 아니에요');}});}
 /* 다른 기록으로 바꾸기(복원·되돌리기): 빠진 칸은 새 기록 값으로, 이 휴대폰의 "바뀐 점" 표시·받아 오기 상태는 그대로 */
-function adoptState(st){const sv=(S.tk||{})['seen:v3'],sy=S.sync;S=Object.assign(fresh(),st);S.settings=Object.assign(fresh().settings,st.settings||{});if(!S.settings.roundDates)S.settings.roundDates={};if(!S.days||typeof S.days!=='object')S.days={};S.v=2;S.today=null;S.tk=S.tk||{};S.tk['seen:v3']=sv||S.tk['seen:v3']||todayStr();S.sync=sy||S.sync;}
+function adoptState(st){const sv=(S.tk||{})['seen:v3'],sy=S.sync;S=Object.assign(fresh(),st);S.settings=Object.assign(fresh().settings,st.settings||{});if(!S.settings.roundDates)S.settings.roundDates={};if(!S.days||typeof S.days!=='object')S.days={};S.v=2;S.today=null;S.tk=S.tk||{};S.tk['seen:v3']=sv||S.tk['seen:v3']||todayStr();S.tk.ver=APP_VER;S.sync=sy||S.sync;}
 /* 새로 시작(3.1.3): 준비 시작일을 다시 정할 때 이전 공부 기록(카드 진도·별표·오답·세트 진도·모의고사·달력·주간 기록·오늘 몫·지난 쉬는 날)을 지운다.
    그대로 두는 것: 설정(하루 공부 시간·글자 크기·외우기 등)·내일부터 정해 둔 쉬는 날·짧은 날·내 카드·내 목차·숨긴 카드·가리며 외우기 표시·받은 세트·받아 오기 상태·"바뀐 점"·마지막 백업 날짜.
    지우기 전 기록은 7일 동안 되돌릴 수 있게 따로 둔다(PREV_KEY, 더보기 → 백업 "되돌리기") */
@@ -2957,7 +3073,7 @@ function tStart(){if(TM.running)return;if(TM.remain<=0)TM.remain=TM.total;TM.end
 function tPause(){if(!TM.running)return;clearInterval(TM.iv);TM.running=false;TM.remain=Math.max(0,Math.round((TM.endAt-Date.now())/1000));PE_IO.keepAwake(false);paintTimer();paintPill();}
 function tReset(){clearInterval(TM.iv);TM.running=false;PE_IO.keepAwake(false);TM.remain=TM.total;TM.lastPart=-1;TM.ended=null;paintTimer();paintPill();}
 /* 그 타이머의 자리: 모의고사 화면 · 세트 ④ 논술 · 세트 ③ 숙제(단답 카드), 자리 없는 타이머는 타이머 화면 */
-const tHome=c=>!c?R.page==='timer':c.kind==='mock'?R.page==='mock'&&R.a===c.D:R.page==='set'&&R.a===c.D&&(SV[c.D]||'cards')===(c.kind==='essay'?'essay':'tasks');
+const tHome=c=>!c?R.page==='timer':c.kind==='mock'?R.page==='mock'&&R.a===c.D:c.kind==='mq'?R.page==='mock'&&R.a===String(c.D).split(':')[0]:R.page==='set'&&R.a===c.D&&(SV[c.D]||'cards')===(c.kind==='essay'?'essay':'tasks');
 /* 0이 됐을 때(틱 안에서): 그 모의고사 화면이면 다시 그려 집중 모드를 끄고 시간 끝 창(tEndShow), 그 밖은 알림과 위쪽 "⏱ 시간 끝" 알약만.
    다른 창(낱말 풀이 등)이 열려 있으면 그 아래 화면만 다시 그리고 알림, 시간 끝 창은 그 창을 닫을 때(dismissModal).
    점수 칸을 쓰는 중이면 다시 그리지 않고(쓰던 칸 그대로) 집중 모드 표시만 끈다(창은 다음에 그릴 때). 가리며 외우기·세션 화면에서는 돌아가면 그 모의 화면에서 */
@@ -2976,7 +3092,7 @@ function timerEndSheet(c){return`<p class="sheet-k">타이머</p><h3 class="cmh"
 function tDone(kind,D,pk){const c=TM.ctx;if(!c||c.kind!==kind||c.D!==D||pk&&c.pk!==pk)return;tReset();TM.ctx=null;}
 /* 알약을 누르면 그 타이머의 자리로(화면 안 타이머까지 내려 보여 줌). 모의 교시 시간이 끝났으면 그 화면에서 시간 끝 창 */
 function tGoHome(){const c=TM.ctx;if(TM.ended&&c&&c.kind==='mock'&&TM.ended.ctx===c&&!(S.mockp[c.D]||{})[c.pk])TM.ended.seen=0;
-  if(!c)return nav('timer');SV.scrollTo='#view [data-timer]';if(c.kind==='mock')return nav('mock/'+c.D);SV[c.D]=c.kind==='essay'?'essay':'tasks';return nav('set/'+c.D);}
+  if(!c)return nav('timer');SV.scrollTo='#view [data-timer]';if(c.kind==='mock')return nav('mock/'+c.D);if(c.kind==='mq')return nav('mock/'+String(c.D).split(':')[0]);SV[c.D]=c.kind==='essay'?'essay':'tasks';return nav('set/'+c.D);}
 /* 화면 안 타이머(.tline): 그 자리(ctx)에서 시작한 타이머가 돌거나 멈춰 있거나 막 끝났으면 남은 시간·문제·버튼 하나, 아니면 시작 버튼(st: {p 타이머, l 글, c 모양}).
    틱마다 paintTimer가 글자만 바꾼다(다시 그리지 않음) */
 const tLive=c=>!!c&&!!TM.ctx&&TM.ctx.kind===c.kind&&TM.ctx.D===c.D&&(TM.ctx.pk||'')===(c.pk||'')&&(TM.running||TM.remain>0&&TM.remain<TM.total||!!TM.ended&&TM.ended.ctx===TM.ctx);
@@ -3052,6 +3168,29 @@ function parseArr(txt){txt=stripFence(txt);try{const j=JSON.parse(txt);if(Array.
 function normCard(o){if(!o||!o.t||!o.d)return null;let u=Number(o.u)||16;if(u<1||u>16)u=16;let k=Array.isArray(o.k)?o.k:String(o.k||'').split(/[,，、]/);k=k.map(s=>String(s).trim()).filter(Boolean).slice(0,8);return{id:'U'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),u,t:String(o.t).trim(),d:String(o.d).trim(),k,f:Math.min(3,Math.max(1,Number(o.f)||2)),x:[]};}
 function parseCards(txt){const arr=parseArr(txt);if(arr)return arr.map(normCard).filter(Boolean);return stripFence(txt).split(/\n+/).map(l=>l.split('|').map(s=>s.trim())).filter(a=>a.length>=2&&a[0]&&a[1]).map(a=>normCard({t:a[0],d:a[1],k:a[2]||'',u:a[3]})).filter(Boolean);}
 function parseEssays(txt){const arr=parseArr(txt)||[];return arr.map(o=>{if(!o||!o.t||!Array.isArray(o.o))return null;let u=Number(o.u)||16;if(u<1||u>16)u=16;return{id:'UE'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),u,t:String(o.t).trim(),o:o.o.map(String),p:String(o.p||''),f:Math.min(3,Math.max(1,Number(o.f)||2)),x:[]};}).filter(Boolean);}
+
+/* ════════ 20b. 앱 업데이트(3.2.0) ════════
+   아이폰 앱은 화면·계산 코드를 EAS Update로 App Store 없이 받는다(App.js·native/updates.js). 앱을 켤 때·다시 볼 때 새 버전을 찾아 받아 두고 PE_IO._update로 알린다.
+   오늘 화면 위 한 줄과 더보기 "앱 업데이트" 줄: "최신 버전 받기"를 누르면 기록을 저장한 뒤 앱이 잠깐 다시 열리며 바로 바뀐다.
+   네이티브(앱 안의 장치)가 바뀐 새 빌드는 App Store에서("App Store 열기"). 업데이트한 뒤 처음 열면 "3.2.1 버전으로 업데이트했어요"(S.tk.ver: 마지막으로 연 버전) */
+const UPD={later:'',busy:false,chk:false};
+const updNow=()=>{const u=PE_IO.update?PE_IO.update():null;return u&&u.s&&u.s!=='off'?u:null;};
+const updV=u=>u&&u.v?`(${u.v})`:'';
+function updNoteHTML(){const u=updNow();if(!u||UPD.later===u.s+':'+(u.v||''))return'';
+  const x=`<button class="nx" data-act="upd-later" aria-label="안내 닫기">×</button>`;
+  if(u.s==='store')return`<div class="notice upd"><span><b>App Store에 새 버전${esc(updV(u))}이 있어요</b><small>앱 안의 장치가 바뀐 버전이라 App Store에서 받아요</small><button class="btn sm sec" data-act="upd-store">App Store 열기</button></span>${x}</div>`;
+  if(!['avail','busy','ready'].includes(u.s))return'';
+  const b=UPD.busy;
+  return`<div class="notice upd"><span><b>새 버전${esc(updV(u))}${u.s==='ready'?'을 받아 두었어요':u.s==='busy'?'을 받는 중이에요':'이 있어요'}</b><small>${u.err&&!b?esc('받지 못했어요 — '+u.err)+'<br>':''}누르면 앱이 잠깐 다시 열리며 바로 바뀌어요. 기록은 그대로예요</small><button class="btn sm sec" data-act="upd-get"${b?' disabled':''}>${b?'받는 중…':'최신 버전 받기'}</button></span>${x}</div>`;}
+/* 더보기 "앱 업데이트"(앱에서만) */
+function updRowHTML(){const u=PE_IO.update?PE_IO.update():null;if(!u)return'';
+  const at=u.at?` · 확인 ${hhmm(u.at)}`:'',G=['avail','busy','ready'].includes(u.s);
+  const d=u.s==='off'?'이 빌드는 앱 안 업데이트를 쓰지 않아요':UPD.busy?'최신 버전을 받는 중…':UPD.chk||u.s==='check'?'확인하는 중…'
+    :G?`새 버전${esc(updV(u))}${u.s==='ready'?'을 받아 두었어요':'이 있어요'} · <b>최신 버전 받기</b>`:u.s==='store'?`App Store에 새 버전${esc(updV(u))}이 있어요 · <b>App Store 열기</b>`
+    :u.s==='err'?`확인하지 못했어요 — ${esc(u.err||'잠시 뒤 다시 확인하세요')} · 다시 확인`:u.s==='none'?`v${APP_VER} · 최신 버전이에요${at}`:`v${APP_VER} · 눌러서 새 버전 확인`;
+  return row({ic:'imp',t:'앱 업데이트',d,act:u.s==='off'?'':G?'upd-get':u.s==='store'?'upd-store':'upd-check'});}
+/* 업데이트한 뒤 처음 열면 한 번 알림(새로 설치·복원한 기록에는 없음) */
+function verOnce(){S.tk=S.tk||{};const o=S.tk.ver;if(o===APP_VER)return;S.tk.ver=APP_VER;save();if(o&&!S_NEW)setTimeout(()=>toast(`${APP_VER} 버전으로 업데이트했어요`),700);}
 
 /* ════════ 21. 공통 동작 ════════ */
 let toastT=null;function toast(m){const el=$('#toast');if(!el)return;el.textContent=m;el.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('on'),2000);}
@@ -3274,9 +3413,32 @@ document.addEventListener('click',e=>{
   case'mock-graded':{const pr=S.mockp[D.d]||(S.mockp[D.d]={}),mk='mock:'+D.d+':g';if(pr.g){delete pr.g;calUnmark(mk);}else{pr.g=todayStr();touchDay();calMark(mk,'mock',`${mockName(D.d)} 채점 받음`);}save();return render();}
   /* 모의고사 단계: 교시 시작(타이머, 이 화면에 머묾) · 교시 다 썼어요(시간 끝 창도 같은 길, 그 교시 타이머는 멈춤) · 되돌리기 · 다 한 뒤 다음 */
   case'mock-start':return mockStart(D.d,D.k);
-  case'mock-part':{const pr=S.mockp[D.d]||(S.mockp[D.d]={});closeModal();if(!pr[D.k]){pr[D.k]=true;touchDay();calMark('mock:'+D.d+':'+D.k,'mock',`${mockName(D.d)} ${MKP[D.k]||''} 다 씀`);}tDone('mock',D.d,D.k);save();return render();}
+  case'mock-part':{const pr=S.mockp[D.d]||(S.mockp[D.d]={});closeModal();if(!pr[D.k]){pr[D.k]=true;touchDay();calMark('mock:'+D.d+':'+D.k,'mock',`${mockName(D.d)} ${MKP[D.k]||''} ${mockStudy(D.d)?'공부 다 함':'다 씀'}`);}tDone('mock',D.d,D.k);save();return render();}
   case'mock-undo':{const pr=S.mockp[D.d];if(pr&&pr[D.k]){delete pr[D.k];calUnmark('mock:'+D.d+':'+D.k);save();}return render();}   /* 도는 다른 교시 타이머는 그대로(mockStep이 그 교시를 지금 교시로) */
-  case'mock-pick':{const F=FLOW&&FLOW.at==='mock/'+D.d?FLOW:null;SV['mkw:'+D.d]={k:D.k,f:F?F.id:''};return render();}   /* 단계 줄에서 고른 교시를 지금 교시로(그 교시 시작은 아래 막대) */
+  case'mock-pick':{const F=FLOW&&FLOW.at==='mock/'+D.d?FLOW:null;SV['mkw:'+D.d]={k:D.k,f:F?F.id:''};return render();}
+  /* 공부하며 풀기(3.2.0): 풀기 방식 · 아는 정도(뺌, 자동으로) · 문제 다 했어요(되돌리기) · 키워드·목차 보기 */
+  /* 앱 업데이트(3.2.0): 타이머가 돌면 멈춘 뒤에(다시 열면 타이머가 처음으로), 기록을 바로 쓰고 앱에 받아서 다시 열기를 부탁 */
+  case'upd-get':{if(TM.running)return toast('타이머를 멈춘 뒤 업데이트해요');if(UPD.busy)return;UPD.busy=true;render();flush();
+    PE_IO.updateCall('apply').then(r=>{if(r&&r.s==='reload')return;UPD.busy=false;toast(r&&r.s==='none'?'이미 최신 버전이에요':'최신 버전을 받지 못했어요');render();},
+      e=>{UPD.busy=false;toast('최신 버전을 받지 못했어요 — '+(e&&e.message||'인터넷 연결을 확인하세요'));render();});return;}
+  case'upd-check':{if(UPD.chk||UPD.busy)return;UPD.chk=true;render();
+    PE_IO.updateCall('check').then(r=>{UPD.chk=false;toast(r&&r.found?`새 버전${r.v?'('+r.v+')':''}을 받고 있어요. 다 받으면 오늘 화면에 알려 드려요`:'최신 버전이에요');render();},
+      e=>{UPD.chk=false;toast('확인하지 못했어요 — '+(e&&e.message||'인터넷 연결을 확인하세요'));render();});return;}
+  case'upd-store':{PE_IO.updateCall('store').catch(()=>toast('App Store를 열지 못했어요'));return;}
+  case'upd-later':{const u=updNow();UPD.later=u?u.s+':'+(u.v||''):'';return render();}
+  case'mock-mode':{const d=D.d,v=D.v==='exam'?'exam':'study';if(mockMode(d)===v)return;const c=TM.ctx;
+    if(c&&tLive(c)&&(c.kind==='mock'&&c.D===d||c.kind==='mq'&&String(c.D).split(':')[0]===d))return toast('타이머를 멈춘 뒤 바꿔요');
+    mockAdj([d],()=>{(S.mockp[d]||(S.mockp[d]={})).mode=v;});save();toast(v==='study'?'공부하며 풀기: 문제마다 아는 정도로 시간을 셉니다':'실전처럼 풀기: 시험 시간으로 셉니다');return render();}
+  case'mock-kn':{const d=D.d,k=D.k,i=Number(D.i),m=mockObj(d),q=m&&(m[k]||[])[i];if(!q)return;const key=qKey(k,q),id=k+':'+i;
+    mockAdj([d],()=>{const pr=S.mockp[d]||(S.mockp[d]={});S.know=S.know||{};
+      if(D.l==='x'){pr.skip=pr.skip||{};if(pr.skip[id])delete pr.skip[id];else pr.skip[id]=1;}
+      else{if(pr.skip)delete pr.skip[id];if(D.l==='auto')delete S.know[key];else if(LV_ORD[D.l]!=null)S.know[key]=D.l;}
+      mockAuto(d,k);});save();return render();}
+  case'mock-q':{const d=D.d,k=D.k,i=Number(D.i),id=k+':'+i,pr=S.mockp[d]||(S.mockp[d]={}),qd=pr.q||(pr.q={}),was=!!qd[id];
+    if(was)delete qd[id];else{const x=mockQs(d,k)[i];if(!x||x.skip)return;const b0=qSteps(k,x.q,x.l,1),an=(b0.find(a=>a[0]==='an')||[0,0])[1];qd[id]=[Date.now(),b0.reduce((a,z)=>a+z[1],0)-an,an];tDone('mq',d+':'+id);}
+    touchDay();mockAuto(d,k);mqCal(d,k);save();if(was)return render();SV.scrollTo='#view .sq.cur';render();return scrollDo();}   /* 다 하면 다음 문제를 화면에 */
+  case'sq-show':{const sk='sqs:'+D.d+':'+D.k+':'+D.i;SV[sk]=!SV[sk];return render();}
+  case'pace':{const v=['auto','fast','mid','slow'].includes(D.v)?D.v:'auto';mockAdj(null,()=>{S.settings.pace=v;});save();return render();}   /* 단계 줄에서 고른 교시를 지금 교시로(그 교시 시작은 아래 막대) */
   case'mock-next':{const n=mockNext(D.d);return n&&n.go?n.go():render();}
   /* 예전 모의고사 화면의 다 썼어요 칸(지금 화면에는 없음) */
   case'mock-done':{const pr=S.mockp[D.d]||(S.mockp[D.d]={});pr[D.k]=b.checked;touchDay();const mk='mock:'+D.d+':'+D.k;if(b.checked)calMark(mk,'mock',`${D.d==='app'?'앱 모의고사':korDate(D.d)+' 모의고사'} ${({p1:'1교시',p2:'2교시',p3:'3교시',p4:'4교시'})[D.k]||''} 다 씀`);else calUnmark(mk);save();return;}
@@ -3368,9 +3530,9 @@ window.addEventListener('scroll',()=>{if(TM.running||TM.remain>0&&TM.remain<TM.t
 /* ════════ 23. 시작 ════════ */
 PE_IO.init({toast});recalcPlan();applyLook();setPreset('essay');R=parseHash();
 if(!location.hash)history.replaceState(null,'','#today');
-calOpen();sync(true);route();v3Once();   /* 받아 오기를 먼저 시작해 첫 화면이 오래된 자료로 오늘 몫을 고정하지 않게(받아 온 뒤 고정) */
+calOpen();sync(true);route();v3Once();verOnce();   /* 받아 오기를 먼저 시작해 첫 화면이 오래된 자료로 오늘 몫을 고정하지 않게(받아 온 뒤 고정) */
 const fresh2=f=>(...a)=>{PLN++;return f(...a);};
-window.__pe={S:()=>S,rParts,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession,
+window.__pe={studySince:v=>{if(v)STUDY_SINCE=v;PLN++;return STUDY_SINCE;},mockQs,knowAuto,qSteps,paceF,paceSamples,mockMode,mockMin,mockTot,estStudy,mockShape,cardLv,essayLv,qKey,planDoneMin,mockRowsSync,S:()=>S,rParts,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession,
   enough,setReviewItems,startDueAll,startWrong,budgetOf,dayKind,TM:()=>TM,go:h=>{nav(h);v3Again();},goUp,goTab,R:()=>R,navBadgeN,tabWords,
   /* 오늘 몫·이번 주(검사용: 부를 때마다 새로 센다) */
   taskList:fresh2(taskList),dayPlan:fresh2(dayPlan),planToday:fresh2(planToday),weekBoard:fresh2(weekBoard),weekSnap:fresh2(weekSnap),reqParts:fresh2(reqParts),cardsOut:fresh2(cardsOut),hwParts:fresh2(hwParts),

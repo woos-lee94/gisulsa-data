@@ -17,7 +17,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // 가짜 기기
 const disk = {};               // Documents/store
-const dev = { clip: null, saved: null, asked: [], answers: [], awake: [], looks: [], notif: [], denyNotif: false, fetched: [], member: [], pick: null, picks: 0, sendFail: null };
+const dev = { clip: null, saved: null, asked: [], answers: [], awake: [], looks: [], notif: [], denyNotif: false, fetched: [], member: [], pick: null, picks: 0, sendFail: null,
+  upd: [], updDisk: null, updFail: null, updCheck: null, updApply: null };   // 앱 업데이트(3.2.0): 부탁받은 일, 그때 네이티브 저장소의 기록, 실패·결과
 // 가짜 회원 서버(Firebase 자리): 관리자 화면이 부르는 요청을 기록한다
 const MEMBERS = [{ uid: 'U2', id: 'kim', status: 'pending', createdAt: '2026-10-20T01:00:00Z', code: '' }, { uid: 'U1', id: 'boss', status: 'approved', createdAt: '2026-10-19T01:00:00Z', code: '' }, { uid: 'U3', id: 'lee', status: 'rejected', createdAt: '2026-10-18T01:00:00Z', code: '' }];
 const CODES = [{ code: 'QWER23', createdAt: '2026-10-20T02:00:00Z' }];
@@ -53,6 +54,11 @@ function open(opt = {}) {
     setNotif: async cfg => { dev.notif.push(cfg); if (dev.denyNotif) throw new Error('denied'); return cfg; },
     look: d => { dev.looks.push(d); },
     pickFile: async () => { dev.picks++; return dev.pick; },
+    update: async op => {
+      dev.upd.push(op); dev.updDisk = disk.pe_state_v1;
+      if (dev.updFail) throw new Error(dev.updFail);
+      return op === 'check' ? (dev.updCheck || { found: false, v: '' }) : op === 'apply' ? (dev.updApply || { s: 'reload' }) : true;
+    },
     member: async (op, a) => {
       dev.member.push([op, a]);
       if (op === 'list') return { members: MEMBERS, codes: CODES, me: 'U1', msgs: msgs === null ? null : msgs.map(m => ({ ...m })), replies: replies.map(r => ({ ...r })) };
@@ -226,7 +232,7 @@ function open(opt = {}) {
   await B.go('#more');
   const appVer = require('../app.json').expo.version;
   ok(B.txt().includes('기술사 6개월 v' + appVer), '더보기 버전 = app.json 버전 ' + appVer);
-  ok(appVer === '3.1.3' && require('../package.json').version === appVer && require('../package-lock.json').version === appVer && require('../package-lock.json').packages[''].version === appVer, `버전 ${appVer}: app.json = package.json = package-lock(앱 줄)`);
+  ok(appVer === '3.2.0' && require('../package.json').version === appVer && require('../package-lock.json').version === appVer && require('../package-lock.json').packages[''].version === appVer, `버전 ${appVer}: app.json = package.json = package-lock(앱 줄)`);
   ok(B.errors.length === 0, '다시 연 화면 콘솔 오류 없음 ' + B.errors.slice(0, 3).join(' | '));
 
   // 예전(2.x) 기록이 든 휴대폰에서 3.0.0을 처음 열면 "바뀐 점" 창 한 번(기록은 그대로), 표시는 네이티브 저장소에 남아 다시 열면 없음
@@ -427,6 +433,89 @@ function open(opt = {}) {
   ok(/"id":10,"ok":true,"v":\{"name":"a.json","text":"\{\}"\}/.test(seen[seen.length - 1]), '파일 고르기(pick): 이름과 글을 돌려줌');
   ok(/maximum-scale=1, user-scalable=no/.test(bundle.files['index.html']) && /touch-action:manipulation/.test(bundle.files['styles.css']), '확대 막기: viewport와 두 번 눌러 확대 막기');
   ok(/"member":\{"id":"boss","admin":true/.test(host.bootScript({ store: {}, notif: null, version: '1', member: { id: 'boss', admin: true, uid: 'U1' } })) && /"member":null/.test(host.bootScript({ store: {}, notif: null, version: '1' })), 'bootScript: 회원 정보 주입');
+
+  // 앱 업데이트(3.2.0): 앱(EAS Update)이 새 버전을 받아 두면 오늘 화면 위 한 줄 "새 버전(3.2.1)을 받아 두었어요 · 최신 버전 받기"(누르면 기록을 먼저 저장하고 앱에 부탁),
+  // 더보기 "앱 업데이트"(확인·받기·App Store 열기), 업데이트한 뒤 처음 열면 "… 버전으로 업데이트했어요". 네이티브가 바뀌면 runtimeVersion을 올려야 함(지문 검사)
+  {
+    const UP = require('../native/updates'), APPV = require('../app.json').expo.version;
+    ok(UP.newer('3.10.0', '3.9.1') && !UP.newer('3.2.0', '3.2.0') && UP.newer('3.2.1', '3.2') && !UP.newer('', '3.2.0') && !UP.newer('3.1.9', '3.2.0'), '업데이트: 버전 비교(3.10.0 > 3.9.1)');
+    const man = v => ({ manifest: { extra: { expoClient: { version: v } } } });
+    ok(UP.verOf(man('3.2.1')) === '3.2.1' && UP.verOf(null) === '' && UP.verOf({ manifest: {} }) === '', '업데이트: 받을 버전 번호(업데이트를 올릴 때의 app.json 버전)');
+    const st = (u, o) => UP.updState(u, Object.assign({ enabled: true, store: null, running: '3.2.0' }, o)), t0 = new Date('2026-11-14T09:00:00');
+    ok(st({}, { enabled: false }).s === 'off' && st({}).s === 'idle' && st({ lastCheckForUpdateTimeSinceRestart: t0 }).s === 'none' && st({ lastCheckForUpdateTimeSinceRestart: t0 }).at === +t0, '업데이트 상태: 꺼진 빌드·확인 전·최신(확인 시각)');
+    ok(st({ isChecking: true }).s === 'check' && st({ isUpdateAvailable: true, availableUpdate: man('3.2.1') }).s === 'avail' && st({ isUpdateAvailable: true, availableUpdate: man('3.2.1') }).v === '3.2.1'
+      && st({ isUpdateAvailable: true, isDownloading: true, availableUpdate: man('3.2.1') }).s === 'busy' && st({ isUpdateAvailable: true, isUpdatePending: true, downloadedUpdate: man('3.2.1') }).s === 'ready', '업데이트 상태: 확인 중·있음·받는 중·받아 둠');
+    ok(st({ isUpdateAvailable: true, availableUpdate: man('3.2.1'), downloadError: new Error('The Internet connection appears to be offline.') }).err === '인터넷 연결을 확인하세요' && st({ checkError: new Error('server 500') }).s === 'err' && st({ checkError: new Error('server 500') }).err === '잠시 뒤 다시 확인하세요', '업데이트 상태: 받기·확인 실패 이유(한국어)');
+    ok(st({}, { store: { v: '3.3.0', url: 'https://apps.apple.com/kr/app/id1' } }).s === 'store' && st({}, { store: { v: '3.2.0', url: 'https://apps.apple.com/kr/app/id1' } }).s === 'idle'
+      && st({ isUpdatePending: true, downloadedUpdate: man('3.2.1') }, { store: { v: '3.3.0', url: 'https://apps.apple.com/kr/app/id1' } }).s === 'ready', '업데이트 상태: App Store에 지금보다 새 버전이면 store(앱 안 업데이트가 먼저)');
+    ok(JSON.stringify(UP.parseStore(JSON.stringify({ resultCount: 1, results: [{ version: '3.3.0', trackViewUrl: 'https://apps.apple.com/kr/app/x/id123?uo=4' }] }))) === '{"v":"3.3.0","url":"https://apps.apple.com/kr/app/x/id123?uo=4"}'
+      && UP.parseStore('{"resultCount":0,"results":[]}') === null && UP.parseStore('x') === null && UP.parseStore(JSON.stringify({ results: [{ version: '3.3.0', trackViewUrl: 'https://evil.example/x' }] })) === null, 'App Store 조회: 버전과 App Store 앱 페이지 주소만 받음');
+    const seenU = [], HU = host.createHost({ inject: c => seenU.push(c), update: async op => { seenU.push('op:' + op); return op === 'check' ? { found: true, v: '3.2.1' } : true; } });
+    await HU(JSON.stringify({ t: 'update', id: 1, op: 'check' })); await HU(JSON.stringify({ t: 'update', id: 2, op: 'wipe' }));
+    ok(seenU.includes('op:check') && /"id":1,"ok":true,"v":\{"found":true,"v":"3\.2\.1"\}/.test(seenU.join('\n')) && /"id":2,"ok":false/.test(seenU.join('\n')) && !seenU.includes('op:wipe'), '업데이트 요청은 check·apply·store만 앱에 넘김');
+
+    // 화면: 확인 전 → 더보기에서 지금 확인
+    const E = open(); await sleep(300);
+    const un = () => E.d.querySelector('#view .notice.upd'), ur = () => [...E.d.querySelectorAll('#view .row')].find(r => /앱 업데이트/.test(r.textContent));
+    ok(!un(), '알림 전(확인 전)에는 오늘 화면에 업데이트 줄 없음');
+    await E.go('#more');
+    ok(ur() && ur().dataset.act === 'upd-check' && /v[\d.]+ · 눌러서 새 버전 확인/.test(ur().textContent), `더보기 "앱 업데이트": 확인 전 "${ur() && ur().textContent}"`);
+    dev.upd = []; E.click('#view [data-act="upd-check"]'); await sleep(60);
+    ok(dev.upd.join() === 'check' && /최신 버전이에요/.test(E.toast()), '누르면 지금 확인 → "최신 버전이에요"');
+    E.w.PE_IO._update({ s: 'none', at: +new Date('2026-11-14T09:05:00') }); await sleep(20);
+    ok(/최신 버전이에요 · 확인 09:05/.test(ur().textContent), `확인한 뒤 더보기 "${ur().textContent}"(앱이 알려 주면 바로 다시 그림)`);
+    dev.updCheck = { found: true, v: '3.2.1' }; E.click('#view [data-act="upd-check"]'); await sleep(60); dev.updCheck = null;
+    ok(/새 버전\(3\.2\.1\)을 받고 있어요/.test(E.toast()), `새 버전이 있으면 "${E.toast()}"`);
+    // 받아 둠 → 오늘 화면 위 한 줄
+    await E.go('#today'); E.w.PE_IO._update({ s: 'ready', v: '3.2.1', at: Date.now() }); await sleep(30);
+    ok(un() && /새 버전\(3\.2\.1\)을 받아 두었어요/.test(un().textContent) && /누르면 앱이 잠깐 다시 열리며 바로 바뀌어요\. 기록은 그대로예요/.test(un().textContent) && un().querySelector('[data-act="upd-get"]').textContent === '최신 버전 받기',
+      `오늘 화면: "${un() && un().textContent}"`);
+    E.pe.TM().running = true; dev.upd = []; E.click('#view [data-act="upd-get"]'); await sleep(30); E.pe.TM().running = false;
+    ok(!dev.upd.length && /타이머를 멈춘 뒤 업데이트해요/.test(E.toast()), '타이머가 도는 동안은 업데이트하지 않음(멈춘 뒤에)');
+    E.pe.S().settings.newPerDay = 19; dev.upd = []; E.click('#view [data-act="upd-get"]'); await sleep(60);
+    ok(dev.upd.join() === 'apply' && JSON.parse(dev.updDisk).settings.newPerDay === 19 && un().querySelector('[data-act="upd-get"]').disabled && /받는 중…/.test(un().textContent),
+      '최신 버전 받기 → 기록을 먼저 네이티브 저장소에 쓰고 앱에 부탁(받아서 다시 열기), 버튼은 "받는 중…"');
+    ok(E.errors.length === 0, '업데이트 화면 콘솔 오류 없음 ' + E.errors.slice(0, 3).join(' | '));
+    // 받지 못하면 이유와 함께 다시 누를 수 있게, 이미 최신이면 그렇게
+    const F = open(); await sleep(300); F.w.PE_IO._update({ s: 'avail', v: '3.2.1', at: Date.now(), err: '인터넷 연결을 확인하세요' }); await sleep(30);
+    const fn = () => F.d.querySelector('#view .notice.upd');
+    ok(fn() && /새 버전\(3\.2\.1\)이 있어요/.test(fn().textContent) && /받지 못했어요 — 인터넷 연결을 확인하세요/.test(fn().textContent), `받기 실패한 뒤 오늘 화면 "${fn() && fn().textContent}"`);
+    dev.updFail = '인터넷에 연결되어 있지 않아요'; F.click('#view [data-act="upd-get"]'); await sleep(60); dev.updFail = null;
+    ok(/최신 버전을 받지 못했어요 — 인터넷에 연결되어 있지 않아요/.test(F.toast()) && !fn().querySelector('[data-act="upd-get"]').disabled, '받지 못하면 이유를 알리고 다시 누를 수 있음');
+    dev.updApply = { s: 'none' }; F.click('#view [data-act="upd-get"]'); await sleep(60); dev.updApply = null;
+    ok(/이미 최신 버전이에요/.test(F.toast()), '이미 최신이면 "이미 최신 버전이에요"');
+    F.click('#view [data-act="upd-later"]'); await sleep(20);
+    ok(!fn(), '× 나중에 → 그 버전 줄은 숨김(앱을 다시 열거나 다른 버전이 오면 다시)');
+    F.w.PE_IO._update({ s: 'ready', v: '3.2.2', at: Date.now() }); await sleep(20);
+    ok(fn() && /3\.2\.2/.test(fn().textContent), '다른 상태·버전이 오면 다시 보임');
+    // App Store에만 있는 새 버전(네이티브가 바뀐 빌드)
+    F.w.PE_IO._update({ s: 'store', v: '3.3.0', url: 'https://apps.apple.com/kr/app/id1', at: Date.now() }); await sleep(20);
+    ok(fn() && /App Store에 새 버전\(3\.3\.0\)이 있어요/.test(fn().textContent) && fn().querySelector('[data-act="upd-store"]'), `App Store 새 버전: "${fn() && fn().textContent}"`);
+    dev.upd = []; F.click('#view [data-act="upd-store"]'); await sleep(30);
+    ok(dev.upd.join() === 'store', 'App Store 열기 → 앱에 부탁(주소는 앱이 가진 것으로)');
+    // 업데이트를 쓰지 않는 빌드
+    F.w.PE_IO._update({ s: 'off' }); await sleep(20); await F.go('#more');
+    const fr = [...F.d.querySelectorAll('#view .row')].find(r => /앱 업데이트/.test(r.textContent));
+    ok(!F.d.querySelector('#view .notice.upd') && fr && !fr.dataset.act && /이 빌드는 앱 안 업데이트를 쓰지 않아요/.test(fr.textContent), '꺼진 빌드: 오늘 줄 없음, 더보기 "이 빌드는 앱 안 업데이트를 쓰지 않아요"(누를 수 없음)');
+    ok(F.errors.length === 0, '업데이트 화면 2 콘솔 오류 없음 ' + F.errors.slice(0, 3).join(' | '));
+    // 업데이트한 뒤 처음 열면 한 번 알림(기록의 마지막 버전과 다르면)
+    { const k = JSON.parse(disk.pe_state_v1); k.tk = Object.assign({}, k.tk, { ver: '3.1.9' }); disk.pe_state_v1 = JSON.stringify(k);
+      const G = open(); await sleep(1100);
+      ok(G.toast() === `${APPV} 버전으로 업데이트했어요` && G.pe.S().tk.ver === APPV && JSON.parse(disk.pe_state_v1).tk.ver === APPV, `업데이트한 뒤 처음 열면 "${G.toast()}"`);
+      const G2 = open(); await sleep(1100);
+      ok(!/업데이트했어요/.test(G2.toast()), '다시 열면 알림 없음'); }
+    // 앱 설정: 프로젝트 ID가 있는 PC에서만 업데이트를 켬, runtimeVersion 고정, 빌드 채널
+    const cfgF = require('../app.config.js'), aj = require('../app.json').expo;
+    const c1 = cfgF({ config: aj }), c2 = cfgF({ config: Object.assign({}, aj, { extra: { eas: { projectId: 'P-1' } } }) });
+    ok(c1.updates.enabled === false && !c1.updates.url && c2.updates.enabled === true && c2.updates.url === 'https://u.expo.dev/P-1' && c2.runtimeVersion === cfgF.RUNTIME && c1.runtimeVersion === cfgF.RUNTIME
+      && c2.updates.checkAutomatically === 'ON_LOAD' && c2.updates.fallbackToCacheTimeout === 0 && require('../eas.json').build.production.channel === 'production',
+      'app.config.js: 프로젝트 ID가 있으면 u.expo.dev 업데이트(켤 때 확인·기다리지 않음), runtimeVersion 고정, eas.json production 채널');
+    // 네이티브 부분(패키지·iOS 설정·플러그인·아이콘)의 지문: 바꾸면 app.config.js의 RUNTIME을 그 버전으로 올리고 PIN에 새 지문을 적은 뒤 App Store 빌드(앱 안 업데이트로 보내지 않음)
+    const crypto = require('crypto'), pkg = require('../package.json');
+    const nat = JSON.stringify({ deps: pkg.dependencies, ios: aj.ios, plugins: aj.plugins, icon: aj.icon, name: aj.name, slug: aj.slug, orientation: aj.orientation, ui: aj.userInterfaceStyle, platforms: aj.platforms });
+    const fp = crypto.createHash('sha256').update(nat).digest('hex').slice(0, 12), PIN = { '3.2.0': '30ff453e3422' };
+    ok(PIN[cfgF.RUNTIME] === fp, `네이티브 지문 ${fp} = runtimeVersion ${cfgF.RUNTIME}의 지문(네이티브를 바꿨으면 RUNTIME을 올리고 새 지문을 적은 뒤 App Store 빌드)`);
+  }
 
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);

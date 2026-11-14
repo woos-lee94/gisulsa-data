@@ -32,6 +32,8 @@ eas env:list production
 
 마지막 줄에 두 값이 보이면 된다. 이 값 없이 빌드하면 앱이 "설정이 빠진 빌드예요" 화면에서 멈춘다.
 
+앱 안 업데이트(3.2.0부터, `npm run ota`)도 같은 production 값을 쓴다(`eas update --environment production`). 혹시 값 없이 올라간 업데이트를 받아도, 앱은 빌드 때 받은 값을 휴대폰 키체인에 적어 두었다가 그대로 쓴다.
+
 ## 3. 빌드
 
 새 네이티브 모듈(expo-secure-store)이 들어가서 새로 빌드해야 한다. 평소 순서 그대로(`npm ci`가 새 모듈을 받는다).

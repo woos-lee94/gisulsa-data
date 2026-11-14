@@ -3,6 +3,7 @@
 const STORE_KEYS = ['pe_state_v1', 'pe_sets_v1', 'pe_state_prev'];   // pe_state_prev: 시작일을 다시 정하며 지운 기록(7일 동안 되돌리기, 3.1.3)
 const MEMBER_OPS = ['list', 'set', 'del', 'code-add', 'code-del', 'remove', 'unread', 'msg-read', 'msg-del', 'msg-send', 'reply', 'thread', 'reply-read'];
 const NOTIF_DEFAULT = { wd: { on: false, time: '07:00' }, su: { on: false, time: '20:00' } };
+const UPDATE_OPS = ['check', 'apply', 'store'];   // 앱 업데이트(3.2.0): 지금 확인 · 최신 버전 받기(받아서 다시 열기) · App Store 열기
 
 // JS 소스에 그대로 넣을 수 있는 값 표기(JSON + 줄 구분 문자 이스케이프)
 function jsLiteral(v) {
@@ -49,6 +50,7 @@ function safeFileName(name) {
 //       keepAwake(on), fetchText(url) → Promise<{ok, status, text}>, setNotif(cfg) → Promise<cfg>, look(dark),
 //       member(op, args) → 관리자 화면·문자함·아이디 지우기·관리자에게 문자(list, set, del, code-add, code-del, remove, unread, msg-read, msg-del, msg-send)
 //       ·관리자 답장(reply: 승인·거절과 함께)·회원의 주고받은 문자(thread)·답장 읽음(reply-read)
+//       update(op) → 앱 업데이트(check: {found, v} · apply: 받아서 다시 열기, 최신이면 {s:'none'} · store: App Store 앱 페이지 열기)
 function createHost(deps) {
   const reply = (id, ok, v, err) => deps.inject(`window.PE_IO&&PE_IO._reply(${jsLiteral({ id, ok, v, err })});true;`);
   const toast = m => deps.inject(`window.PE_IO&&PE_IO._toast(${jsLiteral(m)});true;`);
@@ -75,6 +77,9 @@ function createHost(deps) {
           if (!/^https:\/\//.test(m.url)) throw new Error('https 주소만 받아 와요');
           v = await deps.fetchText(m.url); break;
         case 'notif': v = { cfg: await deps.setNotif(cleanNotif(m.cfg)) }; break;
+        case 'update':
+          if (!UPDATE_OPS.includes(m.op)) throw new Error('모르는 업데이트 요청');
+          v = await deps.update(m.op); break;
         case 'member':
           if (!MEMBER_OPS.includes(m.op)) throw new Error('모르는 회원 요청');
           v = await deps.member(m.op, m.args && typeof m.args === 'object' ? m.args : {}); break;
@@ -87,4 +92,4 @@ function createHost(deps) {
   };
 }
 
-module.exports = { STORE_KEYS, MEMBER_OPS, NOTIF_DEFAULT, jsLiteral, bootScript, cleanNotif, notifPlan, safeFileName, createHost };
+module.exports = { STORE_KEYS, MEMBER_OPS, UPDATE_OPS, NOTIF_DEFAULT, jsLiteral, bootScript, cleanNotif, notifPlan, safeFileName, createHost };

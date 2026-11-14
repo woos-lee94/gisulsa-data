@@ -22,7 +22,7 @@
   - `data_kichul.js` 기출 제116~140회 775문항 요지와 카드 연결표
   - `data_plan.js` 단계·주차 틀 30개·정기시험 규칙(`PE_SCHED`)·요일별 루틴·Claude 프롬프트
 - 학습 기록 저장: `localStorage` 세 키
-  - `pe_state_v1`: 학습 기록 `S` (settings, cards 간격반복 상태, wrong 오답 노트, sp 세트 진행(rev 세트 복습 단계마다 마지막으로 한 날, rvd 그 단계를 처음 끝낸 날), tk 손으로 친 일·표시, today 그날 고정한 오늘 몫, wk 주마다 기록, days 날마다 정한 공부 시간(쉬는 날·짧은 날, v3.1), checks 예전 할 일 체크(읽기만) 등. settings에는 v3.1부터 nextTarget·schUndo·schSent·schSig·slipNo(아래 "시험 일정 살펴보기"))
+  - `pe_state_v1`: 학습 기록 `S` (settings, cards 간격반복 상태, wrong 오답 노트, sp 세트 진행(rev 세트 복습 단계마다 마지막으로 한 날, rvd 그 단계를 처음 끝낸 날), tk 손으로 친 일·표시, today 그날 고정한 오늘 몫, wk 주마다 기록, days 날마다 정한 공부 시간(쉬는 날·짧은 날, v3.1), checks 예전 할 일 체크(읽기만), know 모의 문제마다 직접 정한 아는 정도(3.2.0), mockp 모의마다 기록(교시 다 씀 p1…·채점 g·점수 sc, 3.2.0부터 풀기 방식 mode·다 한 문제 q·뺀 문제 skip) 등. settings에는 v3.1부터 nextTarget·schUndo·schSent·schSig·slipNo(아래 "시험 일정 살펴보기"), 3.2.0부터 pace(공부 속도))
   - `pe_sets_v1`: 받아 온 세트·모의고사·새 기출·저장소 일정(plan)
   - `pe_state_prev`: 준비 시작일을 다시 정하며 지운 기록 `{at, state}`(3.1.3, 7일 동안 되돌리기. 지난 것은 앱을 열 때 비운다). 앱 쪽 `host.js`의 `STORE_KEYS`에도 있다
 - 자료 받아 오기: 앱을 열 때 `https://raw.githubusercontent.com/woos-lee94/gisulsa-data/main/data/index.json`을 읽고, 새로 올라온 `sets/YYYY-MM-DD.json`, `mocks/YYYY-MM-DD.json`, `kichul.json`을 받는다.
@@ -87,6 +87,9 @@
   - 이미 받은 폴더가 있으면 `git clone`은 "already exists" 오류를 내고, 나머지 줄이 그 폴더를 최신으로 맞춘다.
   - `git stash`·`git stash pop`은 `eas init`·`eas build`가 PC의 `app.json`에 적은 EAS 프로젝트 번호(`owner`, `extra.eas`)를 지키려고 쓴다. 저장소의 `app.json`을 고칠 때 그 줄과 겹치지 않게 한다.
   - 앱 변경은 사용자가 `main`으로 받으므로 `main`에 올린다.
+- 앱 안 업데이트(3.2.0, EAS Update, 아래 "앱 안 업데이트"): 네이티브가 그대로인 바뀜(`web/`, `App.js`·`native/*.js`의 JS, 글)은 App Store를 거치지 않는다. 위 순서에서 마지막 줄만 `npm run ota`로 바꿔 친다(`scripts/ota.js`: web 묶음을 만들고 `eas update --channel production --environment production --platform ios --message v버전`). 휴대폰은 앱을 켤 때·다시 볼 때 받아 두고 오늘 화면 "새 버전을 받아 두었어요 · 최신 버전 받기"로 바로 바꾼다.
+  - 네이티브가 바뀐 버전(npm 패키지 추가·버전 변경, `app.json`의 `ios`·`plugins`·아이콘 등)은 `app.config.js`의 `RUNTIME`을 그 버전으로 올리고 `tests/native.test.js`의 지문(`PIN`)을 새 값으로 적은 뒤 `eas build`로 App Store에 올린다. 그런 버전은 `npm run ota`로 보내지 않는다(예전 앱은 받지 않고, App Store 새 버전 안내만 본다). 지문을 고치지 않으면 `npm test`가 실패해 알려 준다.
+  - 안내할 때는 바뀐 것이 네이티브인지 보고 사용자에게 `npm run ota`인지 `eas build`인지 한 줄로 알린다.
 
 ## 받아들이는 기준
 
@@ -104,7 +107,7 @@
 
 ## 앱 폴더
 
-- `web/`: 앱 화면 원본(v3.1.3, 네이티브 다리 포함). `index.html`의 `?v=N`(지금 9)은 `tests/app.test.js`가 스크립트를 찾는 표시라 남겨 둔다. 버전은 `app.js`의 `APP_VER`, `app.json`의 `expo.version`, `package.json`의 `version`(과 `package-lock.json`의 앱 줄 두 곳)을 함께 올린다(`tests/native.test.js`가 확인)
+- `web/`: 앱 화면 원본(v3.2.0, 네이티브 다리 포함). `index.html`의 `?v=N`(지금 9)은 `tests/app.test.js`가 스크립트를 찾는 표시라 남겨 둔다. 버전은 `app.js`의 `APP_VER`, `app.json`의 `expo.version`, `package.json`의 `version`(과 `package-lock.json`의 앱 줄 두 곳)을 함께 올린다(`tests/native.test.js`가 확인)
 - `tests/`: jsdom 회귀 검사와 가짜 저장소(`tests/fake/data`)
 - 확대 막기: `index.html` viewport에 `maximum-scale=1, user-scalable=no`(WKWebView는 이것을 따른다. 글자 칸을 누를 때 16px보다 작은 칸이 확대되던 것도 막는다), `styles.css`의 `html{touch-action:manipulation}`(두 번 눌러 확대)
 - `assets/icon-1024.png`: iOS 앱 아이콘
@@ -132,7 +135,7 @@
 - 점수 "이번 주 n%": `PE_SCORE`(단계별 배점, 합 100) × 줄마다 한 비율. 목표는 모두 월요일부터 정해 둔다(올 세트, 모의 어림 `estMock`, 돌아올 세트 복습). 그래서 점수는 저절로 떨어지지 않고, "다 하면 m%"가 함께 보인다. 필수와 이번 주 목표만 센다(60% 합격선, 80% 잘 지킨 주). 세트 복습이 제때인지는 그 단계를 처음 끝낸 날(`sp.rvd`, 예전 기록은 `sp.rev`)로 본다(기한 다음 날까지 1, 늦으면 ½). 시험이 든 주(본시험 뒤 48시간 복기 날까지)는 점수 대신 체크(응시 · 48시간 복기 · 준비물). 같은 수가 통계("이번 주 필수 n%")와 주간 리포트에 나온다.
 - 새 주 첫 화면에서 지난주를 한 번 고정한다(`weekSnap` → `S.wk[지난주] = {p, parts, lv, at, carry, rel}`. 이 기록을 만들기 전(`S.created`)에 끝난 주는 고정하지 않고(새로 설치·초기화), 받아 오는 동안에는 기다린다. `lv`는 그 주에 오늘 몫을 고정한 가장 높은 단계 `lvx`로, 다시 세지 않는다. 지난주 기록 창·통계에는 단계 문장("빠듯해요" 등)으로). 몫은 월요일에 0부터(빚 없음), 지난주 핵심이 빈 최근 세트 3개와 안 쓴 모의고사만 권장으로 넘어온다.
 - 분은 한 표 `MIN_PER`, 공부 시간은 `budgetOf(t)`(설정 "하루 공부 시간" `S.settings.budget`, 기본 평일 180 · 토 300 · 일요일·공휴일 240, 시험 전 3일 평일, 시험 날 0, 리허설 토요일 430 이상). 표는 `data_plan.js`: `PE_HW_MIN`, `PE_EXTRA`(요일별 루틴 줄을 고정 id의 할 일로), `PE_SCORE`, `PE_EST`, `PE_PHASE_NOTE`.
-- `S.tk` 키(날짜 `YYYY-MM-DD`, 주는 그 월요일): `report:주`, `kichul:주`, `goal:주:i`, `wrong:날짜`·`cards:날짜`(그 세션을 끝까지 함), `x.book:날짜` 같은 손 체크, `x.redo:날짜:j`(모의 오답 다시 쓰기 한 편), `apply:회차`·`applychk:회차`·`recap:회차`·`notice:연도`, `ex:날짜:i`(시험 날), `wkline:주`·`phase:단계`(안내 지움), `budget`, `backup`(마지막 백업), `seen:v3`.
+- `S.tk` 키(날짜 `YYYY-MM-DD`, 주는 그 월요일): `report:주`, `kichul:주`, `goal:주:i`, `wrong:날짜`·`cards:날짜`(그 세션을 끝까지 함), `x.book:날짜` 같은 손 체크, `x.redo:날짜:j`(모의 오답 다시 쓰기 한 편), `apply:회차`·`applychk:회차`·`recap:회차`·`notice:연도`, `ex:날짜:i`(시험 날), `wkline:주`·`phase:단계`(안내 지움), `budget`, `backup`(마지막 백업), `seen:v3`, `ver`(마지막으로 연 앱 버전, 3.2.0: 업데이트한 뒤 처음 열면 "… 버전으로 업데이트했어요").
 - 특별한 날(`dayKind`): 평일 공휴일(`KR_HOLI`)은 평일 블록 + 따라잡기, 공부 시간은 일요일·공휴일 몫, 머리에 공휴일 이름. 원서접수(시험 32일 전, `PE_SCHED.annBefore`)는 21~8일 전 이번 주 줄 "원서접수 날짜 확인 · 12/29 무렵", 7일 전부터 접수 끝까지 오늘 맨 위 핀(남은 날 표는 3일 안이면 빨강, 이번 주 배지와 같은 날, "접수했어요" · "날짜 확인·고치기"). 시행계획 공고는 시험 전해 11/20~12/31 이번 주 줄 "큐넷 2027 시행계획 공고 확인". 두 줄은 시험 일정으로 가고 동그라미(또는 시험 일정 맨 위 "확인했어요")로 친다. 시험 전 3일(`pre3`)은 읽기·퀴즈만(숙제 줄 없음), 카드 30장 돌리기·목차 떠올리기 5문, 시험 전날 준비물(맨 위 핀 "내일 시험"), 머리 줄 "수면 7시간". 시험 날은 머리 "오늘 제141회 시험(실전 응시)", 시험 카드(그날 체크리스트 `ex:날짜:i` + 파란 버튼 "응시했어요"), 다음 날부터 48시간 복기 핀(`recap`). 월요일(화요일까지) 안내 "n주차 시작 · 단원" / 넘어온 것 / "지난주 기록"(창: 지난주 점수·부분·넘어온 것·놓아준 것·60% 넘은 주 연속), 단계가 바뀐 주는 `PE_PHASE_NOTE` 한 줄(월요일엔 같은 칸). 준비 시작 전·시험 뒤는 카드 하나.
 - 3.0.0을 예전 기록으로 처음 열면 한 번 "바뀐 점" 창(`v3Once`). 본 것(`S.tk['seen:v3']`)은 사용자가 닫을 때(닫기·바깥·왼쪽 가장자리 밀기, `dismissModal`) 적고, 그 전에 알림을 눌러 다른 화면으로 가도(`_go` → `go`) 그 화면 위에 다시 띄운다(`v3Again`, `route()` 끝에서도). 새로 설치한 휴대폰에는 띄우지 않고 표시만, 복원해도 이 휴대폰의 표시는 그대로.
 - 검사: `tests/plan.test.js`가 시계를 고정해 계산(예시 상태의 목 07:40 · 수 21:30 · 토 08:00 · 일 · 월, 특별한 날, 단계별 약속, 빈 주를 날마다 해도 점수가 떨어지지 않음, 계획대로 한 4주의 7·14·30일 차 세트 복습과 주말 단계, 읽기만 하는지, 계산 비용)과 화면을 본다. 예시 숫자는 `MOCK_GRADE_SINCE`를 2026-10-31로 바꿔 센다.
@@ -168,6 +171,25 @@
 - 세트 화면 머리의 주차와 세트 숙제 단계(`setPh`, 적어 둔 `S.wk[주].ph`가 없을 때)는 앱 일정(`wkIdx(세트 날짜)`)으로 센다(3.1.2). 세트 파일의 `week`는 예약 작업이 만들 때의 일정 값이라, 앱에서 시작일을 바꾸고 변경 요청을 아직 붙여 넣지 않았으면 다르다. 다르면 머리 아래 한 줄 `setWkNote`("예약 작업이 예전 일정의 3주차로 만든 세트예요.", 저장소 일정이 diff·sent면 변경 요청 안내와 시험 일정 링크). 같은 일정이면 두 값이 같다(저장소 세트 16개 확인).
 - 월요일에 시작하면 기준 월요일 = 시작일이라 예전과 바이트까지 같다. 예전에 월요일이 아닌 날로 정해 둔 기록은 주차가 그 주 월요일 기준으로 바뀌고, 저장소 일정이 다르면 시험 일정이 변경 요청을 띄운다.
 - 검사: `tests/plan.test.js` 25(수요일 시작의 주차·단계 = 월요일 시작), 42(첫 주 안내), 65(목요일·일요일 시작, 시작 전 세트, 다음 월요일 넘어온 것·지난주 고정, 변경 요청, 로드맵, 같은 주 시작 전 날), 66(시작일을 바꾼 뒤 세트 화면 주차·안내·숙제 단계).
+
+## 아는 만큼 공부 시간(v3.2.0, app.js "11-0c")
+
+주간 모의고사를 시험 시간(1교시 100분, 논술 문제당 25분)이 아니라, 모르는 문제를 이해 → 필기 → 암기 → 발설 → (그림) → 답안 쓰기로 공부하는 시간으로 센다.
+
+- 풀기 방식(`mockMode(D)`): 1·2단계(준비 주 포함) 모의는 "공부하며 풀기", 3단계부터는 "실전처럼 풀기"가 기본이고 모의 화면 위 두 칸(`mock-mode`, `S.mockp[D].mode`)으로 바꾼다. `STUDY_SINCE`(2026-11-14) 전에 온 모의는 예전처럼 시험 시간(지난 기록의 셈이 바뀌지 않게, 검사는 이 값을 9999-12-31로 바꿔 예전 셈을 본다).
+- 아는 정도(`knowAuto`): 단답은 기출 번호·이름으로 이은 카드(`_kxRev`·`_byNorm`)가 모두 간격 7일 넘게 맞혀 옴(box 3 이상, 오답 노트에 없음)이면 앎, 하나라도 본 적 있으면 조금, 아니면 모름(`cardLv`). 논술은 이 모의 목차·같은 문제 글·같은 기출의 목차가 떠올리기 잘함 2번 이상이면 앎, 떠올려 봤거나 세트 숙제로 옮겨 적었으면 조금(`essayLv`). 다른 모의에서 공부한 문제는 적어도 조금. 문제마다 칩 모름·조금·앎·뺌으로 고치고(`mock-kn`, `S.know[qKey]`, 뺌은 `S.mockp[D].skip`), "자동으로"로 되돌린다.
+- 걸음과 분(`qSteps`, `data_plan.js`의 `PE_STUDY`): 단답 모름 이해 5·필기 8·암기 6·발설 3·답안 10, 조금 2·5·3·2·10, 앎 답안 10. 논술 모름 10·20·12·5·답안 25, 조금 5·10·6·3·25, 앎 25, 그림·표가 있으면 모름·조금에 그림 5. 필기·암기는 단답 키워드 5개·논술 목차 7줄 기준으로 0.8~1.4배. 공부 속도(`paceF`, 설정 "공부 속도": 자동·빠르게 0.8·보통 1·천천히 1.3)를 답안 쓰기 말고 걸음에 곱한다. 자동은 같은 교시에서 잇닿아 "다 했어요"를 누른 사이 시간(답안 분을 빼고 걸음 어림으로 나눔, 쉰 것으로 보이는 것은 뺌)의 최근 12개 가운데값, 3개부터, 0.6~1.8배.
+- 모의 화면(공부하며): 지금 교시의 문제 목록(`studyPartHTML`·`sqHTML`), 다 하지 않은 첫 문제만 펼쳐 걸음마다 분과 도구(카드 보기·키워드/목차 보기·답안지·타이머 10/25분). 아래 막대 "n번 다 했어요"(`mock-q`, `S.mockp[D].q['p1:3'] = [시각, 속도 뺀 걸음 분, 답안 분]`, 달력 "… 1교시 공부 n문"). 뺀 것 빼고 다 하면 그 교시를 다 쓴 것(`pr.p1`, 예전 칸 그대로)이고 다음 교시·채점으로.
+- 오늘 몫·이번 주: 모의 줄의 분은 남은 문제 어림(`mockMin`), 머리 "주간 모의고사 1교시 단답 공부 · 13문"(아는 정도 요약), 칸 이름 "1교시 단답 공부". 토요일에는 첫 공부 교시를 늘 넣고(그날 공부 시간을 넘어도), 그 뒤 교시·채점이 넘치면 "내일(일) 밀린 핵심". 이번 주 모의 줄은 다 한 문제만큼 찬다. 아직 오지 않은 모의는 `estStudy`(이번 주 단원 카드·목차의 아는 정도 비율, `mockShape`는 pipeline mock_format과 같은 틀). 아는 정도·뺌·속도·방식을 바꾸면 고정한 오늘 줄의 분을 남은 분 차이만큼 고친다(`mockAdj`, 오늘 한 분이 그대로). 이 버전을 받기 전에 시험 시간으로 고정한 오늘 줄은 `mockRowsSync`가 고친다.
+- 검사: `plan.test.js` 68.
+
+## 앱 안 업데이트(v3.2.0)
+
+- 웹 묶음(`native/webBundle.js`)이 JS 묶음 안에 있으므로 EAS Update 한 번에 화면·계산이 함께 바뀐다. 네이티브 쪽은 `runtimeVersion`이 같은 빌드끼리만 주고받는다(`app.config.js`의 `RUNTIME`, 지문 검사 `native.test.js`).
+- `App.js`: `expo-updates`의 `useUpdates()`로 상태를 받아 웹에 `PE_IO._update({s, v, at, err, url})`로 알린다(`native/updates.js`의 `updState`). 켤 때는 expo-updates가 확인하고 받아 둔다(ON_LOAD, 다음에 켤 때 적용). 백그라운드에서 돌아올 때 30분이 지났으면 `checkForUpdateAsync` → 있으면 `fetchUpdateAsync`. App Store 새 버전(네이티브가 바뀐 빌드)은 12시간마다 iTunes 조회(`itunes.apple.com/lookup?country=kr&bundleId=…`, 개인 정보 없음)로, 지금 도는 버전보다 새것일 때만 `store`.
+- 앱 쪽 요청 `{t:'update', op}`(`host.js` `UPDATE_OPS`): `check`(지금 확인, `{found, v}`), `apply`(받는 중이면 기다리고, 받아 둔 것이 없으면 확인·받기 → `reloadAsync`, 다시 열 때 잠깐 보이는 화면은 앱 바탕색. 최신이면 `{s:'none'}`), `store`(앱이 가진 App Store 주소를 연다).
+- 웹(`app.js` "20b"): 오늘 머리 아래 한 줄(`updNoteHTML`: 받아 둠·받는 중·있음·App Store, ×는 그 상태·버전만 숨김), 더보기 → 앱 "앱 업데이트" 줄(`updRowHTML`: 확인 전·최신·확인 중·받는 중·실패·꺼진 빌드). "최신 버전 받기"(`upd-get`)는 타이머가 돌면 멈춘 뒤에, 아니면 `flush()`로 기록을 먼저 네이티브 저장소에 쓰고(메시지 순서대로 처리) `apply`. 업데이트한 뒤 처음 열면 `S.tk.ver`로 한 번 알림(`verOnce`). 브라우저에는 이 줄들이 없다.
+- Firebase 설정은 빌드에 든 값을 키체인(`pe_fbcfg`)에도 적어 두어, 업데이트로 받은 코드에 값이 빠졌어도(`--environment` 없이 올린 경우) 회원 확인이 그대로 된다.
 
 ## 내비게이션(주소는 바꿔 쓰기만)
 
@@ -210,7 +232,9 @@
   - 매일 사전 `gloss/daily.json`: 예약 작업 "기술사 용어 사전"(매주 월~토 07:13, 세트 작업 뒤)이 `gloss/RUNBOOK_GLOSS.md`대로 새 세트·모의고사의 카드·사전에 없는 낱말 풀이를 더한다(`scripts/gloss-daily.js candidates·check·add`, 처리한 날짜는 `done`). 앱은 받아 오기 때 이 파일을 받아 `SETS.gloss`에 두고(새 세트를 받았거나 2시간마다) 내장 사전 다음으로 찾는다. 이 파일은 예약 작업만 고친다. 검사 `tests/gloss.test.js`.
 - `scripts/build-web.js`: `web/`을 `native/webBundle.js`(자동 생성, git 제외)로 묶는다. 글꼴은 `styles.css`의 @font-face가 `assets/fonts/PretendardVariable.woff2`(OFL)를 읽고, 앱이 시작할 때 그 파일을 화면 파일 옆에 복사한다. `index.html`이 바깥 주소를 읽으면 묶기를 멈춘다(인터넷 없이 열려야 하므로). `npm install`(postinstall)과 `npm start` 때 돈다. `web/`을 고친 뒤 앱 빌드에는 따로 할 일이 없다.
 - `app.json`: Xcode 프로젝트 이름은 한글이 빠지면 "6"이 되므로 `name`은 `Gisulsa6`, 홈 화면 이름은 `ios.infoPlist.CFBundleDisplayName` "기술사 6개월". 원격 푸시를 쓰지 않으므로 `expo-notifications`의 `enableRemoteNotifications: false`(푸시 권한 없음).
-- `eas.json`: `production` 프로필(스토어 배포 → TestFlight), 빌드 번호는 EAS가 올린다(`appVersionSource: remote`).
+- `eas.json`: `production` 프로필(스토어 배포 → TestFlight, 앱 안 업데이트 채널 `production`), 빌드 번호는 EAS가 올린다(`appVersionSource: remote`).
+- `app.config.js`(3.2.0): `app.json`에 `runtimeVersion`(고정 문자열 `RUNTIME`)과 `updates`(PC의 `app.json`에 `extra.eas.projectId`가 있으면 `https://u.expo.dev/ID`, 켤 때 확인 `ON_LOAD`, 기다리지 않음 `fallbackToCacheTimeout: 0`. ID가 없으면 끔)를 더한다. 프로젝트 ID는 저장소에 넣지 않는다.
+- `native/updates.js`(3.2.0): 업데이트 상태 셈(`updState`: useUpdates 결과 → 웹 화면에 보내는 `{s, v, at, err, url}`), 버전 비교(`newer`), App Store 조회 결과 읽기(`parseStore`, apps.apple.com 주소만). `scripts/ota.js`: `npm run ota`.
 - 검사: `npm test` = `tests/app.test.js`(웹, 진짜 날짜로 돌아 날짜에 따라 달라지는 것은 생김새만 본다), `tests/plan.test.js`(오늘 몫·이번 주 계산과 화면, 시계를 고정하고 가짜 저장소를 메모리에서 만든다: 예시 상태의 목·수·토·일·월, 특별한 날 11/20·12/22·12/25·1/04·1/27·1/30·1/31, 단계별 약속, 점수가 떨어지지 않음, 내비게이션 걸음), `tests/native.test.js`(앱 묶음 + PE_NATIVE + host.js를 가짜 기기 기능으로, 버전 맞춤), `tests/gloss.test.js`. 회원 규칙은 `npm run test:firebase`.
 - 스토어 문구: `docs/app-store.md`(부제·프로모션·설명·키워드·카테고리·심사 메모·App Privacy). Firebase 설정·관리자 지정·심사용 초대 코드는 `docs/firebase-setup.md`. 지원·개인정보 처리방침 URL은 `docs/support.md`·`docs/privacy.md`의 GitHub 주소(저장소가 공개일 때만 열린다). 문구를 고치면 이 파일들도 함께 고친다.
 - 회원 승인(`native/member.js`, `native/Gate.js`, `firebase/firestore.rules`)

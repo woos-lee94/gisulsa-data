@@ -857,3 +857,36 @@ textarea.in.plain{font-family:inherit;font-size:1rem;line-height:1.6;min-height:
 .msg .mwho{font-weight:700;color:var(--ink2)}
 .sheet.msg.rp::before{background:var(--ok)}
 .sheet.msg.rp.fresh::before{background:var(--blue)}
+
+/* 공부하며 풀기(3.2.0): 풀기 방식, 문제마다 아는 정도와 걸음 */
+.seg.mmode{margin-top:12px}
+.mmnote{margin:6px 0 0}
+.mstudy .msum{margin:0 0 10px}
+.sql .sq{padding:12px 14px;position:relative}
+.sql .sq+.sq{border-top:1px solid var(--rule2)}
+.sq .sqh{display:flex;gap:10px;align-items:flex-start}
+.sq .sqn{flex:0 0 auto;width:24px;color:var(--ink2);font-weight:700;font-variant-numeric:tabular-nums}
+.sq .sqt{flex:1;min-width:0;line-height:1.5}
+.sq .sqt .u{display:block;color:var(--ink2);font-size:.86rem;margin-top:2px}
+.sq .sqm{flex:0 0 auto;color:var(--ink2);font-size:.86rem;white-space:nowrap}
+.sq .kn{display:flex;gap:6px;margin:8px 0 0 34px;flex-wrap:wrap}
+.sq .kn button{min-height:34px;padding:2px 12px;border-radius:17px;border:1px solid var(--rule);background:var(--sheet);color:var(--ink2);font-size:.86rem;font-weight:700}
+.sq .kn button.on{border-color:var(--blue);background:var(--blue-soft);color:var(--blue-ink)}
+.sq .kn button.kx.on{border-color:var(--ink3);background:var(--rule2);color:var(--ink2)}
+.sq.skip .sqt{color:var(--ink2);text-decoration:line-through}
+.sq.done{display:flex;gap:10px;align-items:center}
+.sq.done .sqn{color:var(--ok)}
+.sq.done .sqt{color:var(--ink2)}
+.sq.cur{background:var(--blue-soft)}
+.sq .sqw{margin:8px 0 0 34px;font-size:.86rem;color:var(--ink2)}
+.sq .sqs{margin:10px 0 0 34px;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.sq .sqs li{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;justify-content:space-between}
+.sq .sqs .sst{flex:1 1 12rem;min-width:0;line-height:1.45}
+.sq .sqs .sto{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.sq .sqs .tline{margin:0}
+.sq .sqk{margin:10px 0 0 34px;padding:10px 12px;border-radius:10px;background:var(--sheet);border:1px solid var(--rule2);font-size:1rem;line-height:1.5}
+.sq .sqk p{margin:0}.sq .sqk p+p{margin-top:4px}
+/* 앱 업데이트(3.2.0): 오늘 머리 아래 한 줄 "새 버전을 받아 두었어요 · 최신 버전 받기" */
+.notice.upd b{display:block;font-weight:700;line-height:1.45}
+.notice.upd small{display:block;margin-top:2px;font-size:.86rem;color:var(--ink2);line-height:1.45}
+.notice.upd .btn{width:auto;margin-top:8px;background:var(--paper)}
