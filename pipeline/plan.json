@@ -1,6 +1,6 @@
 {
- "note": "앱 더보기 → 시험 일정과 같은 값. set-plan 명령으로만 바꾼다.",
- "start": "2026-11-09",
- "target": "auto",
+ "note": "앱 더보기 → 시험 일정과 같은 값. set-plan·sync-plan 명령으로만 바꾼다. begin: 앱의 준비 시작일(그 전 날은 세트를 만들지 않음).",
+ "start": "2026-11-16",
+ "target": 142,
  "rounds": {}
 }
