@@ -422,6 +422,15 @@ function open(opt = {}) {
     const G = open({ member: { id: 'kim', admin: false, uid: 'U2' } });
     await sleep(300);
     ok(!dev.member.some(x => x[0] === 'plan'), '회원(관리자 아님) 앱은 시험 일정을 보내지 않음');
+    G.pe.SETS().plan = { start: '2026-10-12', target: 142, exam: '2027-05-15', mock: null, mockDate: null };
+    await G.go('#more'); await G.go('#schedule');
+    ok(/세트 주제는 관리자 일정을 따라요/.test(G.txt()) && /관리자 일정\(10\/12 시작 주, 제142회\)/.test(G.txt()) && !/예약 작업은 아직 이전 일정이에요/.test(G.txt()) && !G.d.querySelector('[data-act="sch-copy"]') && !G.d.querySelector('[data-act="plan-push"]'),
+      '회원: 저장소 일정이 달라도 빨강·변경 요청 없이 "세트 주제는 관리자 일정을 따라요"');
+    const disk0 = Object.assign({}, disk); dev.clip = null;
+    const gs = G.d.querySelector('#schStart'); gs.value = '2026-12-02'; gs.dispatchEvent(new G.w.Event('change', { bubbles: true })); await sleep(20);
+    G.click('[data-act="sch-save"]'); await sleep(120);
+    ok(dev.clip === null && !dev.member.some(x => x[0] === 'plan') && G.pe.S().settings.start === '2026-12-02' && /세트 주제는 관리자 일정을 따라요/.test(G.txt()), '회원: 시작일을 바꿔 저장해도 변경 요청을 복사하지 않고 보내지도 않음(내 일정만 바뀜)');
+    for (const k of Object.keys(disk)) delete disk[k]; Object.assign(disk, disk0);   // 다음 검사는 시작일을 바꾸기 전 기록으로
     { const st = JSON.parse(disk.pe_state_v1); ok(!!st.settings.pushSig, '앞서 연 관리자 앱(승인 관리·문자함)도 열 때 보냈음'); delete st.settings.pushSig; delete st.settings.pushAt; disk.pe_state_v1 = JSON.stringify(st); }
     dev.member.length = 0;
     const P = open({ member: { id: 'boss', admin: true, uid: 'U1' } });

@@ -125,6 +125,7 @@ const sigEq=(r,l)=>!!r&&!!l&&r.start===l.start&&Number(r.target)===Number(l.targ
 /* 저장소가 가야 할 일정: 기다리는 새 일정이 있으면 그것, 없으면 지금 일정 */
 function repoWant(){const N=S.settings.nextTarget;return planSig(N?computePlan(S.settings.start,N.r):PLAN);}
 function repoPlanState(t){const r=SETS.plan;if(!r)return'unknown';const st=S.settings,N=st.nextTarget,cur=sigEq(r,planSig());
+  if(memOnly()&&!(cur&&!N))return'admin';   /* 회원(관리자 아님, 3.2.1): 세트·모의는 관리자 일정을 따른다(바꿀 수 없으니 빨강·변경 요청 없이 안내만) */
   if(cur)return N?'wait':'same';if(N&&sigEq(r,planSig(computePlan(st.start,N.r))))return'next';
   if(pushed()&&(t||todayStr())<=addDays(st.pushAt,3))return'auto';
   const u=st.schUndo,last=[st.schSent,u&&u.at].filter(Boolean).sort().pop();return st.schSent&&sigEq(st.schSig,repoWant())&&(t||todayStr())<=addDays(last,7)?'sent':'diff';}
@@ -144,8 +145,10 @@ function planPush(){if(!ibxOn())return Promise.resolve(false);const st=S.setting
   if(st.pushSig===k&&st.pushAt)return Promise.resolve(true);if(PUSHING&&PUSHING.k===k)return PUSHING.p;
   const p=PE_IO.memberCall('plan',o).then(()=>{st.pushSig=k;st.pushAt=todayStr();save();if(R.page==='schedule'||R.page==='more')softRender();return true;},()=>false).then(r=>{if(PUSHING&&PUSHING.k===k)PUSHING=null;return r;});
   PUSHING={k,p};return p;}
-/* 시험 일정을 바꾼 뒤 알리기: 저장소 일정이 가야 할 일정과 다르면 관리자는 예약 작업에 보내고(못 보내면) 변경 요청을 복사한다 */
-function schTell(m,t){if(!(SETS.plan&&!sigEq(SETS.plan,repoWant()))){schSentDel();save();toast(m);planPush();return;}
+/* 회원 휴대폰(아이디가 있고 관리자가 아님). 브라우저·회원 확인 없는 빌드는 혼자 쓰는 앱이라 아니다 */
+function memOnly(){const me=PE_IO.member&&PE_IO.member();return!!(me&&!me.admin);}
+/* 시험 일정을 바꾼 뒤 알리기: 저장소 일정이 가야 할 일정과 다르면 관리자는 예약 작업에 보내고(못 보내면) 변경 요청을 복사한다. 회원은 알림만 */
+function schTell(m,t){if(memOnly()){schSentDel();save();toast(m);return;}if(!(SETS.plan&&!sigEq(SETS.plan,repoWant()))){schSentDel();save();toast(m);planPush();return;}
   const cp=()=>{schSentSet(t);save();softRender();PE_IO.copy(schReq()).then(()=>toast(m+'. 변경 요청을 복사했어요'),()=>{schSentDel();save();toast(m+'. 변경 요청은 복사하지 못했어요');render();});};
   if(!ibxOn())return cp();
   planPush().then(ok=>{if(ok){schSentDel();save();toast(m+'. 예약 작업에도 보냈어요');render();}else cp();});}
@@ -653,6 +656,7 @@ function estMock(w){const r=weekRange(w),inW=d=>!!d&&d>=r[0]&&d<=r[1];
 function setPh(d){const x=(S.wk||{})[wkStart(d)];return x&&x.ph!=null?x.ph:phaseObj(wkIdx(d)).id;}
 /* 세트 파일의 주차(예약 작업 일정)가 앱 주차와 다르면 세트 화면 머리 아래 한 줄: 저장소 일정이 앱과 다르면 변경 요청 안내와 시험 일정 링크 */
 function setWkNote(d,w){const s=SETS.sets[d];if(!s||s.week==null||s.week===w)return'';const rp=repoPlanState();
+  if(rp==='admin')return`<p class="note setwk">관리자 일정의 ${s.week<=0?'준비 주':s.week+'주차'} 세트예요. 세트 주제는 관리자 일정을 따르고, 오늘 몫·주차·단계는 내 일정대로예요.</p>`;
   return`<p class="note setwk">예약 작업이 예전 일정의 ${s.week<=0?'준비 주':s.week+'주차'}로 만든 세트예요.${rp==='auto'?' 예약 작업에 지금 일정을 보냈어요. 다음 세트부터 앱 주차와 맞아요.':''}${rp==='diff'||rp==='sent'?` 시험 일정의 변경 요청을 예약 작업에 붙여 넣으면 다음 세트부터 앱 주차와 맞아요. <button class="lnk" data-act="go" data-h="schedule">시험 일정</button>`:''}</p>`;}
 function hwMin(d){const R=hwRule(d),M=Object.assign({},PE_HW_MIN[1],PE_HW_MIN[setPh(d)]||{});for(const k in M)M[k]=Math.min(M[k],R[k]||0);return M;}
 /* 세트 숙제를 할 일 단위로: n 필수 칸, N 학원 횟수 칸, k·K 한 칸(필수·전체까지만), u 칸당 분, f·F 낱말마다 필수·전체 횟수.
@@ -2779,6 +2783,7 @@ function vSchedule(){const ed=SCH||{start:S.settings.start,target:S.settings.tar
     ${changed?`<div class="btns schsv" style="margin-top:14px"><button class="btn" data-act="sch-save">${from?'<span>'+esc(dlab(from))+'부터 <span class="nw">이 일정으로</span></span>':'이 일정으로 저장'}</button><button class="btn ghost" data-act="sch-cancel">취소</button></div><p class="ds" style="margin:8px 0 0">${from?esc(dlab(from))+'부터 ':''}오늘 화면, 로드맵, 주차와 단계가 새 일정으로 바뀌어요.${stCh&&hasRec()&&!SCH.keep?'':' 카드·오답 기록은 그대로예요.'}</p>`:''}</div>
   ${sec('예약 작업 일정','',rp==='same'?`<div class="group">${row({ic:'check',tone:'ok',t:'예약 작업도 같은 일정이에요',d:'매일 세트와 주간 모의고사가 이 일정의 주차·단원으로 만들어져요'})}</div>`
     :rp==='unknown'?`<div class="group">${row({ic:'sync',tone:'gray',t:'아직 확인하지 못했어요',d:'받아 오기를 하면 저장소의 일정과 비교해요',act:'sync'})}</div>`
+    :rp==='admin'?`<div class="group">${row({ic:'info',tone:'gray',t:'세트 주제는 관리자 일정을 따라요',d:esc(`매일 세트와 주간 모의고사는 모두 같은 것이 와요. 지금은 관리자 일정(${md(R0.start)} 시작 주, 제${R0.target}회)의 주차·단원이에요. 오늘 몫·주차·단계·시험 목표·D-day는 내가 정한 일정대로예요.`)})}</div>`
     :rp==='wait'&&pushed()?`<div class="group">${row({ic:'cal',tone:'gray',t:esc(`예약 작업은 ${dlab(N.from)}부터 바꿔요`),d:'앱이 새 일정을 보내 두었어요. 그날 세트부터 새 일정으로 만들어요'})}</div>`
     :rp==='wait'?`<div class="group">${row({ic:'cal',tone:'gray',t:esc(`예약 작업은 ${dlab(N.from)}부터 바꿔요`),d:esc(`${dlab(addDays(N.from,-1))}에 변경 요청을 붙여 넣어요`)})}</div>
       <div class="btns"><button class="btn sec" data-act="sch-copy">변경 요청 복사</button></div><p class="note">그 전에 붙여 넣으면 이번 주 남은 세트가 새 일정으로 와요.</p>`
