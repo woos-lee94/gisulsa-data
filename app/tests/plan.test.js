@@ -2388,6 +2388,78 @@ function runWeek(W, sets, st) {
     sel.value = '141'; sel.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(30);
     ok(/6개월이 안 되는 압축 일정이에요/.test(T_(V$())) && /이 일정이면 .*하루 평균 약/.test(T_(V$().querySelector('.coachl'))), `69-7. 미리 보기: ${T_(V$().querySelector('.schshort')).slice(0, 60)} / ${T_(V$().querySelector('.coachl')).slice(0, 60)}`);
     pe.goTab('today'); await sleep(40); }
+  // 70. 짝 맞추기 게임(3.2.3): 연습 → 카드 → 짝 맞추기, 용어 칩과 뜻 카드, 5쌍씩 3판
+  {
+    const J = JSON.stringify;
+    const T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), tap = async s => { click(s); await sleep(20); };
+    scene('2026-11-15T10:00:00', ST);
+    const S = pe.S(), ds = pe.deck(); S.range = 'all';
+    // 70-1. 짝 글: 정의 첫 문장에서 용어 이름을 ○○로 가리고 56자 넘으면 줄임(말줄임 …), 이름이 그대로 남은 짝 글 없음
+    const main = c => c.t.replace(/\s*[(（][^)）]*[)）]\s*/g, ' ').trim(), leak = ds.filter(c => { const x = pe.mgText(c, 'd'); return x && x.includes(main(c)); });
+    const lens = ds.map(c => (pe.mgText(c, 'd') || '').length), made = ds.filter(c => pe.mgText(c, 'd')).length, mk = ds.filter(c => pe.mgText(c, 'k')).length;
+    ok(!leak.length && Math.max(...lens) <= 57 && made >= ds.length * .95 && mk >= ds.length * .9 && pe.mgCut('가'.repeat(80)).length === 57 && pe.mgCut('짧은 글') === '짧은 글'
+      && /○○/.test(pe.mgText(ds.find(c => c.t === '구조물 뒤채움') || ds[0], 'd') + (ds.find(c => c.t === '구조물 뒤채움') ? '' : '○○')),
+      `70-1. 뜻 짝 ${made}/${ds.length}장 · 키워드 짝 ${mk}장, 가장 긴 ${Math.max(...lens)}자, 이름이 남은 것 ${leak.length}`);
+    // 70-2. 고르기: 헷갈린 카드(간격 2단계 이하·오답 노트)부터, 5쌍씩 3판, 같은 이름·같은 짝 글 없음. 범위가 좁으면 5쌍 단위(7장 → 1판), 5장이 안 되면 못 함
+    S.cards = {}; const weak = ds.slice(0, 6).map(c => c.id);
+    weak.forEach(id => { S.cards[id] = { box: 1, due: '2026-11-20', seen: 2, ok: 0, ng: 1, star: false }; });
+    ds.slice(6, 40).forEach(c => { S.cards[c.id] = { box: 5, due: '2026-12-20', seen: 3, ok: 3, ng: 0, star: false }; });
+    const rs = pe.mgPick('all', 'd'), flat = rs.flat();
+    ok(rs.length === 3 && rs.every(r => r.length === 5) && weak.every(id => flat.some(p => p.id === id)) && new Set(flat.map(p => p.t)).size === 15 && new Set(flat.map(p => p.x)).size === 15,
+      `70-2. ${rs.length}판 × ${rs[0].length}쌍, 헷갈린 카드 ${weak.filter(id => flat.some(p => p.id === id)).length}/6장 들어감`);
+    ds.slice(40, 47).forEach(c => { S.cards[c.id] = { box: 3, due: '2026-12-01', seen: 1, ok: 1, ng: 0, star: true }; });
+    const st7 = pe.mgPick('stars', 'd'); ds.slice(42, 47).forEach(c => { S.cards[c.id].star = false; });
+    ok(st7 && st7.length === 1 && st7[0].length === 5 && pe.mgPick('stars', 'd') === null && pe.mgCount('stars', 'd') === 2, `70-2. 별표 7장 → ${st7 && st7.length}판, 2장 → 못 함`);
+    // 70-3. 화면: 연습 줄 → 시작 화면(범위·짝·카드 수) → 시작하면 집중 모드(아래 탭 숨김, 위쪽 "닫기"), 1/3판, 용어 칩 5·뜻 카드 5
+    const card0 = J(S.cards), wrong0 = J(S.wrong), ev0 = (S.ev || []).length;
+    await show('#practice'); const row = V$().querySelector('[data-h="match"]');
+    ok(row && /짝 맞추기 게임/.test(T_(row)) && /용어와 뜻을 짝지어요 · 5쌍씩 3판/.test(T_(row)), `70-3. 연습 줄 "${T_(row)}"`);
+    await tap('[data-h="match"]'); await sleep(30);
+    ok(/#match$/.test(w.location.hash) && V$().querySelector('#rangeSel') && V$().querySelectorAll('[data-act="mg-mode"]').length === 2 && /이 범위 카드 \d+장/.test(T_(V$())) && !d.body.classList.contains('focus'),
+      `70-3. 시작 화면: ${T_(V$()).slice(0, 90)}`);
+    await tap('[data-act="mg-start"]'); const M = pe.MG();
+    ok(M && d.body.classList.contains('focus') && /1\/3판/.test(T_(V$())) && V$().querySelectorAll('.mgw').length === 5 && V$().querySelectorAll('.mgf').length === 5 && T_(V$().querySelector('.topbar .back')) === '닫기' && /맞는 뜻을 누르세요/.test(T_(V$())),
+      '70-3. 게임: 집중 모드, 1/3판, 칩 5 · 뜻 5');
+    // 70-4. 누르기: 고름 → 같은 쪽 다른 칸이면 바꿈 → 틀리면 +3초와 두 카드를 헷갈린 용어로 → 맞히면 초록 후 사라짐(다시 그려도), 시계는 벌점 포함
+    const r0 = M.rs[0].map(p => p.id), Q = (s, id) => `[data-act="mg"][data-s="${s}"][data-id="${id}"]`, E = (s, id) => V$().querySelector(Q(s, id));
+    await tap(Q('t', r0[0]));
+    ok(E('t', r0[0]).classList.contains('sel') && M.sel && M.sel.id === r0[0], '70-4. 용어를 누르면 골라짐');
+    await tap(Q('t', r0[1]));
+    ok(!E('t', r0[0]).classList.contains('sel') && E('t', r0[1]).classList.contains('sel'), '70-4. 같은 쪽 다른 칸을 누르면 그것으로 바뀜');
+    await tap(Q('d', r0[2]));
+    ok(M.miss === 1 && M.errs[r0[1]] === 1 && M.errs[r0[2]] === 1 && !M.sel && E('d', r0[2]).classList.contains('bad') && T_(V$().querySelector('#mgMiss')) === '틀림 1',
+      `70-4. 틀림 ${M.miss}, 헷갈린 용어 ${J(M.errs)}`);
+    at('2026-11-15T10:00:20'); await tap(Q('d', r0[0])); await tap(Q('t', r0[0]));
+    ok(M.done[r0[0]] && E('t', r0[0]).classList.contains('ok') && E('t', r0[0]).disabled && E('d', r0[0]).classList.contains('ok') && T_(d.querySelector('#mgClk')) === '0:23' && d.querySelector('#mgPen').classList.contains('on'),
+      `70-4. 뜻부터 눌러도 맞힘, 시계 ${T_(d.querySelector('#mgClk'))}(20초 + 벌점 3초)`);
+    pe.render(); await sleep(10);
+    ok(E('t', r0[0]).classList.contains('gone') && E('d', r0[0]).classList.contains('gone') && E('t', r0[1]) && !E('t', r0[1]).disabled, '70-4. 다시 그려도 맞힌 칸은 사라진 채, 나머지는 그대로');
+    // 70-5. 판을 다 맞히면 다음 판, 마지막 판 뒤 끝 화면(시간·틀림·첫 기록·헷갈린 용어 두 장·파란 버튼 "카드로 외우기"), 집중 모드 끝, 달력 한 줄·최고 기록. 간격 반복·오답 노트·속도 기록은 그대로
+    const solve = async () => { const G = pe.MG(); for (const p of G.rs[G.r]) if (!G.done[p.id]) { click(Q('t', p.id)); click(Q('d', p.id)); } await sleep(480); };
+    await solve(); ok(pe.MG().r === 1 && /2\/3판/.test(T_(V$())) && !/맞는 뜻을 누르세요/.test(T_(V$())), '70-5. 1판을 다 맞히면 2/3판');
+    await solve(); at('2026-11-15T10:01:00'); await solve();
+    const tx = T_(V$()), S2 = pe.S();
+    ok(pe.MG().end && !d.body.classList.contains('focus') && /1분 3초/.test(tx) && /틀림 1번\(\+3초\)/.test(tx) && /첫 기록이에요/.test(tx) && /헷갈린 용어\s*2개/.test(tx)
+      && V$().querySelectorAll('.sec .row[data-act="card-modal"]').length === 2 && T_(V$().querySelector('.btn:not(.sec)')) === '헷갈린 용어 2장 카드로 외우기' && V$().querySelector('.btn.sec[data-act="mg-start"]'),
+      `70-5. 끝 화면: ${tx.slice(0, 120)}`);
+    ok(S2.mg.best.d3 === 63000 && J(S2.cal['2026-11-15'].x.match) === J(['quiz', '짝 맞추기 1번 · 15쌍 · 틀림 1']) && J(S2.cards) === card0 && J(S2.wrong) === wrong0 && (S2.ev || []).length === ev0 && S2.act['2026-11-15'] > 0,
+      `70-5. 최고 기록 ${S2.mg.best.d3}ms, 달력 ${J(S2.cal['2026-11-15'].x.match)}, 카드·오답·속도 기록 그대로, 오늘 공부 ${S2.act['2026-11-15']}분`);
+    // 70-6. 헷갈린 용어 → 카드 세션(매김은 평소대로), 닫으면 짝 맞추기 시작 화면(최고 기록)
+    await tap('[data-act="mg-review"]'); await sleep(30);
+    ok(/#sess$/.test(w.location.hash) && pe.SES() && pe.SES().kind === 'match' && pe.SES().items.length === 2 && pe.SES().items.every(it => it.type === 'card' && M.errs[it.id]) && !pe.MG(),
+      '70-6. 헷갈린 용어 2장으로 카드 세션');
+    await tap('[data-act="back"]'); await sleep(40);
+    ok(/#match$/.test(w.location.hash) && V$().querySelector('[data-act="mg-start"]') && /최고 기록 1분 3초/.test(T_(V$())), `70-6. 세션을 닫으면 짝 맞추기 시작 화면: ${T_(V$()).slice(-60)}`);
+    // 70-7. 키워드 짝, 하다가 닫으면 게임은 버림(집중 모드 끝, 연습으로). 연습 줄에 최고 기록
+    await tap('[data-act="mg-mode"][data-m="k"]');
+    ok(pe.S().mg.mode === 'k' && /용어와 키워드를 짝지어/.test(T_(V$())) && !/최고 기록/.test(T_(V$().querySelector('.note'))), '70-7. 키워드 짝(최고 기록은 짝마다 따로)');
+    await tap('[data-act="mg-start"]');
+    ok(pe.MG() && pe.MG().m === 'k' && /맞는 키워드를 누르세요/.test(T_(V$())), '70-7. 키워드 짝 게임');
+    await tap('[data-act="back"]'); await sleep(40);
+    ok(!pe.MG() && !d.body.classList.contains('focus') && /#practice$/.test(w.location.hash), `70-7. 닫으면 게임은 버리고 ${w.location.hash}`);
+    pe.S().mg.mode = 'd'; pe.render(); await sleep(10);
+    ok(/최고 1분 3초/.test(T_(V$().querySelector('[data-h="match"]'))), `70-7. 연습 줄에 최고 기록: ${T_(V$().querySelector('[data-h="match"]'))}`);
+    pe.goTab('today'); await sleep(40); }
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);

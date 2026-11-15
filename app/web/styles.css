@@ -898,3 +898,32 @@ textarea.in.plain{font-family:inherit;font-size:1rem;line-height:1.6;min-height:
 .coprow .tx{flex:1;min-width:0}
 .cobar{display:block;height:6px;margin-top:6px;border-radius:6px;background:var(--rule2);overflow:hidden}
 .cobar i{display:block;height:100%;border-radius:6px;background:var(--blue)}
+
+/* ── 짝 맞추기(3.2.3, #match): 위 용어 칩 · 아래 뜻 카드. 고른 칸 청색, 맞힘 초록 → 사라짐(자리는 그대로), 틀림 빨강 흔들기 ── */
+.mghd{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;margin:14px 2px 6px}
+.mghd .rd{font-size:.86rem;font-weight:700;color:var(--ink2)}
+.mghd .clkw{position:relative}
+.mghd .clk{font-size:1.6rem;font-weight:800;letter-spacing:-.01em;line-height:1.2}
+.mghd .ms{justify-self:end;font-size:.86rem;font-weight:700;color:var(--red)}
+.mghd .pen{position:absolute;left:100%;top:-2px;margin-left:6px;font-size:.86rem;font-weight:800;color:var(--red);opacity:0;pointer-events:none;white-space:nowrap}
+.mghd .pen.on{animation:mgpen .9s ease-out}
+@keyframes mgpen{0%{opacity:0;transform:translateY(6px)}20%{opacity:1;transform:none}70%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
+.mgq{margin:0 2px 10px;color:var(--ink2);font-size:.86rem;text-align:center}
+.mgts{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:6px 0 14px}
+.mgw{min-height:44px;padding:9px 15px;border-radius:999px;border:1.5px solid var(--rule);background:var(--sheet);font-size:1rem;font-weight:700;line-height:1.3;text-align:center;
+  transition:opacity .25s,transform .25s,background-color .15s,border-color .15s}
+.mgds{display:grid;gap:8px}
+.mgf{display:block;width:100%;min-height:52px;padding:11px 14px;border-radius:var(--r-sm);border:1.5px solid var(--rule);background:var(--sheet);font-size:1rem;line-height:1.45;text-align:left;
+  transition:opacity .25s,transform .25s,background-color .15s,border-color .15s}
+:is(.mgw,.mgf).sel{border-color:var(--blue);background:var(--blue-soft);box-shadow:inset 0 0 0 1px var(--blue)}
+:is(.mgw,.mgf).ok{border-color:var(--ok);background:var(--ok-soft);opacity:1}
+:is(.mgw,.mgf).gone{opacity:0;transform:scale(.96);pointer-events:none}
+:is(.mgw,.mgf):disabled{color:inherit}
+:is(.mgw,.mgf).bad{border-color:var(--red);background:var(--red-soft);animation:mgshake .4s}
+@keyframes mgshake{0%,100%{transform:none}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+.mgres{margin-top:16px;padding:22px 18px 18px;border-radius:var(--r-lg);background:var(--sheet);text-align:center}
+.mgres .k{margin:0;color:var(--ink2);font-size:.86rem;font-weight:700}
+.mgres .big{margin:4px 0 2px;font-size:2rem;font-weight:800;letter-spacing:-.02em;line-height:1.2}
+.mgres .s{margin:0;color:var(--ink2);font-size:1rem}
+.mgres .best{display:inline-block;margin:10px 0 0;padding:4px 12px;border-radius:999px;background:var(--rule2);color:var(--ink2);font-size:.86rem;font-weight:700}
+.mgres .best.on{background:var(--ok-soft);color:var(--ok)}

@@ -14,12 +14,13 @@ const INTERVALS=[0,1,3,7,14,30,60];
 const REVIEW_STEPS=[1,3,7,14,30];
 const KEY='pe_state_v1', SKEY='pe_sets_v1';
 const DATA_DEFAULT='https://raw.githubusercontent.com/woos-lee94/gisulsa-data/main/data/';
-const APP_VER='3.2.2';
+const APP_VER='3.2.3';
 const MOCK_GRADE_SINCE='2026-11-01';            /* v3.0.0을 내는 날. 이 날짜 전 모의고사는 "채점 받았어요"를 묻지 않는다 */
 const BUDGET_DEF={wd:180,sat:300,sun:240};       /* 하루 공부 시간(분) 기본값: 평일·토요일·일요일과 공휴일(S.settings.budget, budgetOf) */
 const PLAN_START=(window.PE_EXAM&&PE_EXAM.defaults.start)||'2026-10-19';
 
 const IC={
+  pair:'<rect x="3" y="4" width="8" height="7" rx="1.8"/><rect x="13" y="13" width="8" height="7" rx="1.8"/><path d="M11 7.5h3a2 2 0 0 1 2 2V13"/><path d="m14.2 11 1.8 2 1.8-2"/>',
   cards:'<rect x="3.5" y="6" width="13" height="14" rx="2"/><path d="M7.5 6V5a1.5 1.5 0 0 1 1.5-1.5h10A1.5 1.5 0 0 1 20.5 5v11a1.5 1.5 0 0 1-1.5 1.5h-2.5"/>',
   redo:'<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4.5v4.2h4.2"/>',
   shuffle:'<path d="M3.5 7h3c2.2 0 3.4 1.1 4.6 3l1.8 3c1.2 1.9 2.4 3 4.6 3h3M3.5 17h3c1.1 0 2-.3 2.7-.9M13.9 7.9c.7-.6 1.6-.9 2.6-.9h4"/><path d="m17.5 4 3 3-3 3M17.5 13l3 3-3 3"/>',
@@ -423,8 +424,8 @@ function paintSyncBits(){document.querySelectorAll('[data-syncline]').forEach(el
    아래 탭: 오늘 · 이번 주 · 복습 · 연습 · 더보기. 예전 주소 #study(암기)·#test(테스트)는 연습 탭으로 읽는다(주소는 바꾸지 않고 그 탭을 그린다) */
 const TABS=['today','week','review','practice','more'],TAB_ALIAS={study:'practice',test:'practice'};
 const PARENT={set:'today',cal:'today',mock:'practice',kichul:'practice',dandap:'practice',stats:'week',archive:'review',wrong:'review',
-  guide:'more',timer:'more',plan:'more',schedule:'more',coach:'more',settings:'more',backup:'more',about:'more',prompts:'more',imp:'more',admin:'more',inbox:'more',msg:'more'};
-const PAGES={set:vSet,sess:vSess,memo:vMemo,cal:vCal,dandap:vDandap,kichul:vKichul,mock:vMock,guide:vGuide,admin:vAdmin,inbox:vInbox,msg:vMsg,plan:vPlan,schedule:vSchedule,coach:vCoach,timer:vTimer,prompts:vPrompts,imp:vImport,settings:vSettings,backup:vBackup,about:vAbout,archive:vArchive,wrong:vWrong,stats:vStats};
+  match:'practice',guide:'more',timer:'more',plan:'more',schedule:'more',coach:'more',settings:'more',backup:'more',about:'more',prompts:'more',imp:'more',admin:'more',inbox:'more',msg:'more'};
+const PAGES={set:vSet,sess:vSess,memo:vMemo,match:vMatch,cal:vCal,dandap:vDandap,kichul:vKichul,mock:vMock,guide:vGuide,admin:vAdmin,inbox:vInbox,msg:vMsg,plan:vPlan,schedule:vSchedule,coach:vCoach,timer:vTimer,prompts:vPrompts,imp:vImport,settings:vSettings,backup:vBackup,about:vAbout,archive:vArchive,wrong:vWrong,stats:vStats};
 const TAB_VIEWS={today:vToday,week:vWeek,review:vReview,practice:vPractice,more:vMore};
 const UP_LABEL={today:'오늘',week:'이번 주',review:'복습',practice:'연습',study:'연습',test:'연습',more:'더보기',set:'세트',kichul:'기출','kichul/u':'단원별',mock:'모의고사',cal:'달력',inbox:'문자함'};
 const SET_TABS=['cards','quiz','essay','tasks'];
@@ -458,8 +459,8 @@ const upLabel=h=>{h=nh(h);const p=h.split('/');if(UP_LABEL[h])return UP_LABEL[h]
   return UP_LABEL[p[0]]||'뒤로';};
 function parseHash(){const h=curH(),p=h.split('/');const r={tab:'today',page:null,a:p[1]||null,b:p[2]||null};
   if(isTab(p[0]))r.tab=tabKey(p[0]);else if(PAGES[p[0]]){r.page=p[0];r.tab=tabOf(h);}return r;}
-/* 집중 모드: 세션·가리며 외우기, 타이머가 도는 그 모의고사(아래 탭을 숨기고 위쪽은 "닫기") */
-const isFocus=()=>R.page==='sess'||R.page==='memo'||(R.page==='mock'&&TM.running&&!!TM.ctx&&TM.ctx.kind==='mock'&&TM.ctx.D===R.a);
+/* 집중 모드: 세션·가리며 외우기, 하고 있는 짝 맞추기, 타이머가 도는 그 모의고사(아래 탭을 숨기고 위쪽은 "닫기") */
+const isFocus=()=>R.page==='sess'||R.page==='memo'||(R.page==='match'&&!!MG&&!MG.end)||(R.page==='mock'&&TM.running&&!!TM.ctx&&TM.ctx.kind==='mock'&&TM.ctx.D===R.a);
 /* 빈 흐름: SES 없는 #sess, MEMO 없는 #memo. 그리지 않고 위로 보낸다 */
 const flowGone=r=>(r.page==='sess'&&!SES)||(r.page==='memo'&&!MEMO);
 /* 같은 주소면 다시 그리기만 한다(세션 → 세션, 외우기 안의 외우기). 그 주소가 빈 흐름이면 위로(바꿔 쓰지 않아 route()를 거치지 않는 길에도 빈 화면을 막는다) */
@@ -489,7 +490,7 @@ function goTab(tab){closeModal();SCR[curH()]=window.scrollY;tab=tabKey(tab);if(!
 function flowKeep(o){if(!(o&&o.keepFlow)&&!(FLOW&&curH()===FLOW.at))FLOW=null;}
 /* 복원·초기화: 메모리에만 있던 흐름을 비운다(하던 세션·가리며 외우기, 오늘 줄의 흐름, 들어온 곳·스크롤 자리, 펼친 줄·나중에·고른 답안지, 고치던 시험 일정, 그 기록에 묶인 타이머).
    남겨 두면 오늘에 지운 기록의 "이어서"가 뜨고, 그것을 끝내면 매김·오답·세트 복습이 새 기록에 들어간다 */
-function flowReset(){memoStop();SES=null;MEMO=null;FLOW=null;RET={};SCR={};UPH=null;Object.assign(UI,{later:{},act:null,d:null,hwf:null,ddx:null});SCH=null;if(TM.ctx||TM.ended)setPreset(TM.preset);
+function flowReset(){memoStop();mgStop();SES=null;MEMO=null;FLOW=null;RET={};SCR={};UPH=null;Object.assign(UI,{later:{},act:null,d:null,hwf:null,ddx:null});SCH=null;if(TM.ctx||TM.ended)setPreset(TM.preset);
   Object.keys(SV).forEach(k=>{if(/^mkw?:|:eo$/.test(k))delete SV[k];});}   /* 그 기록에 묶인 화면 값: 모의의 고른 교시(mkw:)·연 키워드·목차(mk:)·논술 목차 힌트(:eo). 세트 탭 같은 보기 값은 그대로 */
 /* 주소가 바뀐 뒤: 그리고 맨 위로(위로 온 것이면 떠날 때 자리로, 그 위 SV.scrollTo가 있으면 그곳으로). 아직 닫지 않은 "바뀐 점" 창은 다시 띄운다 */
 function route(){closeModal();const up=UPH;UPH=null;
@@ -499,7 +500,7 @@ function route(){closeModal();const up=UPH;UPH=null;
     if(R.page==='set'&&R.b){if(SET_TABS.includes(R.b))SV[R.a]=R.b;return rep('set/'+R.a);}
     onEnter(R);
   }catch(e){console.error(e);R=parseHash();}
-  if(R.page!=='memo')memoStop();render();window.scrollTo(0,up&&up===curH()&&SCR[up]||0);scrollDo();v3Again();}
+  if(R.page!=='memo')memoStop();if(R.page!=='match')mgStop();render();window.scrollTo(0,up&&up===curH()&&SCR[up]||0);scrollDo();v3Again();}
 /* 화면에 들어갈 때 한 번(그리기와 따로, 그리기는 기록을 쓰지 않는다): 토·일요일에 다음 주 단원의 기출 화면을 열면 "다음 주 단원 기출 훑기"(S.tk['kichul:주']) */
 function onEnter(r){if(r.page==='inbox'&&r.a)return ibxSeen(r.a);if(r.page==='msg')return mtPoll(true);if(r.page!=='kichul'||r.a!=='u'||!r.b)return;const t=todayStr(),dw=parse(t).getDay(),W=wkStart(t),tk=S.tk||(S.tk={});if(dw!==0&&dw!==6||tk['kichul:'+W])return;
   if((weekObj(weekIndex(addDays(W,7))).u||[]).map(Number).includes(Number(r.b))){tk['kichul:'+W]=t;touchDay();save();}}
@@ -2110,17 +2111,18 @@ function rangeSelect(id,cur){return`<select class="select" id="${id}">${RANGES.m
 /* 연습 탭: 스스로 고르는 연습만 모은 곳(파란 버튼 없음, 모두 줄). 범위 → 카드(카드 복습·새 카드·자유 연습·가리며 외우기) → 문제 6 → 실전 3 → 단원별 진도(접음).
    카드 복습은 늘 전체 단원(복습 탭과 같은 수), 범위는 새 카드·자유 연습·가리며 외우기·문제에 쓴다 */
 function vPractice(){const rg=S.range||'week',pool=deck().filter(rangeFilter(rg)),t=todayStr(),N=cardsOut(t).length,learned=deck().filter(c=>pget(c.id).seen>0).length;
-  const fresh=pool.filter(c=>!S.cards[c.id]||S.cards[c.id].seen===0).length,room=newRoom(),nw=Math.min(fresh,room),mr=resumeAt('memo:study'),lm=latestMockDate(),rounds=kichulRounds();
+  const fresh=pool.filter(c=>!S.cards[c.id]||S.cards[c.id].seen===0).length,room=newRoom(),nw=Math.min(fresh,room),mr=resumeAt('memo:study'),lm=latestMockDate(),rounds=kichulRounds(),mgb=mgBest(mgMode()+MG_ROUNDS);
   const mk=D=>{const pr=S.mockp[D]||{};return mockParts(SETS.mocks[D]).map(k=>`${MKP[k]} ${pr[k]?'✓':'○'}`).join(' ')+(D>=MOCK_GRADE_SINCE?` 채점 ${pr.g?'✓':'○'}`:'');};
   const units=PE_UNITS.map(u=>{const cs=deck().filter(c=>Number(c.u)===u.id);const l=cs.filter(c=>pget(c.id).seen>0).length;const ok=cs.reduce((a,c)=>a+pget(c.id).ok,0),ng=cs.reduce((a,c)=>a+pget(c.id).ng,0);return{u,n:cs.length,l,acc:ok+ng?Math.round(ok/(ok+ng)*100):null};});
   return`<div class="ltitle"><div><h1>연습</h1><p class="lsub">학습한 카드 ${learned}/${deck().length}</p></div></div>
   <label class="f" for="rangeSel">범위</label>${rangeSelect('rangeSel',rg)}
-  <p class="note">새 카드·자유 연습·가리며 외우기·문제에 써요. 카드 복습은 늘 전체 단원이에요.</p>
+  <p class="note">새 카드·자유 연습·가리며 외우기·짝 맞추기·문제에 써요. 카드 복습은 늘 전체 단원이에요.</p>
   ${sec('카드','',`<div class="group">
     ${row({ic:'redo',t:N?`카드 복습 ${N}장 · 전체 단원`:'카드 복습 · 전체 단원',d:N?'':'지금 돌아온 카드가 없어요',act:'start-due'})}
     ${row({ic:'cards',t:nw?`새 카드 ${nw}장`:'새 카드',d:!fresh?'이 범위의 새 카드는 다 봤어요':!room?`오늘 ${S.settings.newPerDay}장을 다 봤어요 · 설정에서 바꿔요`:`범위 안 · 하루 ${S.settings.newPerDay}장까지`,act:'start-study'})}
     ${row({ic:'shuffle',tone:pool.length?'':'gray',t:pool.length?`자유 연습 ${Math.min(30,pool.length)}장`:'자유 연습',d:pool.length?'범위에서 섞어서':'이 범위에 카드가 없어요',act:'start-free'})}
     ${row({ic:'layers',tone:pool.length||mr?'':'gray',t:mr?`가리며 외우기 이어서 (${mr})`:pool.length?`가리며 외우기 ${Math.min(pool.length,MEMO_MAX)}장 · 별표·오답 먼저`:'가리며 외우기',d:mr||pool.length?'':'이 범위에 카드가 없어요',act:'memo-study'})}
+    ${row({ic:'pair',tone:pool.length>=MG_PAIRS?'':'gray',t:'짝 맞추기 게임',d:pool.length>=MG_PAIRS?`용어와 ${MG_MODE[mgMode()]+jo(MG_MODE[mgMode()],['을','를'])} 짝지어요 · ${MG_PAIRS}쌍씩 ${MG_ROUNDS}판${mgb?` · 최고 ${mgDur(mgb)}`:''}`:`이 범위에 카드가 ${MG_PAIRS}장이 안 돼요`,act:'go',data:{h:'match'}})}
   </div>${mr?'<div class="btns" style="margin-top:4px"><button class="btn ghost" data-act="resume-clear" data-k="memo:study">이어 하지 않고 처음부터</button></div>':''}`)}
   ${sec('문제','',`<div class="group">
     ${row({ic:'list',t:'4지선다 10문',d:'설명을 보고 용어 고르기',act:'start-mcq'})}
@@ -2136,6 +2138,90 @@ function vPractice(){const rg=S.range||'week',pool=deck().filter(rangeFilter(rg)
     ${row({ic:'wand',t:'앱 모의고사 만들기',d:'기출·약점 가중으로 1~4교시',act:'gen-mock'})}
   </div>`)}
   <details class="d" style="margin-top:18px"${foldAt('units')}><summary>단원별 진도 · 학습 / 정답률</summary><div class="group">${units.map(x=>`<button class="unitbar" data-act="study-unit" data-u="${x.u.id}" style="width:100%"><span class="nm">${esc(x.u.n)}</span><span class="bar"><i style="width:${x.n?Math.round(x.l/x.n*100):0}%"></i></span><span class="c">${x.l}/${x.n}</span><span class="c" style="color:${x.acc==null?'var(--ink3)':x.acc>=80?'var(--ok)':x.acc>=60?'var(--amber)':'var(--red)'}">${x.acc==null?'—':x.acc+'%'}</span></button>`).join('')}</div><p class="note" style="margin:8px 16px 12px">단원을 누르면 그 단원의 카드 복습과 새 카드를 외워요(범위는 그대로).</p></details>`;}
+
+/* ════════ 14-2. 짝 맞추기(3.2.3, 연습 → 카드 → 짝 맞추기 게임, #match) ════════
+   위에 용어 칩(.mgw), 아래에 뜻 카드(.mgf, 모의고사의 .mgd와 다름). 하나를 누르고 다른 쪽의 짝을 누른다(어느 쪽부터 눌러도 된다). 한 판 5쌍, 3판(범위에 카드가 적으면 5쌍 단위로 그만큼).
+   범위는 연습 탭과 같은 S.range. 짝(S.mg.mode): 뜻 d 정의에서 용어 이름을 ○○로 가린 첫 문장(gqMask, 56자 넘으면 줄임) · 키워드 k 답안 골격 앞 3개.
+   카드 고르기: 공부한 카드 가운데 헷갈린 카드(간격 2단계 이하·오답 노트) 8장까지 → 나머지 공부한 카드 → 아직 안 본 카드. 같은 이름·같은 짝 글은 한 번만.
+   틀리면 MG_PEN초를 더하고 두 카드를 "헷갈린 용어"에 센다. 게임은 간격 반복 기록(S.cards)·오답 노트를 바꾸지 않는다(끝 화면 "카드로 외우기"에서 매기면 평소대로 들어간다).
+   누를 때마다 touchDay(그날 공부한 분 S.act·공부한 날), 끝나면 달력 한 줄(그날 횟수·쌍·틀림)과 최고 기록 S.mg.best[짝+판 수](ms, 벌점 포함).
+   다른 화면으로 가면 하던 게임은 버린다(route·flowReset의 mgStop). 게임 중에는 집중 모드(아래 탭 숨김, 위쪽 "닫기") */
+const MG_PAIRS=5,MG_ROUNDS=3,MG_PEN=3,MG_CUT=56,MG_WEAK=8,MG_MODE={d:'뜻',k:'키워드'};
+let MG=null;
+function mgRec(){const r=S.mg&&typeof S.mg==='object'?S.mg:(S.mg={});if(!r.best||typeof r.best!=='object')r.best={};return r;}
+const mgMode=()=>(S.mg&&S.mg.mode)==='k'?'k':'d',mgBest=k=>((S.mg&&S.mg.best)||{})[k]||0;   /* 그리기에서는 이 둘로 읽기만 */
+function mgCut(s){s=String(s||'').replace(/\s+/g,' ').trim();if(s.length<=MG_CUT)return s;let c=s.slice(0,MG_CUT);
+  const lp=c.lastIndexOf('('),rp=c.lastIndexOf(')');if(lp>rp&&lp>=MG_CUT*.5)c=c.slice(0,lp);   /* 괄호가 열린 채 잘리면 괄호 앞에서 */
+  else{const b=Math.max(c.lastIndexOf(' '),c.lastIndexOf('·'),c.lastIndexOf(','));if(b>=MG_CUT*.6)c=c.slice(0,b);}
+  return c.replace(/[\s,·:=/(+-]+$/,'')+'…';}
+/* 용어 이름 가리기: gqMask(본 이름·한글 이름 조각)에 더해 영문 이름(괄호 속 원어, RMR 같은 약어 3자 이상)과
+   이름의 3자 이상 한글 낱말(구조물 뒤채움 → 구조물, 흔한 말 FILL_STOP·GL_STOP은 빼고)도 ○○로: 뜻 글에 이름 조각이 남아 짝이 그냥 보이지 않게 */
+function mgMask(s,c){let x=gqMask(s,c);if(x==null)return null;
+  const ws=gqMain(c).split(/[\s·,/()]+/).filter(w=>w.length>=3&&/^[가-힣]+$/.test(w)&&!FILL_STOP.has(w)&&!GL_STOP.has(w));
+  glNames(c.t).filter(n=>n&&!/[가-힣]/.test(n)&&n.length>=3).concat(String(c.t).match(/[A-Z][A-Z0-9]{2,}/g)||[],ws).sort((a,b)=>b.length-a.length).forEach(n=>{x=x.split(n).join('○○');});return x.replace(/(○○)+/g,'○○');}
+/* 짝 글: 뜻은 용어 이름을 가린 첫 문장(이름이 남으면 다음 문장), 키워드는 앞 3개. 못 만들면 null */
+function mgText(c,m){if(m==='k'){const ks=(c.k||[]).slice(0,3).map(k=>mgMask(String(k),c));return ks.length&&ks.every(Boolean)?mgCut(ks.join(' · ')):null;}
+  const ss=gqSents(c.d);if(!ss.length&&String(c.d||'').trim().length>=8)ss.push(String(c.d).trim());
+  for(const s of ss){const x=mgMask(s,c);if(x&&x.replace(/○○/g,'').trim().length>=8)return mgCut(x);}return null;}
+/* 판들 [[{id,t,x}]]. 짝을 지을 카드가 5장이 안 되면 null */
+function mgPick(rg,m){const pool=deck().filter(rangeFilter(rg)),p=c=>pget(c.id),weak=c=>p(c).seen>0&&(p(c).box<=2||!!S.wrong['C:'+c.id]);
+  const L=pool.filter(c=>p(c).seen>0),W=shuffle(L.filter(weak)),O=L.filter(c=>!weak(c)),F=shuffle(pool.filter(c=>!(p(c).seen>0)));
+  const order=W.slice(0,MG_WEAK).concat(shuffle(O.concat(W.slice(MG_WEAK))),F),seen=new Set(),out=[];
+  for(const c of order){if(out.length>=MG_PAIRS*MG_ROUNDS)break;const t=gqMain(c),x=t&&mgText(c,m);if(!x||seen.has('t:'+t)||seen.has('x:'+x))continue;seen.add('t:'+t);seen.add('x:'+x);out.push({id:c.id,t,x});}
+  const k=Math.floor(out.length/MG_PAIRS)*MG_PAIRS;if(!k)return null;const o=shuffle(out.slice(0,k)),rs=[];for(let i=0;i<k;i+=MG_PAIRS)rs.push(o.slice(i,i+MG_PAIRS));return rs;}
+/* 이 범위에서 짝을 지을 수 있는 카드 수(시작 화면 안내) */
+function mgCount(rg,m){const seen=new Set();let n=0;deck().filter(rangeFilter(rg)).forEach(c=>{const t=gqMain(c);if(!t||seen.has(t)||!mgText(c,m))return;seen.add(t);n++;});return n;}
+const mgMs=()=>MG?(MG.t1||Date.now())-MG.t0+MG.miss*MG_PEN*1000:0;
+const mgClk=ms=>{const s=Math.floor(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
+const mgDur=ms=>{const s=Math.max(1,Math.round(ms/1000)),m=Math.floor(s/60),r=s%60;return m?(r?`${m}분 ${r}초`:`${m}분`):`${r}초`;};
+function mgStop(){if(MG&&MG.iv)clearInterval(MG.iv);MG=null;}
+function mgOrder(){const ids=MG.rs[MG.r].map(p=>p.id);MG.ord={t:shuffle(ids),d:shuffle(ids)};}
+function mgStart(){const m=mgMode(),rg=S.range||'week',rs=mgPick(rg,m);if(!rs)return toast(`이 범위에서 짝을 지을 카드가 ${MG_PAIRS}장이 안 돼요`);
+  mgStop();MG={m,rg,rs,r:0,sel:null,done:{},miss:0,errs:{},t0:Date.now(),t1:0,end:false,busy:0};mgOrder();MG.iv=setInterval(mgTick,250);touchDay();save();
+  if(R.page==='match')return render();nav('match');}
+function mgTick(){if(!MG||MG.end)return;const el=document.getElementById('mgClk');if(el)el.textContent=mgClk(mgMs());}
+const mgBtn=(s,id)=>document.querySelector(`#view .mg [data-act="mg"][data-s="${s}"][data-id="${id}"]`);
+/* 누른 칸의 모양만 바꾼다(다시 그리지 않음): 고른 칸, 맞힌 칸(초록 → 사라짐) */
+function mgPaint(){if(!MG)return;document.querySelectorAll('#view .mg [data-act="mg"]').forEach(b=>{const s=b.dataset.s,id=b.dataset.id,on=!!MG.sel&&MG.sel.s===s&&MG.sel.id===id;
+  b.classList.toggle('sel',on);b.setAttribute('aria-pressed',on?'true':'false');
+  if(MG.done[id]&&!b.classList.contains('ok')){b.classList.add('ok');b.disabled=true;setTimeout(()=>b.classList.add('gone'),260);}});
+  const ms=document.getElementById('mgMiss');if(ms)ms.textContent=MG.miss?`틀림 ${MG.miss}`:'';mgTick();}
+function mgBad(pairs){pairs.forEach(([s,id])=>{const b=mgBtn(s,id);if(!b)return;b.classList.remove('bad');void b.offsetWidth;b.classList.add('bad');setTimeout(()=>b.classList.remove('bad'),650);});
+  const p=document.getElementById('mgPen');if(p){p.classList.remove('on');void p.offsetWidth;p.classList.add('on');}}
+function mgTap(s,id){if(!MG||MG.end||MG.busy)return;const rd=MG.rs[MG.r];if(!rd.some(p=>p.id===id)||MG.done[id])return;touchDay();
+  const sel=MG.sel;if(!sel||sel.s===s){MG.sel=sel&&sel.s===s&&sel.id===id?null:{s,id};return mgPaint();}
+  MG.sel=null;
+  if(sel.id===id){MG.done[id]=1;mgPaint();if(rd.every(p=>MG.done[p.id])){MG.busy=1;setTimeout(mgNext,420);}return;}
+  const tid=s==='t'?id:sel.id,did=s==='d'?id:sel.id;MG.miss++;MG.errs[tid]=(MG.errs[tid]||0)+1;MG.errs[did]=(MG.errs[did]||0)+1;mgPaint();mgBad([['t',tid],['d',did]]);}
+function mgNext(){if(!MG||MG.end)return;MG.busy=0;MG.sel=null;MG.r++;if(MG.r>=MG.rs.length)return mgFinish();mgOrder();save();if(R.page==='match')render();}
+function mgFinish(){const g=MG,rec=mgRec(),key=g.m+g.rs.length,b=rec.best[key],t=todayStr();g.t1=Date.now();g.end=true;clearInterval(g.iv);g.iv=null;
+  g.ms=mgMs();g.prev=b||0;g.newBest=!b||g.ms<b;if(g.newBest)rec.best[key]=g.ms;
+  const n=g.rs.reduce((a,r)=>a+r.length,0);if(!rec.day||rec.day.d!==t)rec.day={d:t,g:0,n:0,m:0};rec.day.g++;rec.day.n+=n;rec.day.m+=g.miss;
+  calMark('match','quiz',`짝 맞추기 ${rec.day.g}번 · ${rec.day.n}쌍${rec.day.m?` · 틀림 ${rec.day.m}`:''}`);
+  if(R.page==='match')render();}
+function mgGameHTML(){const g=MG,rd=g.rs[g.r],by={};rd.forEach(p=>by[p.id]=p);
+  const tile=(s,p)=>{const dn=!!g.done[p.id],on=!!g.sel&&g.sel.s===s&&g.sel.id===p.id;
+    return`<button class="${s==='t'?'mgw':'mgf'}${dn?' ok gone':''}${on?' sel':''}" data-act="mg" data-s="${s}" data-id="${esc(p.id)}" aria-pressed="${on}"${dn?' disabled':''}>${esc(s==='t'?p.t:p.x)}</button>`;};
+  return`<div class="mg"><div class="mghd"><span class="rd">${g.r+1}/${g.rs.length}판</span><span class="clkw"><span class="clk num" id="mgClk">${mgClk(mgMs())}</span><span class="pen" id="mgPen" aria-hidden="true">+${MG_PEN}초</span></span><span class="ms" id="mgMiss">${g.miss?`틀림 ${g.miss}`:''}</span></div>
+  ${g.r===0?`<p class="mgq">용어를 누르고 맞는 ${MG_MODE[g.m]+jo(MG_MODE[g.m],['을','를'])} 누르세요</p>`:''}
+  <div class="mgts">${g.ord.t.map(id=>tile('t',by[id])).join('')}</div>
+  <div class="mgds">${g.ord.d.map(id=>tile('d',by[id])).join('')}</div></div>`;}
+function mgEndHTML(){const g=MG,all={};g.rs.forEach(r=>r.forEach(p=>all[p.id]=p));const n=Object.keys(all).length,best=mgBest(g.m+g.rs.length);
+  const ids=Object.keys(g.errs).filter(id=>all[id]).sort((a,b)=>g.errs[b]-g.errs[a]||(a<b?-1:1));
+  const bl=g.newBest?(g.prev?`<p class="best on">최고 기록이에요 · 전 기록 ${mgDur(g.prev)}</p>`:'<p class="best on">첫 기록이에요</p>'):`<p class="best">최고 기록 ${mgDur(best)}</p>`;
+  return`<div class="mgres"><p class="k">${MG_MODE[g.m]} 짝 맞추기 · ${n}쌍</p><div class="big num">${mgDur(g.ms)}</div>
+    <p class="s">${g.miss?`틀림 ${g.miss}번(+${g.miss*MG_PEN}초)`:'한 번도 틀리지 않았어요'}</p>${bl}</div>
+  ${ids.length?sec('헷갈린 용어',ids.length+'개',`<div class="group">${ids.map(id=>row({t:esc(all[id].t),d:esc(all[id].x),v:g.errs[id]>1?g.errs[id]+'번':null,act:'card-modal',data:{id}})).join('')}</div>
+    <p class="note">누르면 카드 전체를 봐요. 게임은 복습 날짜를 바꾸지 않아요. 카드로 외우며 매기면 복습에 들어가요.</p>`):''}
+  <div class="btns">${ids.length?`<button class="btn" data-act="mg-review">헷갈린 용어 ${ids.length}장 카드로 외우기</button>`:`<button class="btn" data-act="mg-start">한 번 더</button>`}</div>
+  ${ids.length?'<div class="btns"><button class="btn sec" data-act="mg-start">한 번 더</button></div>':''}`;}
+function vMatch(){if(MG&&!MG.end)return topbar('짝 맞추기')+mgGameHTML();if(MG)return topbar('짝 맞추기')+mgEndHTML();
+  const rg=S.range||'week',m=mgMode(),n=mgCount(rg,m),best=mgBest(m+MG_ROUNDS),ok=n>=MG_PAIRS;
+  return topbar('짝 맞추기')+`<h1 class="ptitle">짝 맞추기</h1><p class="lsub">용어와 ${MG_MODE[m]+jo(MG_MODE[m],['을','를'])} 짝지어 누르는 게임이에요(어느 쪽부터 눌러도 돼요). ${MG_PAIRS}쌍씩 ${MG_ROUNDS}판, 틀리면 ${MG_PEN}초를 더해요.</p>
+  <label class="f" for="rangeSel">범위</label>${rangeSelect('rangeSel',rg)}
+  <label class="f">짝</label><div class="seg">${[['d','뜻(정의 첫 문장)'],['k','키워드(답안 골격)']].map(([x,l])=>`<button class="${m===x?'on':''}" data-act="mg-mode" data-m="${x}">${l}</button>`).join('')}</div>
+  <p class="note">${ok?`이 범위 카드 ${n}장 · 헷갈렸던 카드와 공부한 카드부터 나와요`:`이 범위에서 짝을 지을 카드가 ${n}장이라 ${MG_PAIRS}장이 안 돼요. 범위를 넓혀 주세요`}${best?` · 최고 기록 ${mgDur(best)}`:''}</p>
+  <div class="btns"><button class="btn" data-act="mg-start"${ok?'':' disabled'}>시작</button></div>`;}
 
 /* ════════ 15. 세션(카드·퀴즈·빈칸·목차 공통) ════════ */
 /* SES.kind: 세션을 연 곳(rev 세트 복습, flash 세트 카드 넘겨 보기, gq 용어 퀴즈, wrong 오답, cards 카드 복습, study·free·stars·mcq·recall·cloze·fill·outline).
@@ -2953,7 +3039,7 @@ function restartRec(start,target){const o=S,n=fresh();
   try{PE_IO.set(PREV_KEY,JSON.stringify({at:todayStr(),state:o}));}catch(e){}
   n.settings=Object.assign({},o.settings);['nextTarget','schUndo','schSent','schSig','slipNo'].forEach(k=>delete n.settings[k]);
   if(start)n.settings.start=start;if(target)n.settings.target=target;
-  ['userCards','userEssays','hidden','memoPick','memoTape','range','fillLv','sync','ev'].forEach(k=>{if(o[k]!==undefined)n[k]=o[k];});
+  ['userCards','userEssays','hidden','memoPick','memoTape','range','fillLv','sync','ev','mg'].forEach(k=>{if(o[k]!==undefined)n[k]=o[k];});
   KEEP_TK.forEach(k=>{if(o.tk&&o.tk[k])n.tk[k]=o.tk[k];});
   const t=todayStr();n.days={};Object.keys(o.days||{}).forEach(d=>{if(d>t)n.days[d]=o.days[d];});   /* 내일부터 정해 둔 쉬는 날·짧은 날은 계획이라 남김 */
   S=n;recalcPlan();flowReset();invalidate();flush();}
@@ -3319,7 +3405,7 @@ function promptWith(id,from,to){const p=PE_PROMPTS.find(x=>x.id===id);return p?f
 /* ════════ 22. 이벤트 ════════ */
 /* 꾹 누르기(0.45초): 형광펜 낱말은 그 카드, 다른 낱말은 카드 → 앱 사전 → 바깥 사전 찾기. 데스크톱은 오른쪽 클릭.
    손을 움직이면(스크롤) 취소하고, 누른 뒤 손을 뗄 때 생기는 클릭은 버린다(카드 뒤집기·답 고르기·창 닫기 방지). 입력 칸·버튼·탭은 빼고 */
-const GL_SKIP='input,textarea,select,.btn,nav,.topbar,.seg,label.check,#memoBox.editing';
+const GL_SKIP='input,textarea,select,.btn,nav,.topbar,.seg,label.check,#memoBox.editing,.mg';
 let glT=null,glXY=null,glEl=null,glFired=0;
 function glAt(target,x,y){if(!target||!target.closest||target.closest(GL_SKIP)||!target.closest('#view,#modal-wrap'))return false;
   const g=target.closest('.gl');if(g){const c=card(g.dataset.gl);if(c){openModal(cardModal(c));return true;}}
@@ -3450,6 +3536,11 @@ document.addEventListener('click',e=>{
   case'gq-go':return D.rv?withChain(D.d,()=>startGq(D.d,D.r)):startGq(D.d,D.r);
   case'gq-mode':SV['gqm:'+D.d]=D.m;return render();
   case'card-modal':{const c=card(D.id);if(c)openModal(cardModal(c));return;}
+  /* 짝 맞추기(14-2) */
+  case'mg':return mgTap(D.s,D.id);
+  case'mg-start':return mgStart();
+  case'mg-mode':mgRec().mode=D.m==='k'?'k':'d';save();return render();
+  case'mg-review':{if(!MG||!MG.end)return;const ids=Object.keys(MG.errs).filter(id=>card(id));if(!ids.length)return;return startSession({kind:'match',title:'헷갈린 용어',items:cardItems(shuffle(ids)),from:'match'});}
   case'rev-open':return openModal(revSheet(D.d));
   case'memo-study':return startMemo({key:'memo:study',label:'연습 카드',title:'가리며 외우기',items:memoStudyIds().map(id=>({id}))});
   case'memo-finish':return memoFinish();
@@ -3649,7 +3740,7 @@ PE_IO.init({toast});recalcPlan();applyLook();setPreset('essay');R=parseHash();
 if(!location.hash)history.replaceState(null,'','#today');
 calOpen();sync(true);route();v3Once();verOnce();   /* 받아 오기를 먼저 시작해 첫 화면이 오래된 자료로 오늘 몫을 고정하지 않게(받아 온 뒤 고정) */
 const fresh2=f=>(...a)=>{PLN++;return f(...a);};
-window.__pe={coachCalc,evSpeed,evLog,actAvg,actTick,qAvg,coachWeek,nearRounds,buildMapShort,p12End,p3Week,studySince:v=>{if(v)STUDY_SINCE=v;PLN++;return STUDY_SINCE;},mockQs,knowAuto,qSteps,paceF,paceSamples,mockMode,mockMin,mockTot,estStudy,mockShape,cardLv,essayLv,qKey,planDoneMin,mockRowsSync,S:()=>S,rParts,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession,
+window.__pe={MG:()=>MG,mgPick,mgText,mgCut,mgCount,mgStart,mgTap,mgStop,mgRec,mgDur,coachCalc,evSpeed,evLog,actAvg,actTick,qAvg,coachWeek,nearRounds,buildMapShort,p12End,p3Week,studySince:v=>{if(v)STUDY_SINCE=v;PLN++;return STUDY_SINCE;},mockQs,knowAuto,qSteps,paceF,paceSamples,mockMode,mockMin,mockTot,estStudy,mockShape,cardLv,essayLv,qKey,planDoneMin,mockRowsSync,S:()=>S,rParts,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession,
   enough,setReviewItems,startDueAll,startWrong,budgetOf,dayKind,TM:()=>TM,go:h=>{nav(h);v3Again();},goUp,goTab,R:()=>R,navBadgeN,tabWords,
   /* 오늘 몫·이번 주(검사용: 부를 때마다 새로 센다) */
   taskList:fresh2(taskList),dayPlan:fresh2(dayPlan),planToday:fresh2(planToday),weekBoard:fresh2(weekBoard),weekSnap:fresh2(weekSnap),reqParts:fresh2(reqParts),cardsOut:fresh2(cardsOut),hwParts:fresh2(hwParts),
