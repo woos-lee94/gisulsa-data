@@ -890,3 +890,11 @@ textarea.in.plain{font-family:inherit;font-size:1rem;line-height:1.6;min-height:
 .notice.upd b{display:block;font-weight:700;line-height:1.45}
 .notice.upd small{display:block;margin-top:2px;font-size:.86rem;color:var(--ink2);line-height:1.45}
 .notice.upd .btn{width:auto;margin-top:8px;background:var(--paper)}
+/* 공부 시간 진단(3.2.2) */
+.score.coach h3{margin:4px 0 2px;font-size:1.7rem;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.score.coach .ds{margin:4px 0 0;font-size:.86rem;color:var(--ink2);line-height:1.5}
+.score.coach .coh{color:var(--ink);font-weight:700}
+.score.coach .coh.short{color:var(--amber)}
+.coprow .tx{flex:1;min-width:0}
+.cobar{display:block;height:6px;margin-top:6px;border-radius:6px;background:var(--rule2);overflow:hidden}
+.cobar i{display:block;height:100%;border-radius:6px;background:var(--blue)}

@@ -419,9 +419,11 @@ const go = async h => { w.location.hash = h; await sleep(30); };
   const tg = d.querySelector('#schTarget'); tg.value = '144'; tg.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(20);
   click('[data-act="sch-keep"]'); await sleep(10); click('[data-act="sch-save"]'); await sleep(20);   // 기록은 그대로 두기(지우는 길은 plan.test 67)
   ok(pe.PLAN().target.r === 144 && pe.S().settings.target === 144, '목표 제144회 선택');
-  // 시작일을 늦춰 144회가 6개월 안이 되면 자동으로 돌아감
+  // 시작일을 늦춰 144회가 6개월 안이 되어도 4주 넘게 남았으면 그대로(압축 일정, 3.2.2), 4주가 안 남으면 자동으로 돌아감
   const se2 = d.querySelector('#schStart'); se2.value = '2027-09-01'; se2.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(20);
-  ok(d.querySelector('#schTarget').value === 'auto', '자격 없는 목표 → 자동');
+  ok(d.querySelector('#schTarget').value === '144' && /6개월이 안 되는 압축 일정이에요/.test(txt()) && d.querySelector('#schTarget optgroup'), '6개월이 안 되는 목표도 그대로 · 압축 일정 안내');
+  const se4 = d.querySelector('#schStart'); se4.value = '2028-01-20'; se4.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(20);
+  ok(d.querySelector('#schTarget').value === 'auto', '4주가 안 남은 목표 → 자동');
   click('[data-act="sch-cancel"]'); await sleep(20);
   ok(pe.PLAN().target.r === 144, '취소하면 그대로');
   // 회차 날짜 직접 입력

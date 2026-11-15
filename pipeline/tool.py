@@ -167,6 +167,12 @@ def eligible(start, ov=None):
     return [x for x in round_list(ov) if x['d'] >= mn]
 
 
+def near(start, ov=None):
+    """6개월이 안 되는 회차(직접 고를 때만, 압축 일정): 시작 주에서 minWeeks주 이상 남은 것. 앱 nearRounds와 같다."""
+    lo, mn = start + dt.timedelta(weeks=SCHED.get('minWeeks', 4)), add_months(start, SCHED['minMonths'])
+    return [x for x in round_list(ov) if lo <= x['d'] < mn]
+
+
 def _jsround(x):
     return int(x + 0.5) if x >= 0 else -int(-x + 0.5)
 
@@ -206,6 +212,44 @@ def build_map(E, M):
     return mp
 
 
+def build_map_short(E, M):
+    """압축 일정(6개월이 안 되는 목표). 앱 buildMapShort와 같다: 1~E-1주(실전 모의 주 빼고)를 14:7:4 비율로 기본·실전 모의·파이널에 나눠 틀을 몰아 넣는다."""
+    mp = [None] * (E + 1)
+
+    def put(a, t, **x):
+        mp[a] = dict({'t': t, 'ph': TPL[t]['ph']}, **x)
+    put(0, 0)
+    put(E, 29)
+    ws = [a for a in range(1, E) if a != M]
+    n = len(ws)
+    c = max(1, _jsround(n * 4 / 25))
+    b = max(1, _jsround(n * 7 / 25))
+    a = n - b - c
+    while a < 1 and b > 1:
+        b -= 1
+        a += 1
+    while a < 1 and c > 1:
+        c -= 1
+        a += 1
+
+    def grp(ids, fr):
+        for i, w in enumerate(ids):
+            ts = fr[i * len(fr) // len(ids):(i + 1) * len(fr) // len(ids)]
+            if len(ts) > 1:
+                put(w, ts[0], ts=ts)
+            else:
+                put(w, ts[0])
+    grp(ws[:a], list(range(1, 15)) + [16, 17])
+    grp(ws[a:a + b], list(range(18, 25)))
+    grp(ws[a + b:], [25, 26, 27, 28])
+    if M is not None and 0 < M < E:
+        pv = mp[M - 1] or {'t': 1, 'ph': 1}
+        mp[M] = {'t': 15, 'ph': pv['ph'] if pv['ph'] >= 3 else (2 if pv['t'] >= 11 else 1), 'mock': True}
+        if M > 1 and mp[M - 1]['t'] != 0:
+            mp[M - 1]['pre'] = True
+    return mp
+
+
 PRE_GOALS = ['토요일 전교시 리허설 1회(실제 시간표, 400분)', '시험장 준비물과 이동 동선 점검']
 
 
@@ -223,12 +267,18 @@ def compute_plan(start=None, target=None, ov=None):
     target = c.get('target', 'auto') if target is None else target
     ov = c.get('rounds', {}) if ov is None else ov
     el = eligible(start, ov)
-    tg = next((x for x in el if target not in (None, 'auto') and x['r'] == int(target)), el[0])
+    want = target not in (None, 'auto')
+    tg = next((x for x in el if want and x['r'] == int(target)), None)
+    short = False
+    if tg is None and want:
+        tg = next((x for x in near(start, ov) if x['r'] == int(target)), None)
+        short = tg is not None
+    tg = tg or el[0]
     mk = [x for x in round_list(ov) if x['d'] < tg['d'] and (x['d'] - start).days >= 7 * SCHED['mockMinWeeks']]
     mk = mk[-1] if mk else None
     E = (tg['d'] - start).days // 7
     M = (mk['d'] - start).days // 7 if mk else None
-    return {'start': start, 'target': tg, 'mock': mk, 'E': E, 'M': M, 'map': build_map(E, M)}
+    return {'start': start, 'target': tg, 'mock': mk, 'E': E, 'M': M, 'map': build_map_short(E, M) if short else build_map(E, M), 'short': short}
 
 
 PLAN = compute_plan()
@@ -970,7 +1020,7 @@ def cmd_link(kid, target):
 
 def print_plan():
     t, m = PLAN['target'], PLAN['mock']
-    print(f'일정: {START} 시작 → 제{t["r"]}회 필기 {t["d"]}{est(t)}, {PLAN["E"]}주(약 {PLAN["E"] / 4.345:.1f}개월)'
+    print(f'일정: {START} 시작 → 제{t["r"]}회 필기 {t["d"]}{est(t)}, {PLAN["E"]}주(약 {PLAN["E"] / 4.345:.1f}개월)' + (' — 6개월이 안 되는 압축 일정' if PLAN.get('short') else '')
           + (f', 실전 모의 제{m["r"]}회 {m["d"]}{est(m)} = {PLAN["M"]}주차' if m else ', 실전 모의 없음(주말 모의로 대신)'))
     for x in (m, t):
         if x and x['note']:
@@ -1025,8 +1075,9 @@ def cmd_set_plan(a):
         if not DATE_RE.match(begin) or not 0 <= (dt.date.fromisoformat(begin) - sd).days <= 6:
             sys.exit(f'--begin 은 시작 주({start}) 월요일부터 그 일요일 사이 날짜여야 합니다(받은 값 {begin})')
     el = [x['r'] for x in eligible(sd, rounds)]
-    if target != 'auto' and target not in el:
-        sys.exit(f'제{target}회는 {start} 시작에서 {SCHED["minMonths"]}개월이 안 됩니다. 고를 수 있는 회차: {el[:6]}')
+    nr = [x['r'] for x in near(sd, rounds)]   # 6개월이 안 되는 회차도 직접 고르면 압축 일정(3.2.2)
+    if target != 'auto' and target not in el + nr:
+        sys.exit(f'제{target}회는 {start} 시작에서 {SCHED.get("minWeeks", 4)}주가 안 남았거나 지난 회차입니다. 고를 수 있는 회차: {(nr + el)[:8]}')
     conf = {'note': '앱 더보기 → 시험 일정과 같은 값. set-plan·sync-plan 명령으로만 바꾼다. begin: 앱의 준비 시작일(그 전 날은 세트를 만들지 않음).', 'start': start}
     if begin and begin != start:
         conf['begin'] = begin

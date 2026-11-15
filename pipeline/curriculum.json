@@ -2,6 +2,7 @@
  "note": "단원·주차 틀·정기시험 규칙. 앱 data_plan.js와 같은 값이다. 실제 시작일과 목표 회차는 pipeline/plan.json(set-plan 명령)에 있다. 주차 틀 30개(w 0~29)를 실제 준비 기간(주 수)에 맞춰 늘이거나 줄여 쓴다. {본시험}·{모의}·{모의문장}은 회차 번호로 바뀐다.",
  "sched": {
   "minMonths": 6,
+    "minWeeks": 4,
   "mockMinWeeks": 12,
   "baseYear": 2026,
   "baseRound": 138,

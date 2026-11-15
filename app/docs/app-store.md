@@ -334,6 +334,10 @@ The app is an independent study aid and is not affiliated with HRD Korea or any 
 가릴 곳을 살짝 꾹 눌렀다가 그으면 테이프가 붙고, 그냥 밀면 화면이 움직이도록 바꿨습니다.
 ```
 
+## 3.2.2 보내는 순서(심사 없음)
+
+공부 시간 진단과 6개월이 안 되는 목표(압축 일정)는 화면·계산(`web/`)만 바뀌어 네이티브 지문이 3.2.0과 같다. PowerShell 순서의 마지막 줄을 `npm run ota`로. Firebase 규칙·App Privacy는 그대로(공부 시간 기록은 휴대폰 안에만 있다).
+
 ## 3.2.1 보내는 순서(심사 없음)
 
 화면·계산(`web/`)과 회원 요청(`native/member.js`·`host.js`·`App.js`의 JS)만 바뀌어 네이티브 지문이 3.2.0과 같다. App Store 빌드·심사 없이 `npm run ota`로 보낸다(3.2.0 빌드가 깔린 휴대폰만 받는다).

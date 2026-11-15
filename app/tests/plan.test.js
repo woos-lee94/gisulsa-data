@@ -2338,6 +2338,56 @@ function runWeek(W, sets, st) {
     pe.studySince('2026-10-01'); pe.planToday(SAT); const e2 = row();
     ok(e1 && e1.m === 100 && !e1.st && e2 && e2.m === 323 && e2.st === 1, `68-12. 예전 줄 ${e1 && e1.m}분 → ${e2 && e2.m}분(공부하며)`);
     pe.studySince('9999-12-31'); pe.goTab('today'); await sleep(40); }
+  // 69. 6개월이 안 되는 목표(압축 일정)·공부 시간 진단(3.2.2)
+  {
+    const J = JSON.stringify;
+    const T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), tap = async s => { click(s); await sleep(60); };
+    scene('2026-11-15T09:40:00', ST);
+    // 69-1. 6개월이 안 되는 회차는 직접 고를 때만(자동은 늘 6개월 이상), 4주 넘게 남아야 함
+    const nr = pe.nearRounds('2026-11-18').map(x => x.r), PA = pe.computePlan('2026-11-18', 'auto'), PS = pe.computePlan('2026-11-18', 141);
+    ok(J(nr) === '[141,142]' && PA.target.r === 143 && !PA.short && PS.short && PS.target.r === 141 && PS.E === 10 && PS.start === '2026-11-16'
+      && pe.computePlan('2026-11-18', 140).target.r === 143 && !pe.computePlan('2027-01-11', 141).short && pe.computePlan('2027-01-11', 141).target.r !== 141, `69-1. 가까운 회차 ${J(nr)}, 자동 제${PA.target.r}회, 제141회 고르면 압축 ${PS.E}주`);
+    // 69-2. 압축 지도: 0주차 준비 · 마지막 시험 주, 틀(1~14·16·17·18~28)을 빠짐없이 한 번씩, 단계는 줄지 않음, 1·2단계 끝 다음 주가 3단계 첫 주
+    const fr = [].concat(...PS.map.slice(1, PS.E).map(m => m.ts || [m.t])).sort((a, b) => a - b), phs = PS.map.slice(1, PS.E).map(m => m.ph);
+    const want = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,16,17,18,19,20,21,22,23,24,25,26,27,28];
+    ok(PS.map[0].t === 0 && PS.map[PS.E].t === 29 && J(fr) === J(want) && phs.every((p, i) => !i || p >= phs[i - 1]) && pe.p3Week(PS) === pe.p12End(PS) + 1 && /\(압축\)/.test(pe.weekObj(1, PS).t),
+      `69-2. 압축 지도 단계 ${phs.join('')}, 1·2단계 끝 ${pe.p12End(PS)}주, 3단계 ${pe.p3Week(PS)}주`);
+    const PN = pe.PLAN();
+    ok(pe.p12End(PN) === PN.E - 12 && pe.p3Week(PN) === PN.E - 11, `69-2. 보통 일정은 예전 셈 그대로(${pe.p12End(PN)} = E-12)`);
+    // 69-3. 내 속도: 바로 앞 공부와의 틈 ÷ 앱 어림의 가운데값(c 10개·d·e 5개부터), 쉰 것으로 보이는 긴 틈은 뺌
+    const S = pe.S(), T0 = NOW;
+    S.ev = [].concat(Array.from({ length: 12 }, (_, i) => [T0 + i, 'c', .5, .6]), Array.from({ length: 4 }, (_, i) => [T0 + i, 'd', 15, 30]), Array.from({ length: 6 }, (_, i) => [T0 + i, 'e', 5, 10]), [[T0, 'e', 5, 80]]);
+    const sp = pe.evSpeed();
+    ok(sp.c.on && sp.c.f === 1.2 && !sp.d.on && sp.d.f === 1 && sp.d.n === 4 && sp.e.on && sp.e.f === 2 && sp.e.n === 6, `69-3. 속도 c ${sp.c.f} · d ${sp.d.f}(${sp.d.n}/5) · e ${sp.e.f}(긴 틈 뺌, ${sp.e.n}개)`);
+    // 69-4. 기록: 공부 동작(touchDay·evLog)마다 그날 공부한 분(20분 넘는 틈은 쉰 것), 끝낸 일은 바로 앞 공부와의 틈
+    S.ev = []; S.act = {}; delete S.actLast; at('2026-11-15T10:00:00'); pe.actTick(); at('2026-11-15T10:12:00'); pe.actTick(); pe.evLog('d', 15);
+    at('2026-11-15T11:00:00'); pe.evLog('c', .5);
+    ok(J(S.ev.map(x => [x[1], x[3]])) === '[["d",12],["c",48]]' && S.act['2026-11-15'] === 12, `69-4. 틈 ${J(S.ev.map(x => x[3]))}, 오늘 공부 ${S.act['2026-11-15']}분(48분 틈은 쉰 것)`);
+    // 69-5. 진단: 권장(숙제 학원 횟수까지)과 필수만, 단계별, 권장 하루 시간(평일·토·일)의 합 ≈ 권장 한 주, 내 속도가 느리면 그 몫만 늘어남
+    at('2026-11-15T09:40:00'); S.ev = []; pe.invalidate();
+    const c0 = pe.coachCalc();
+    ok(c0.cur && c0.cur.ph === 1 && c0.cur.tot > c0.cur.min && Math.abs(c0.rec.week - c0.cur.tot) <= 30 && c0.phs.map(g => g.ph).join('') === '1234' && c0.total > c0.totalMin && c0.weeks[0].w === pe.weekIndex('2026-11-15'),
+      `69-5. 지금 단계 권장 한 주 ${Math.round(c0.cur.tot)}분(필수만 ${Math.round(c0.cur.min)}) → 권장 ${J(c0.rec)}, 단계 ${c0.phs.map(g => g.ph + ':' + g.n + '주').join(' ')}`);
+    S.ev = Array.from({ length: 5 }, (_, i) => [NOW + i, 'd', 15, 30]); const c1 = pe.coachCalc();
+    ok(c1.sp.d.f === 2 && Math.round(c1.cur.dan) === Math.round(c0.cur.dan * 2) && Math.round(c1.cur.core) === Math.round(c0.cur.core), `69-5. 단답 손글씨가 앱 어림의 2배 걸리면 그 몫만 2배(${Math.round(c0.cur.dan)} → ${Math.round(c1.cur.dan)}분)`);
+    // 69-6. 화면: 더보기 줄 → 진단(권장·필수만·지금 설정·나눔·단계·내 속도) → "이 시간으로 맞추기" → 설정에 그 시간
+    S.ev = []; pe.invalidate(); await show('#more');
+    const mr = [...V$().querySelectorAll('.row')].find(r => /공부 시간 진단/.test(T_(r)));
+    ok(mr && /지금 단계 권장 하루 평균/.test(T_(mr)), `69-6. 더보기 줄 "${T_(mr)}"`);
+    await show('#coach'); const tx = T_(V$()), rec = pe.coachCalc().rec;
+    ok(/하루 평균/.test(tx) && /필수만 하면\(최소선\)/.test(tx) && /한 주를 이렇게 나눠요/.test(tx) && /단계별로 필요한 시간/.test(tx) && /내 공부 속도/.test(tx) && /아직 0\/5번/.test(tx) && V$().querySelector('[data-act="coach-apply"]'),
+      `69-6. 진단 화면: ${tx.slice(0, 140)}`);
+    await tap('[data-act="coach-apply"]');
+    const bg = pe.S().settings.budget;
+    ok(bg.wd === rec.wd && bg.sat === rec.sat && bg.sun === rec.sun && !V$().querySelector('[data-act="coach-apply"]') && /딱 맞아요/.test(T_(V$())), `69-6. 맞추기 → 하루 공부 시간 ${J(bg)}`);
+    await show('#settings'); const on = [...V$().querySelectorAll('[data-act="budget"][data-k="wd"].on')].map(b => Number(b.dataset.v));
+    ok(J(on) === J([rec.wd]), `69-6. 설정에 진단 시간(평일 ${rec.wd}분)이 골라져 보임`);
+    // 69-7. 시험 일정: 6개월이 안 되는 회차 → 압축 일정 안내와 진단 한 줄, 저장하면 압축 일정
+    await show('#schedule'); const sel = V$().querySelector('#schTarget');
+    ok(sel.querySelector('optgroup') && [...sel.querySelectorAll('optgroup option')].some(o => o.value === '141'), '69-7. 목표 회차에 "6개월이 안 되는 회차(압축 일정)"');
+    sel.value = '141'; sel.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(30);
+    ok(/6개월이 안 되는 압축 일정이에요/.test(T_(V$())) && /이 일정이면 .*하루 평균 약/.test(T_(V$().querySelector('.coachl'))), `69-7. 미리 보기: ${T_(V$().querySelector('.schshort')).slice(0, 60)} / ${T_(V$().querySelector('.coachl')).slice(0, 60)}`);
+    pe.goTab('today'); await sleep(40); }
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);
