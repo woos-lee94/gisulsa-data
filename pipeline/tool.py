@@ -379,8 +379,8 @@ def rotation_start():
 def units_for(d):
     w = week_of(d)
     wk = week_obj(w)
-    if w > 0 and wk.get('u'):
-        return wk['u'], '이번 주 단원'
+    if w >= 0 and wk.get('u'):   # 준비 주(0주차)도 틀의 단원(토공)부터. 예전에는 전 범위라 앞서 다룬 단원을 빼고 남은 단원(터널 등)이 먼저 왔다
+        return wk['u'], ('이번 주 단원' if w > 0 else '준비 주: 첫 단원부터')
     rs = rotation_start()
     if w >= rs:
         order = unit_order()
@@ -493,9 +493,9 @@ def cmd_today():
             print(f'    · {q["id"]} {q["t"]}')
 
     dk = deck()
-    def recent(cid):
+    def recent(cid):   # 준비 시작일 전(시작일을 다시 정하기 전 일정)에 쓴 것은 세지 않는다: 앱 기록이 그때 새로 시작했다
         f = st['featured'].get(cid)
-        return f and (d - dt.date.fromisoformat(f)).days < 21
+        return bool(f) and dt.date.fromisoformat(f) >= begin_date() and (d - dt.date.fromisoformat(f)).days < 21
     cr = [c for c in dk if inu(c['u']) and not recent(c['id'])]
     cr.sort(key=lambda c: (-len(c.get('x', [])), c['id']))
     print(f'\n[기존 카드 후보] ref로 넣을 카드 (최근 21일 안에 쓰지 않은 것, 기출 연결 많은 순) — 새 용어와 이어지는 것을 고르세요')
