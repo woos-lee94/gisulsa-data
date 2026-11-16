@@ -108,7 +108,7 @@
 
 ## 앱 폴더
 
-- `web/`: 앱 화면 원본(v3.2.3, 네이티브 다리 포함). `index.html`의 `?v=N`(지금 9)은 `tests/app.test.js`가 스크립트를 찾는 표시라 남겨 둔다. 버전은 `app.js`의 `APP_VER`, `app.json`의 `expo.version`, `package.json`의 `version`(과 `package-lock.json`의 앱 줄 두 곳)을 함께 올린다(`tests/native.test.js`가 확인)
+- `web/`: 앱 화면 원본(v3.2.4, 네이티브 다리 포함). `index.html`의 `?v=N`(지금 9)은 `tests/app.test.js`가 스크립트를 찾는 표시라 남겨 둔다. 버전은 `app.js`의 `APP_VER`, `app.json`의 `expo.version`, `package.json`의 `version`(과 `package-lock.json`의 앱 줄 두 곳)을 함께 올린다(`tests/native.test.js`가 확인)
 - `tests/`: jsdom 회귀 검사와 가짜 저장소(`tests/fake/data`)
 - 확대 막기: `index.html` viewport에 `maximum-scale=1, user-scalable=no`(WKWebView는 이것을 따른다. 글자 칸을 누를 때 16px보다 작은 칸이 확대되던 것도 막는다), `styles.css`의 `html{touch-action:manipulation}`(두 번 눌러 확대)
 - `assets/icon-1024.png`: iOS 앱 아이콘
@@ -191,6 +191,20 @@
 - 앱 쪽 요청 `{t:'update', op}`(`host.js` `UPDATE_OPS`): `check`(지금 확인, `{found, v}`), `apply`(받는 중이면 기다리고, 받아 둔 것이 없으면 확인·받기 → `reloadAsync`, 다시 열 때 잠깐 보이는 화면은 앱 바탕색. 최신이면 `{s:'none'}`), `store`(앱이 가진 App Store 주소를 연다).
 - 웹(`app.js` "20b"): 오늘 머리 아래 한 줄(`updNoteHTML`: 받아 둠·받는 중·있음·App Store, ×는 그 상태·버전만 숨김), 더보기 → 앱 "앱 업데이트" 줄(`updRowHTML`: 확인 전·최신·확인 중·받는 중·실패·꺼진 빌드). "최신 버전 받기"(`upd-get`)는 타이머가 돌면 멈춘 뒤에, 아니면 `flush()`로 기록을 먼저 네이티브 저장소에 쓰고(메시지 순서대로 처리) `apply`. 업데이트한 뒤 처음 열면 `S.tk.ver`로 한 번 알림(`verOnce`). 브라우저에는 이 줄들이 없다.
 - Firebase 설정은 빌드에 든 값을 키체인(`pe_fbcfg`)에도 적어 두어, 업데이트로 받은 코드에 값이 빠졌어도(`--environment` 없이 올린 경우) 회원 확인이 그대로 된다.
+
+## 과목별 공부 시간(3.2.4, app.js "11-0e", `#subj`)
+
+- 들어가는 곳: 더보기 → "과목별 공부 시간"(`PARENT.subj = 'more'`, 공부 시간 진단 줄 아래 `subjRow`), 설정의 하루 공부 시간 안내에서도. 켜기 전엔 하루 공부 시간만 쓰는 예전 그대로.
+- `S.settings.subj = {on, wd, sat, sun}`: 요일 종류(평일·토요일·일요일과 공휴일, `SUBJ_DAY`로 `dayKind` 연결)마다 과목 `SUBJ`(core 용어·세트 퀴즈 · dan 단답 · non 논술 · rev 복습 · mock 모의고사 · etc 기타, 공부 시간 진단 `CO_PART`와 같은 나눔)의 분. 오늘 몫 줄은 `SUBJ_K`(줄 종류 `k`나 `id` 앞부분)로 과목을 정하고 없으면 기타.
+- 켜면(`subj-on`) 진단 지금 단계 비율로 나눠 채운다(`subjDefault`: 평일·일요일은 모의고사 0, 토요일은 모의고사를 그날 시간의 반까지, 5분 단위 `subjRound`). 과목 시간의 합이 그날 하루 공부 시간(`S.settings.budget`)이 된다(`subjSync`). 반대로 설정·진단에서 하루 공부 시간을 바꾸면 비율 그대로 늘이거나 줄인다(`subjFit`). −/+는 5분씩(0~600분, 그날 합이 0이 되게는 못 줄임), "진단 비율로 다시 나누기"(`subj-fill`).
+- `dayPlan`: `subjCaps(kind, 그날 쓸 시간)`이 과목 상한(그날 공부 시간·오늘 시간에 맞춰 늘이거나 줄임, 끄면 null). 꼭 할 일(always)·남겨 둔 일은 상한과 상관없이 넣고 그 과목 몫에서 빼며, 나머지(필수 P≤1·몫 늘리기·분량 일·카드·나머지 고르기·숙제 줄이기)는 과목 몫이 남을 때만. 카드는 복습 몫에 맞게 장수를 줄인다(5장 이상일 때). 못 넣은 일은 평소 넘침처럼 다른 날로. 결과에 `subj: {caps, used}`.
+- 화면: 요일 탭(합계), 과목 줄마다 한 주 합·진단 권장(30분 이상 권장인데 90% 못 미치면 노란 "모자라요")·오늘 몫(오늘 요일 탭일 때 `capView`).
+
+## 숙제 "새 용어" 카드만 넘겨 보기·외우기, 카드 뒷면 답안지(3.2.4)
+
+- 숙제 화면의 새 용어 줄(`key: 'fresh'`)에서 "카드 넘겨 보기"·"가리며 외우기"는 `data-fresh="1"` → `setFlash(d, {fresh:true})`·`memoSet(d, {fresh:true})`: 그 세트의 새 카드만(연결 카드 `ref` 빼고). 이어 하기 키는 `flashn:날짜`·`memo:set:날짜:new`, 세션 `part: 1`이라 끝나도 세트 복습 표시(`markReviewed`)는 하지 않는다(달력은 `flashn:`). 세트 화면·복습의 넘겨 보기는 예전처럼 세트 카드 전부.
+- 카드 세션 뒷면(`SES.back`)에 "답안지로 보기"(`ddHash(카드 id)` → `#dandap`). 뒤로 가면 같은 카드 뒷면으로(`UP_LABEL.sess = '카드'`).
+- 검사: `plan.test.js` 71(기본 나눔·합, 켜기 화면, 복습 상한 지킴·끄면 예전 그대로, 오늘 시간 줄이면 비율대로, −/+와 하루 공부 시간 맞춤·설정에서 바꾸면 따라옴, 끄기, 숙제 새 용어 넘겨 보기·외우기 4장, 답안지로 보기 → 뒤로 같은 카드).
 
 ## 짝 맞추기 게임(3.2.3, app.js "14-2", `#match`)
 

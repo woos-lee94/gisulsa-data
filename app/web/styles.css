@@ -927,3 +927,16 @@ textarea.in.plain{font-family:inherit;font-size:1rem;line-height:1.6;min-height:
 .mgres .s{margin:0;color:var(--ink2);font-size:1rem}
 .mgres .best{display:inline-block;margin:10px 0 0;padding:4px 12px;border-radius:999px;background:var(--rule2);color:var(--ink2);font-size:.86rem;font-weight:700}
 .mgres .best.on{background:var(--ok-soft);color:var(--ok)}
+
+/* ── 과목별 공부 시간(3.2.4, #subj): 과목 줄마다 −/+ 5분, 요일 종류 탭(그날 합계), 진단 권장보다 모자라면 호박색 ── */
+.sjon,.sjday{margin-top:12px}
+.sjday button{display:flex;flex-direction:column;align-items:center;line-height:1.25;padding-top:6px;padding-bottom:6px}
+.sjday button small{font-size:.8rem;font-weight:600;color:var(--ink2)}
+.sjg{margin-top:12px}
+.sjrow{align-items:center}
+.sjrow .ds.sjlow{color:var(--amber);font-weight:600}
+.sjst{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.sjst b{min-width:4.6em;text-align:center;font-size:.86rem;font-weight:700}
+.sjb{width:40px;height:40px;border-radius:50%;border:1.5px solid var(--rule);background:var(--sheet);font-size:1.06rem;font-weight:700;color:var(--blue);display:grid;place-items:center}
+.sjb:disabled{opacity:.35}
+.sjsum .val{font-size:1rem;font-weight:800;color:var(--ink)}

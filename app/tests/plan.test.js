@@ -2460,6 +2460,59 @@ function runWeek(W, sets, st) {
     pe.S().mg.mode = 'd'; pe.render(); await sleep(10);
     ok(/최고 1분 3초/.test(T_(V$().querySelector('[data-h="match"]'))), `70-7. 연습 줄에 최고 기록: ${T_(V$().querySelector('[data-h="match"]'))}`);
     pe.goTab('today'); await sleep(40); }
+  // 71. 과목별 공부 시간·숙제 새 용어만 넘겨 보기·카드 뒷면 답안지(3.2.4)
+  {
+    const J = JSON.stringify, T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), tap = async s => { click(s); await sleep(30); };
+    scene('2026-10-29T07:00:00', ST);
+    const S = pe.S(), t = '2026-10-29', cat = P => { const o = {}; P.rows.forEach(r => { const c = pe.subjKey(r.task || r); o[c] = (o[c] || 0) + r.m; }); return o; };
+    // 71-1. 처음 켤 때 나눔: 5분 단위, 합 = 그날 하루 공부 시간, 평일·일요일은 모의고사 0
+    const dw = pe.subjDefault('wd', 180), ds = pe.subjDefault('sat', 300), du = pe.subjDefault('sun', 240);
+    ok(pe.subjSum(dw) === 180 && pe.subjSum(ds) === 300 && pe.subjSum(du) === 240 && Object.values(dw).every(v => v % 5 === 0) && dw.mock === 0 && du.mock === 0,
+      `71-1. 평일 ${J(dw)} · 토 ${J(ds)}`);
+    // 71-2. 화면: 더보기 줄 → 과목별 공부 시간 → 켜면 하루 공부 시간 = 과목 합, 과목 6줄·요일 탭 3
+    const P0 = pe.dayPlan(t, { now: 7 * 60 }), c0 = cat(P0);
+    await show('#more'); const mr = [...V$().querySelectorAll('.row')].find(r => /과목별 공부 시간/.test(T_(r)));
+    ok(mr && /따로 정해요/.test(T_(mr)), `71-2. 더보기 줄 "${T_(mr)}"`);
+    await show('#subj'); ok(/하루 시간만/.test(T_(V$())) && !V$().querySelector('[data-act="subj-step"]'), '71-2. 처음에는 꺼져 있음');
+    await tap('[data-act="subj-on"]');
+    const st = S.settings.subj, bg = S.settings.budget;
+    ok(st.on && pe.subjSum(st.wd) === bg.wd && pe.subjSum(st.sat) === bg.sat && pe.subjSum(st.sun) === bg.sun && V$().querySelectorAll('.sjrow').length === 6 && V$().querySelectorAll('[data-act="subj-day"]').length === 3,
+      `71-2. 켬: 평일 ${J(st.wd)} = ${bg.wd}분`);
+    // 71-3. 오늘 몫: 복습 과목을 5분으로 줄이면 복습 줄(늘 넣는 줄이 아닌 것)은 5분 안, 다른 과목은 그대로 고른다. 꺼 둔 오늘 몫과 견줌
+    st.wd = Object.assign({}, st.wd, { rev: 5 }); const P1 = pe.dayPlan(t, { now: 7 * 60 }), c1 = cat(P1), revAlways = P1.rows.filter(r => r.task && r.task.always && pe.subjKey(r.task) === 'rev').reduce((a, r) => a + r.m, 0);
+    ok((c0.rev || 0) > 5 && (c1.rev || 0) - revAlways <= 5.5 && (c0.etc || 0) <= 10 && P1.subj && Math.abs(pe.subjSum(P1.subj.caps) - P1.cap) < 1 && (c1.core || 0) >= (c0.core || 0),
+      `71-3. 복습 ${c0.rev || 0}분 → ${c1.rev || 0}분(상한 ${Math.round(P1.subj.caps.rev)}), 그날 ${P1.cap}분, 꺼 둔 때 ${J(c0)} / 켠 때 ${J(c1)}`);
+    // 71-4. 짧게(오늘 시간 60분): 상한을 비율대로 줄임
+    const P2 = pe.dayPlan(t, { now: 7 * 60, user: 60 });
+    ok(P2.subj && Math.abs(pe.subjSum(P2.subj.caps) - 60) < 1 && Math.abs(P2.subj.caps.core / P1.subj.caps.core - 60 / P1.cap) < .01, `71-4. 오늘 시간 60분: 상한 합 ${Math.round(pe.subjSum(P2.subj.caps))}분`);
+    // 71-5. +/− 5분 → 그 과목과 하루 공부 시간이 함께 바뀜, 설정에서 하루 시간을 바꾸면 비율대로 늘이거나 줄임
+    await show('#subj'); const b0 = st.wd.core, w0 = pe.subjSum(st.wd);
+    await tap('[data-act="subj-step"][data-k="wd"][data-c="core"][data-v="5"]');
+    ok(S.settings.subj.wd.core === b0 + 5 && S.settings.budget.wd === w0 + 5 && /하루 합계/.test(T_(V$())), `71-5. 용어 ${b0} → ${S.settings.subj.wd.core}분, 평일 ${w0} → ${S.settings.budget.wd}분`);
+    await show('#settings'); await tap('[data-act="budget"][data-k="wd"][data-v="240"]');
+    ok(pe.subjSum(S.settings.subj.wd) === 240 && S.settings.budget.wd === 240 && /과목별로 나눠 두었어요/.test(T_(V$())), `71-5. 설정 평일 240분 → 과목 합 ${pe.subjSum(S.settings.subj.wd)}분 ${J(S.settings.subj.wd)}`);
+    // 71-6. 끄면 예전처럼(과목 상한 없음)
+    await show('#subj'); await tap('[data-act="subj-off"]');
+    ok(!S.settings.subj.on && pe.dayPlan(t, { now: 7 * 60 }).subj === null && pe.subjCaps('wd', 180) === null, '71-6. 끄면 과목 상한 없음');
+    // 71-7. 숙제 "새 용어"의 카드 넘겨 보기·가리며 외우기는 새 용어만(세트 화면의 넘겨 보기는 전부)
+    const D = '2026-10-29', set = pe.SETS().sets[D], nNew = set.cards.filter(c => !c.ref).length;
+    pe.SV()[D] = 'tasks'; await show('#set/' + D);
+    const fb = V$().querySelector('[data-act="set-flash"][data-fresh="1"]'), mb = V$().querySelector('[data-act="memo-set"][data-fresh="1"]');
+    ok(fb && mb && nNew < set.cards.length, `71-7. 숙제에 새 용어 버튼(새 용어 ${nNew}/${set.cards.length}장)`);
+    await tap('[data-act="set-flash"][data-fresh="1"]');
+    ok(pe.SES() && pe.SES().items.length === nNew && pe.SES().part === 1 && /새 용어 카드/.test(pe.SES().title), `71-7. 넘겨 보기 ${pe.SES() && pe.SES().items.length}장`);
+    // 71-8. 카드 뒷면 "답안지로 보기" → 답안지, 뒤로 → 같은 카드
+    const i0 = pe.SES().i; await tap('[data-act="sess-flip"]');
+    const ab = [...V$().querySelectorAll('[data-act="go"]')].find(b => /답안지로 보기/.test(T_(b)));
+    ok(ab && /^dandap\//.test(ab.dataset.h), `71-8. 뒷면 버튼 ${ab && ab.dataset.h}`);
+    ab.dispatchEvent(new w.MouseEvent('click', { bubbles: true })); await sleep(40);
+    ok(/#dandap\//.test(w.location.hash) && /단답 답안지/.test(T_(V$())) && /카드/.test(T_(V$().querySelector('.topbar .back'))), `71-8. 답안지 화면 ${w.location.hash}`);
+    await tap('[data-act="back"]'); await sleep(30);
+    ok(/#sess$/.test(w.location.hash) && pe.SES().i === i0 && pe.SES().back, `71-8. 뒤로 → 같은 카드 뒷면(${pe.SES().i + 1}번째)`);
+    const SES0 = pe.SES(); pe.SES && (await tap('[data-act="back"]'));
+    await show('#set/' + D); await tap('[data-act="memo-set"][data-fresh="1"]');
+    ok(pe.MEMO() && pe.MEMO().items.length === nNew && pe.MEMO().part === 1 && /새 용어/.test(pe.MEMO().title), `71-7. 가리며 외우기 ${pe.MEMO() && pe.MEMO().items.length}장`);
+    pe.goTab('today'); await sleep(40); }
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);

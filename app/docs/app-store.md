@@ -334,6 +334,10 @@ The app is an independent study aid and is not affiliated with HRD Korea or any 
 가릴 곳을 살짝 꾹 눌렀다가 그으면 테이프가 붙고, 그냥 밀면 화면이 움직이도록 바꿨습니다.
 ```
 
+## 3.2.4 보내는 순서(심사 없음)
+
+과목별 공부 시간, 숙제 새 용어 카드만 넘겨 보기, 카드 뒷면 "답안지로 보기"는 화면·계산(`web/`)만 바뀌어 네이티브 지문이 3.2.0과 같다. PowerShell 순서의 마지막 줄을 `npm run ota`로. Firebase 규칙·App Privacy는 그대로(과목별 시간은 휴대폰 안의 설정이다).
+
 ## 3.2.3 보내는 순서(심사 없음)
 
 짝 맞추기 게임은 화면·계산(`web/`)만 바뀌어 네이티브 지문이 3.2.0과 같다. PowerShell 순서의 마지막 줄을 `npm run ota`로. Firebase 규칙·App Privacy는 그대로(게임 기록은 휴대폰 안에만 있다). 개인정보 처리방침의 "휴대폰 안에만 저장하는 정보"에 짝 맞추기 기록을 더했다.
