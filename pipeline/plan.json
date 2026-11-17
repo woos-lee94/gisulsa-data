@@ -1,6 +1,8 @@
 {
- "note": "앱 더보기 → 시험 일정과 같은 값. set-plan·sync-plan 명령으로만 바꾼다. begin: 앱의 준비 시작일(그 전 날은 세트를 만들지 않음).",
+ "note": "앱 더보기 → 시험 일정과 같은 값. set-plan·sync-plan·set-terms 명령으로만 바꾼다. begin: 앱의 준비 시작일(그 전 날은 세트를 만들지 않음). terms: 앱 설정의 하루 외울 용어 수 = 세트 카드 수(없으면 단계 규칙).",
  "start": "2026-11-16",
- "target": 142,
- "rounds": {}
+ "begin": "2026-11-18",
+ "target": "auto",
+ "rounds": {},
+ "terms": 3
 }
