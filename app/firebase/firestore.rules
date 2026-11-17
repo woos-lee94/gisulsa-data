@@ -97,10 +97,11 @@ service cloud.firestore {
     // 공개 저장소의 data/index.json에도 같은 일정이 있으므로 누구나 읽어도 된다(예약 작업은 로그인 없이 읽는다).
     // start 예약 작업에 넣을 시작 주 월요일 · begin 앱의 준비 시작일 · target auto 또는 회차 · rounds "141=2027-01-30 142=…"(고친 회차 날짜)
     // tr·exam 그 일정의 목표 회차·시험 날(확인용) · next·nfrom·nexam 월요일부터 바꾸기로 한 목표(없으면 빈 칸)
+    // fresh 설정의 하루 새 용어 수(3.2.5부터, "auto" 또는 "1"~"10", 없어도 된다: 3.2.4 이전 앱은 보내지 않는다)
     match /config/{doc} {
       allow get: if doc == 'plan';
       allow create, update: if doc == 'plan' && isAdmin()
-        && request.resource.data.keys().hasOnly(['start', 'begin', 'target', 'rounds', 'tr', 'exam', 'next', 'nfrom', 'nexam', 'at'])
+        && request.resource.data.keys().hasOnly(['start', 'begin', 'target', 'rounds', 'tr', 'exam', 'next', 'nfrom', 'nexam', 'fresh', 'at'])
         && request.resource.data.keys().hasAll(['start', 'begin', 'target', 'rounds', 'tr', 'exam', 'next', 'nfrom', 'nexam', 'at'])
         && isDate(request.resource.data.start) && isDate(request.resource.data.begin) && isDate(request.resource.data.exam)
         && request.resource.data.target is string && request.resource.data.target.matches('^(auto|[0-9]{3})$')
@@ -110,6 +111,7 @@ service cloud.firestore {
         && request.resource.data.next is string && request.resource.data.next.matches('^([0-9]{3})?$')
         && (request.resource.data.next == '' ? request.resource.data.nfrom == '' && request.resource.data.nexam == ''
             : isDate(request.resource.data.nfrom) && isDate(request.resource.data.nexam))
+        && (!('fresh' in request.resource.data) || (request.resource.data.fresh is string && request.resource.data.fresh.matches('^(auto|[1-9]|10)$')))
         && request.resource.data.at == request.time;
     }
   }

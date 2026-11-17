@@ -2,7 +2,7 @@
   "expo": {
     "name": "Gisulsa6",
     "slug": "gisulsa-6",
-    "version": "3.2.4",
+    "version": "3.2.5",
     "orientation": "portrait",
     "icon": "./assets/icon-1024.png",
     "userInterfaceStyle": "automatic",

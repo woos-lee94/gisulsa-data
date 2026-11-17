@@ -334,6 +334,14 @@ The app is an independent study aid and is not affiliated with HRD Korea or any 
 가릴 곳을 살짝 꾹 눌렀다가 그으면 테이프가 붙고, 그냥 밀면 화면이 움직이도록 바꿨습니다.
 ```
 
+## 3.2.5 보내는 순서(심사 없음)
+
+설정의 "하루 새 용어"(평일 세트의 새 용어 수)는 화면·계산(`web/`)과 회원 요청(`native/member.js`의 JS)만 바뀌어 네이티브 지문이 3.2.0과 같다.
+
+1. Firebase 규칙 다시 게시(`docs/firebase-setup.md` 4-4, `config/plan`에 `'fresh'`가 있는 판). 게시 전에도 시험 일정 맞추기는 그대로 되고, 새 용어 수만 보내지 못한다(설정에 안내).
+2. PowerShell 순서의 마지막 줄을 `npm run ota`로.
+3. App Privacy: 그대로. 관리자 휴대폰만 자기 설정 숫자 하나를 일정과 함께 보낸다(사용자에게서 모으는 데이터가 아니다). 개인정보 처리방침의 관리자 일정 줄에 한 마디 더했다.
+
 ## 3.2.4 보내는 순서(심사 없음)
 
 과목별 공부 시간, 숙제 새 용어 카드만 넘겨 보기, 카드 뒷면 "답안지로 보기"는 화면·계산(`web/`)만 바뀌어 네이티브 지문이 3.2.0과 같다. PowerShell 순서의 마지막 줄을 `npm run ota`로. Firebase 규칙·App Privacy는 그대로(과목별 시간은 휴대폰 안의 설정이다).

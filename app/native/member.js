@@ -12,6 +12,7 @@ const ALNUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 // 시험 일정(config/plan, 3.2.1): 규칙(firebase/firestore.rules)과 같은 형식만 보낸다
 const DATE_RE = /^20\d{2}-[01]\d-[0-3]\d$/;
 const ROUNDS_RE = /^(\d{3}=20\d{2}-[01]\d-[0-3]\d( \d{3}=20\d{2}-[01]\d-[0-3]\d)*)?$/;
+const FRESH_RE = /^(auto|[1-9]|10)$/;
 function planDoc(a) {
   a = a && typeof a === 'object' ? a : {};
   const s = k => String(a[k] == null ? '' : a[k]);
@@ -20,6 +21,11 @@ function planDoc(a) {
     && o.rounds.length <= 300 && ROUNDS_RE.test(o.rounds)
     && (o.next === '' ? o.nfrom === '' && o.nexam === '' : /^\d{3}$/.test(o.next) && DATE_RE.test(o.nfrom) && DATE_RE.test(o.nexam));
   if (!ok) throw new MemberError('badplan', '시험 일정 형식이 맞지 않아요');
+  // 하루 새 용어 수(3.2.5): auto 또는 1~10. 없으면 보내지 않는다(예약 작업은 그대로 둔다)
+  if (a.fresh != null && a.fresh !== '') {
+    if (!FRESH_RE.test(String(a.fresh))) throw new MemberError('badplan', '하루 새 용어 수 형식이 맞지 않아요');
+    o.fresh = String(a.fresh);
+  }
   return o;
 }
 
@@ -293,10 +299,19 @@ function createMember({ apiKey, projectId, fetch, store, now = () => Date.now(),
   }
 
   // 관리자: 시험 일정을 config/plan에 쓴다(예약 작업이 읽어 같은 일정으로 맞춘다). 누구나 읽는 문서라 로그인 없이 확인도 한다
+  // 돌려주는 값: true(다 보냄) · 'nofresh'(Firebase 규칙이 3.2.4 판이라 하루 새 용어 수는 빼고 일정만 보냄)
   async function setPlan(a) {
     const o = planDoc(a);
-    await req('POST', `${FS}:commit`, { writes: [{ update: { name: docName('config/plan'), fields: toFields(o) }, updateTransforms: [{ fieldPath: 'at', setToServerValue: 'REQUEST_TIME' }] }] });
-    return true;
+    const put = x => req('POST', `${FS}:commit`, { writes: [{ update: { name: docName('config/plan'), fields: toFields(x) }, updateTransforms: [{ fieldPath: 'at', setToServerValue: 'REQUEST_TIME' }] }] });
+    try {
+      await put(o);
+      return true;
+    } catch (e) {
+      if (!e || e.code !== 'denied' || !('fresh' in o)) throw e;
+      const { fresh, ...rest } = o;
+      await put(rest);   // 이것도 막히면(관리자가 아님 등) 그 오류를 그대로 낸다
+      return 'nofresh';
+    }
   }
   async function getPlan() {
     try { return fromDoc(await call(`${FS}/config/plan`, { method: 'GET' })); } catch (e) { if (e.code === 'notfound') return null; throw e; }
