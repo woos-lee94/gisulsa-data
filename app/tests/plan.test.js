@@ -2513,53 +2513,99 @@ function runWeek(W, sets, st) {
     await show('#set/' + D); await tap('[data-act="memo-set"][data-fresh="1"]');
     ok(pe.MEMO() && pe.MEMO().items.length === nNew && pe.MEMO().part === 1 && /새 용어/.test(pe.MEMO().title), `71-7. 가리며 외우기 ${pe.MEMO() && pe.MEMO().items.length}장`);
     pe.goTab('today'); await sleep(40); }
-  // 72. 하루 새 용어 수(3.2.5): 설정 → 세트 규칙(setRule, tool.py rule과 같은 셈)·숙제 어림·예약 작업에 보내기(config/plan fresh)
+  // 72. 하루 외울 용어 수(3.2.6): 설정 → 세트 카드 수(termsSplit = tool.py terms_split), 받은 세트도 그 수만(setVis), 예약 작업에 보내기(config/plan terms)
   {
-    const J0 = JSON.stringify, T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), tap = async s => { click(s); await sleep(30); }, IO = w.PE_IO, mem0 = IO.member, call0 = IO.memberCall, cp0 = IO.copy;
+    const T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), tap = async s => { click(s); await sleep(30); }, IO = w.PE_IO, mem0 = IO.member, call0 = IO.memberCall, cp0 = IO.copy;
     scene('2026-10-29T07:00:00', ST);
-    const S = pe.S(), st = S.settings;
-    // 72-1. 기본은 단계 규칙(4·4·3·2·1, 파이널 0)
-    ok(pe.freshWant() === null && pe.setRule(1).fresh === 4 && pe.setRule(1).total === 10 && pe.setRule(3).fresh === 2 && pe.setRule(5).fresh === 0 && pe.planDocNow().fresh === 'auto', '72-1. 기본: 단계 규칙, 보낼 값 auto');
-    const ha0 = pe.hwAhead().terms, cw0 = J0(pe.coachWeek(4, pe.PLAN(), { c: 1, d: 1, e: 1 }, 1));
-    // 72-2. 설정 화면: 단계 규칙대로 / 직접 정하기(지금 단계의 수에서 시작), −/+ 1~10
+    const S = pe.S(), st = S.settings, D = '2026-10-29', D0 = '2026-10-28', set = pe.SETS().sets[D], n0 = set.cards.length, nNew = set.cards.filter(c => !c.ref).length;
+    const J = JSON.stringify, sp = (ph, n) => J(pe.termsSplit(ph, n));
+    // 72-1. 기본 단계 규칙, 나누는 셈
+    ok(pe.termsWant() === null && sp(1, null) === J({ fresh: 4, total: 10 }) && sp(1, 5) === J({ fresh: 4, total: 5 }) && sp(1, 3) === J({ fresh: 3, total: 3 }) && sp(1, 12) === J({ fresh: 6, total: 12 })
+      && sp(3, 5) === J({ fresh: 2, total: 5 }) && sp(5, 5) === J({ fresh: 0, total: 5 }) && pe.planDocNow().terms === 'auto' && pe.setVis(D).length === n0,
+      '72-1. 기본 10장(4+6), 줄이면 지난 카드부터(5 → 4+1, 3 → 3+0), 늘리면 새 용어(12 → 6+6), 파이널 그대로, 받은 세트 그대로');
+    const ha0 = pe.hwAhead().terms;
+    // 72-2. 설정: 단계 규칙대로 / 직접 정하기(10에서 시작), −로 5
     await show('#settings');
-    ok(/하루 새 용어/.test(T_(V$())) && V$().querySelector('[data-act="fresh-mode"][data-v="auto"].on') && !V$().querySelector('[data-act="fresh-step"]') && /연습 탭 '새 카드' 하루 한도/.test(T_(V$())), '72-2. 설정에 "하루 새 용어"(단계 규칙대로 켜짐), 연습 한도는 따로 이름');
-    await tap('[data-act="fresh-mode"][data-v="set"]');
-    ok(pe.freshWant() === 4 && V$().querySelector('[data-act="fresh-step"][data-v="1"]') && /4개/.test(T_(V$().querySelector('.sjst'))), '72-2. 직접 정하기 → 지금 단계 수(4개)에서 시작');
-    for (let i = 0; i < 3; i++) await tap('[data-act="fresh-step"][data-v="1"]');
-    ok(pe.freshWant() === 7 && st.fresh === 7 && pe.setRule(1).fresh === 7 && pe.setRule(1).total === 10 && pe.setRule(4).fresh === 7 && pe.setRule(5).fresh === 0 && pe.planDocNow().fresh === '7', '72-2. 7개: 0~4단계 세트 새 용어 7(전체 10), 파이널 0, 보낼 값 "7"');
-    ok(pe.hwAhead().terms > ha0 && J0(pe.coachWeek(4, pe.PLAN(), { c: 1, d: 1, e: 1 }, 1)) !== cw0, `72-2. 앞으로 외울 용어 어림·한 주 필요 시간도 늘어남(${ha0} → ${pe.hwAhead().terms})`);
-    for (let i = 0; i < 5; i++) await tap('[data-act="fresh-step"][data-v="1"]');
-    ok(pe.freshWant() === 10 && pe.setRule(1).total === 13 && V$().querySelector('[data-act="fresh-step"][data-v="1"]').disabled, '72-2. 10개까지(전체 13장 = 지난 카드 3장 남김), + 막힘');
-    // 72-3. 이 기기(브라우저, 회원 확인 없음)는 예약 작업에 못 보냄 → 변경 요청 복사(set-fresh)
+    ok(/하루 외울 용어/.test(T_(V$())) && V$().querySelector('[data-act="terms-mode"][data-v="auto"].on') && !V$().querySelector('[data-act="terms-step"]') && V$().querySelector('[data-act="go"][data-h="setup"]'), '72-2. 설정에 "하루 외울 용어"(단계 규칙대로), "시작 준비 다시 하기"');
+    await tap('[data-act="terms-mode"][data-v="set"]');
+    ok(pe.termsWant() === 10 && /10개/.test(T_(V$().querySelector('.sjst'))), '72-2. 직접 정하기 → 지금 단계 10개에서 시작');
+    for (let i = 0; i < 5; i++) await tap('[data-act="terms-step"][data-v="-1"]');
+    const vs = pe.setVis(D);
+    ok(pe.termsWant() === 5 && J(pe.setRule(1)) === J({ fresh: 4, total: 5 }) && pe.planDocNow().terms === '5' && pe.termsAt(D) === 5 && pe.termsAt(D0) === null,
+      `72-2. 5개: 세트 규칙 4+1, 보낼 값 "5", 오늘부터(${J(st.termsLog)})`);
+    ok(vs.length === 5 && vs.filter(x => !x.sc.ref).length === nNew && pe.setHid(D) === n0 - 5 && pe.setVis(D0).length === pe.SETS().sets[D0].cards.length, `72-2. 오늘 세트 ${n0}장 → 5장(새 용어 ${nNew}개 그대로, 지난 카드 ${n0 - 5}장 뺌), 어제 세트는 그대로`);
+    ok(pe.setCore(D).st.nc === 5 && pe.hwAhead().terms <= ha0 && /오늘 세트도 5개만 보여요/.test(T_(V$())), '72-2. 세트 핵심 5장, 설정에 "오늘 세트도 5개만"');
+    // 72-3. 세트 화면·넘겨 보기·가리며 외우기도 5장
+    pe.SV()[D] = 'cards'; await show('#set/' + D);
+    ok(V$().querySelectorAll('.acc').length === 5 && /지난 카드 5개는 뺐어요/.test(T_(V$())), `72-3. 세트 ① 용어 5장과 안내(${V$().querySelectorAll('.acc').length})`);
+    await tap('[data-act="set-flash"]'); ok(pe.SES() && pe.SES().items.length === 5, '72-3. 카드 넘겨 보기 5장'); pe.goTab('today'); await sleep(30);
+    // 72-4. 3~15 범위, 브라우저는 변경 요청 복사(set-terms)
+    await show('#settings');
+    for (let i = 0; i < 3; i++) await tap('[data-act="terms-step"][data-v="-1"]');
+    ok(pe.termsWant() === 3 && V$().querySelector('[data-act="terms-step"][data-v="-1"]').disabled && pe.setVis(D).every(x => !x.sc.ref) && pe.setVis(D).length === 3, '72-4. 3개까지(새 용어 3장만), − 막힘');
+    for (let i = 0; i < 13; i++) await tap('[data-act="terms-step"][data-v="1"]');
+    ok(pe.termsWant() === 15 && V$().querySelector('[data-act="terms-step"][data-v="1"]').disabled && J(pe.setRule(1)) === J({ fresh: 9, total: 15 }) && pe.setVis(D).length === n0 && pe.hwAhead().terms > ha0, '72-4. 15개까지(새 용어 9 + 지난 6), 받은 세트는 있는 만큼, 앞으로 외울 용어 어림 늘어남');
     let copied = ''; IO.copy = x => { copied = x; return Promise.resolve(); };
-    ok(pe.freshState() === 'manual' && V$().querySelector('[data-act="fresh-copy"]'), '72-3. 브라우저: 변경 요청 복사 버튼');
-    await tap('[data-act="fresh-copy"]');
-    ok(/tool\.py set-fresh 10/.test(copied), '72-3. 복사한 요청에 set-fresh 10');
-    // 72-4. 관리자 앱: 바꾸면 잠시 뒤 config/plan에 fresh와 함께 보냄 → "다음 평일 아침 세트부터"
+    ok(pe.termsState() === 'manual' && V$().querySelector('[data-act="terms-copy"]'), '72-4. 브라우저: 변경 요청 복사 버튼');
+    await tap('[data-act="terms-copy"]'); ok(/tool\.py set-terms 15/.test(copied), '72-4. 복사한 요청에 set-terms 15');
+    // 72-5. 관리자 앱: 모아서 한 번 보냄 → noterms면 규칙 안내 → 다시 보냄
     const sent = []; let reply = true;
     IO.member = () => ({ id: 'boss', admin: true, uid: 'U1' }); IO.memberCall = (op, a) => { sent.push([op, a]); return Promise.resolve(reply); };
-    await tap('[data-act="fresh-step"][data-v="-1"]'); await tap('[data-act="fresh-step"][data-v="-1"]');
-    ok(pe.freshWant() === 8 && sent.length === 0, '72-4. 누르는 동안은 아직 안 보냄(모아서 보냄)');
+    for (let i = 0; i < 7; i++) await tap('[data-act="terms-step"][data-v="-1"]');
+    ok(pe.termsWant() === 8 && sent.length === 0, '72-5. 누르는 동안은 아직 안 보냄');
     await sleep(1400);
-    ok(sent.length === 1 && sent[0][0] === 'plan' && sent[0][1].fresh === '8' && pe.freshState() === 'sent' && /다음 평일 아침 세트부터/.test(T_(V$())), `72-4. 1.2초 뒤 한 번 보냄(fresh ${sent[0] && sent[0][1].fresh}), 상태 sent`);
-    // 72-5. Firebase 규칙이 옛 판이면(nofresh) 규칙 다시 게시 안내, 다음에 다시 보냄
-    reply = 'nofresh'; await tap('[data-act="fresh-step"][data-v="-1"]'); await sleep(1400);
-    ok(sent.length === 2 && st.freshNo && pe.freshState() === 'rules' && /Firebase 규칙을 다시 게시/.test(T_(V$())), '72-5. nofresh → "Firebase 규칙을 다시 게시" 안내');
-    reply = true; await pe.planPush();
-    ok(sent.length === 3 && !st.freshNo && pe.freshState() === 'sent', '72-5. 같은 값이어도 다시 보내 보고, 받아지면 안내가 사라짐');
-    // 72-6. 저장소(data/index.json plan.fresh)가 같아지면 same
-    const plan0 = pe.SETS().plan; pe.SETS().plan = Object.assign({}, plan0, { fresh: 7 }); pe.render(); await sleep(10);
-    ok(pe.freshState() === 'same' && /예약 작업도 이 수로/.test(T_(V$())), '72-6. 저장소 값 7 = 설정 7 → 예약 작업도 이 수로');
-    // 72-7. 회원 휴대폰: 관리자 값(저장소)을 따르고 버튼이 없다
-    IO.member = () => ({ id: 'kim', admin: false, uid: 'U2' }); st.fresh = 3; pe.render(); await sleep(10);
-    ok(pe.freshState() === 'member' && pe.setRule(1).fresh === 7 && !V$().querySelector('[data-act="fresh-mode"]') && /관리자가 정한 수로 와요: 하루 7개/.test(T_(V$())), '72-7. 회원: 관리자 값 7을 따름(자기 설정 3은 쓰지 않음), 버튼 없음');
-    // 72-8. 단계 규칙대로로 되돌리기 → auto
-    IO.member = () => ({ id: 'boss', admin: true, uid: 'U1' }); pe.render(); await sleep(10);
-    await tap('[data-act="fresh-mode"][data-v="auto"]'); await sleep(1400);
-    ok(pe.freshWant() === null && !('fresh' in st) && sent[sent.length - 1][1].fresh === 'auto' && pe.setRule(1).fresh === 4, '72-8. 단계 규칙대로 → fresh 지움, auto를 보냄, 세트 규칙 4');
-    pe.SETS().plan = plan0; IO.member = mem0; IO.memberCall = call0; IO.copy = cp0; delete st.freshNo; delete st.pushSig; delete st.pushAt;
+    ok(sent.length === 1 && sent[0][0] === 'plan' && sent[0][1].terms === '8' && !('fresh' in sent[0][1]) && pe.termsState() === 'sent' && /다음 평일 아침 세트부터/.test(T_(V$())), `72-5. 1.2초 뒤 한 번 보냄(terms ${sent[0] && sent[0][1].terms})`);
+    reply = 'noterms'; await tap('[data-act="terms-step"][data-v="-1"]'); await sleep(1400);
+    ok(sent.length === 2 && st.termsNo && pe.termsState() === 'rules' && /Firebase 규칙을 다시 게시/.test(T_(V$())), '72-5. noterms → 규칙 다시 게시 안내');
+    reply = true; await pe.planPush(); ok(sent.length === 3 && !st.termsNo && pe.termsState() === 'sent', '72-5. 같은 값이어도 다시 보내 보고, 받아지면 안내가 사라짐');
+    // 72-6. 저장소(data/index.json plan.terms)가 같아지면 same
+    const plan0 = pe.SETS().plan; pe.SETS().plan = Object.assign({}, plan0, { terms: 7 }); pe.render(); await sleep(10);
+    ok(pe.termsState() === 'same' && /예약 작업도 이 수로/.test(T_(V$())), '72-6. 저장소 7 = 설정 7 → same');
+    // 72-7. 회원: 자기 수가 없으면 관리자 수, 정하면 이 휴대폰에서 그만큼만(보내지 않음)
+    IO.member = () => ({ id: 'kim', admin: false, uid: 'U2' }); pe.SETS().plan = Object.assign({}, plan0, { terms: 6 }); await tap('[data-act="terms-mode"][data-v="auto"]');
+    const n7 = sent.length;
+    ok(pe.termsState() === 'member' && J(pe.setRule(1)) === J({ fresh: 4, total: 6 }) && /관리자가 정한 수\(하루 6개\)/.test(T_(V$())) && pe.setVis(D).length === n0, '72-7. 회원: 관리자 수 6을 셈에 씀, 받은 세트는 그대로');
+    await tap('[data-act="terms-mode"][data-v="set"]'); const s7 = pe.termsWant(); for (let i = 0; i < 2; i++) await tap('[data-act="terms-step"][data-v="-1"]'); await sleep(1400);
+    ok(s7 === 6 && pe.termsWant() === 4 && pe.setVis(D).length === 4 && sent.length === n7, '72-7. 회원: 직접 정하기는 관리자 수 6에서 시작, 4로 정하면 이 휴대폰에서 4장만, 보내지 않음');
+    // 72-8. 단계 규칙대로 → auto(오늘부터 세트 그대로)
+    IO.member = () => ({ id: 'boss', admin: true, uid: 'U1' }); pe.SETS().plan = plan0; pe.render(); await sleep(10);
+    await tap('[data-act="terms-mode"][data-v="auto"]'); await sleep(1400);
+    ok(pe.termsWant() === null && !('terms' in st) && sent[sent.length - 1][1].terms === 'auto' && pe.setVis(D).length === n0 && J(pe.setRule(1)) === J({ fresh: 4, total: 10 }), '72-8. 단계 규칙대로 → terms 지움, auto를 보냄, 오늘 세트 다시 10장');
+    // 72-9. 3.2.5의 하루 새 용어 수(fresh)는 한 번 옮긴다
+    st.fresh = 6; st.freshNo = '2026-10-29'; pe.termsFix();
+    ok(pe.termsWant() === 6 && !('fresh' in st) && !('freshNo' in st), '72-9. 3.2.5 fresh 6 → 하루 외울 용어 6');
+    pe.termsFix(); ok(pe.termsWant() === 6, '72-9. 다시 불러도 그대로');
+    IO.member = mem0; IO.memberCall = call0; IO.copy = cp0; delete st.terms; delete st.termsLog; delete st.termsNo; delete st.pushSig; delete st.pushAt;
     pe.goTab('today'); await sleep(40); }
+  // 73. 시작 준비(3.2.6): 준비 시작일을 다시 정하면 오늘 화면 전에 하루 외울 용어 → 공부 시간 → 과목별 → 속도
+  {
+    const T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), tap = async s => { click(s); await sleep(30); }, IO = w.PE_IO, ask0 = IO.ask;
+    scene('2026-11-09T07:30:00', ST); IO.ask = (m, yes) => { yes && yes(); };
+    const S = pe.S(), st = S.settings, t = '2026-11-09';
+    await show('#schedule'); { const i = V$().querySelector('#schStart'); i.value = '2026-11-10'; i.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(20); }
+    await tap('[data-act="sch-save"]'); await sleep(30);
+    const S2 = pe.S();
+    ok(/#setup$/.test(w.location.hash) && S2.settings.start === '2026-11-10' && S2.tk.setup === 'due' && /시작 준비/.test(T_(V$())) && V$().querySelector('[data-act="terms-mode"]') && V$().querySelectorAll('.nextbar .btn').length === 1,
+      `73-1. 새로 시작 → 시작 준비 ① 하루 외울 용어(${w.location.hash})`);
+    await tap('[data-act="terms-mode"][data-v="set"]'); for (let i = 0; i < 4; i++) await tap('[data-act="terms-step"][data-v="-1"]');
+    ok(pe.termsWant() === 6, '73-2. ① 6개로');
+    await tap('[data-act="setup-step"][data-v="1"]');
+    ok(V$().querySelector('[data-act="budget"]') && /하루 공부 시간/.test(T_(V$())), '73-3. ② 하루 공부 시간');
+    await tap('[data-act="budget"][data-k="wd"][data-v="120"]');
+    ok(Number(S2.settings.budget.wd) === 120 && /#setup$/.test(w.location.hash), '73-3. 평일 2시간(시작 준비 화면 그대로)');
+    await tap('[data-act="setup-step"][data-v="1"]');
+    ok(V$().querySelector('[data-act="subj-on"]') && /과목별 공부 시간/.test(T_(V$())), '73-4. ③ 과목별');
+    await tap('[data-act="subj-on"]');
+    ok(pe.subjOn() && /평일 2시간/.test(T_(V$())) && V$().querySelector('[data-act="go"][data-h="subj"]'), '73-4. 과목별로 켜면 요일마다 합과 "자세히"');
+    await tap('[data-act="setup-step"][data-v="1"]');
+    ok(V$().querySelector('[data-act="pace"]') && /하루 외울 용어 ?6개/.test(T_(V$())) && /평일 2시간/.test(T_(V$())) && /과목별로 나눠요/.test(T_(V$())) && T_(V$().querySelector('.nextbar .btn')) === '이 설정으로 시작하기', '73-5. ④ 속도와 요약');
+    await tap('[data-act="setup-step"][data-v="-1"]'); ok(V$().querySelector('[data-act="subj-on"]'), '73-5. 이전 → ③');
+    await tap('[data-act="setup-step"][data-v="1"]'); await tap('[data-act="setup-done"]');
+    ok(/#today$/.test(w.location.hash) && !S2.tk.setup && !/시작 준비를 마저 해요/.test(T_(V$())), '73-6. 시작하기 → 오늘, 안내 없음');
+    // 73-7. 끝내지 않고 나가면 오늘 화면 위에 안내
+    S2.tk.setup = 'due'; pe.render(); await sleep(10);
+    ok(/시작 준비를 마저 해요/.test(T_(V$())) && V$().querySelector('.notice [data-act="go"][data-h="setup"]'), '73-7. 끝내기 전엔 오늘 위에 "시작 준비를 마저 해요"');
+    delete S2.tk.setup; IO.ask = ask0; pe.goTab('today'); await sleep(40); }
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);

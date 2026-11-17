@@ -940,3 +940,12 @@ textarea.in.plain{font-family:inherit;font-size:1rem;line-height:1.6;min-height:
 .sjb{width:40px;height:40px;border-radius:50%;border:1.5px solid var(--rule);background:var(--sheet);font-size:1.06rem;font-weight:700;color:var(--blue);display:grid;place-items:center}
 .sjb:disabled{opacity:.35}
 .sjsum .val{font-size:1rem;font-weight:800;color:var(--ink)}
+
+/* ── 시작 준비(3.2.6, #setup) ── */
+.stp4{display:flex;gap:6px;margin:14px 0 6px}
+.stp4 span{flex:1;min-width:0;text-align:center;padding:7px 2px;border-radius:10px;background:var(--rule2);color:var(--ink2);font-size:.8rem;font-weight:700;white-space:nowrap}
+.stp4 span.on{background:var(--blue);color:#fff}
+.stp4 span.done{background:var(--blue-soft);color:var(--blue-ink)}
+.stph{margin-top:18px}
+:root[data-theme="dark"] .stp4 span.on{color:#08142E}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .stp4 span.on{color:#08142E}}

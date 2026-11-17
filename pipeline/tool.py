@@ -13,11 +13,11 @@
   python3 pipeline/tool.py add-round FILE.json              새 회차 기출 추가(제141회부터 실제 시행분)
   python3 pipeline/tool.py link 기출id 카드id|목차id        기존 카드·목차를 새 기출에 연결
   python3 pipeline/tool.py status                           일정·주차·덱 현황
-  python3 pipeline/tool.py set-plan --start YYYY-MM-DD [--begin YYYY-MM-DD] [--target auto|회차] [--round 회차=YYYY-MM-DD ...] [--fresh auto|1~10]
+  python3 pipeline/tool.py set-plan --start YYYY-MM-DD [--begin YYYY-MM-DD] [--target auto|회차] [--round 회차=YYYY-MM-DD ...] [--terms auto|3~15]
                                                             앱에서 바꾼 시험 일정을 저장소에 넣기
   python3 pipeline/tool.py sync-plan [--url URL] [--json-file F] [--date YYYY-MM-DD]
-                                                            앱(관리자)이 보낸 시험 일정·하루 새 용어 수(Firestore config/plan)로 맞추기
-  python3 pipeline/tool.py set-fresh auto|1~10              앱에서 정한 하루 새 용어 수를 저장소에 넣기(다음 세트부터)
+                                                            앱(관리자)이 보낸 시험 일정·하루 외울 용어 수(Firestore config/plan)로 맞추기
+  python3 pipeline/tool.py set-terms auto|3~15              앱에서 정한 하루 외울 용어 수를 저장소에 넣기(다음 세트부터)
   python3 pipeline/tool.py kds "KDS 11 80 05" [검색어 ...]       국가건설기준(KDS·KCS) 현행 원문
   python3 pipeline/tool.py law "건설기술 진흥법 시행령" [검색어 ...] 현행 법령 조문
   python3 pipeline/tool.py admrul "고시·훈령 이름" [검색어 ...]      현행 행정규칙(고시·훈령·지침)
@@ -308,7 +308,7 @@ def dday_line(d):
 
 
 def plan_sig():
-    return {'start': START.isoformat(), 'target': TR, 'exam': EXAM.isoformat(), 'mock': MR, 'mockDate': MOCK.isoformat() if MOCK else None, 'fresh': fresh_conf()}
+    return {'start': START.isoformat(), 'target': TR, 'exam': EXAM.isoformat(), 'mock': MR, 'mockDate': MOCK.isoformat() if MOCK else None, 'terms': terms_conf()}
 
 
 def week_of(d):
@@ -406,23 +406,29 @@ def studied_units(w):
     return sorted(us) or None
 
 
-FRESH_RE = re.compile(r'^(auto|[1-9]|10)$')
+TERMS_RE = re.compile(r'^(auto|[3-9]|1[0-5])$')
 
 
-def fresh_conf():
-    """앱 설정의 하루 새 용어 수(3.2.5, plan.json fresh 1~10). 없으면 None(단계 규칙 그대로)."""
-    v = plan_conf().get('fresh')
-    return v if isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 10 else None
+def terms_conf():
+    """앱 설정의 하루 외울 용어 수(3.2.6, plan.json terms 3~15 = 세트 카드 수). 없으면 None(단계 규칙 그대로)."""
+    v = plan_conf().get('terms')
+    return v if isinstance(v, int) and not isinstance(v, bool) and 3 <= v <= 15 else None
+
+
+def terms_split(r, n):
+    """단계 규칙 r({fresh, total})과 하루 외울 용어 수 n → (새 용어, 전체). 앱 app.js termsSplit과 같은 셈.
+    n이 단계 전체 이하면 새 용어는 min(단계 새 용어, n)이고 나머지가 기존 카드(줄이면 기존 카드부터 뺀다),
+    넘으면 기존 카드는 단계 그대로 두고 새 용어를 늘린다. 새 용어가 없는 단계(파이널)는 그대로."""
+    if n is None or not r['fresh']:
+        return r['fresh'], r['total']
+    if n >= r['total']:
+        return r['fresh'] + n - r['total'], n
+    return min(r['fresh'], n), n
 
 
 def rule(w):
-    """세트 카드 수(새 용어, 전체). 앱에서 하루 새 용어 수를 정했으면 새 용어가 있는 단계(0~4)는 그 수로,
-    전체는 기존 카드(ref)가 3개 이상 남게 늘린다(앱 app.js setRule과 같은 셈). 파이널(새 용어 0)은 그대로."""
-    r = CUR['setrule'][str(phase_of(w))]
-    f = fresh_conf()
-    if f is None or not r['fresh']:
-        return r['fresh'], r['total']
-    return f, max(r['total'], f + 3)
+    """세트 카드 수(새 용어, 전체): 단계 규칙, 앱에서 하루 외울 용어 수를 정했으면 그 수로(terms_split)."""
+    return terms_split(CUR['setrule'][str(phase_of(w))], terms_conf())
 
 
 def deck():
@@ -492,7 +498,7 @@ def cmd_today():
     if wk.get('goals'):
         print('이번 주 목표: ' + ' / '.join(wk['goals'][:4]))
     print(f'규칙: 카드 {total}개 = 새 용어 {fresh}개 + 기존 카드 다시 짚기(ref) {total - fresh}개, 퀴즈 5문, 논술 1문제, 과제 3~4개'
-          + (' (새 용어 수는 사용자가 앱에서 정한 하루 새 용어 수)' if fresh_conf() is not None and fresh else ''))
+          + (' (카드 수는 사용자가 앱에서 정한 하루 외울 용어 수)' if terms_conf() is not None and fresh else ''))
     print(dday_line(d))
 
     bl = load(p('pipeline', 'backlog.json'))
@@ -1042,7 +1048,8 @@ def print_plan():
         if x and x['note']:
             print(f'  제{x["r"]}회: {x["note"]}')
     rp = dict(index().get('plan') or {})
-    rp.setdefault('fresh', None)   # 3.2.5 전 index.json에는 fresh 칸이 없다
+    rp.pop('fresh', None)
+    rp.setdefault('terms', None)   # 3.2.6 전 index.json에는 terms 칸이 없다
     if rp != plan_sig():
         print('  ※ data/index.json의 plan이 이 일정과 다릅니다. python3 pipeline/tool.py set-plan --start ' + START.isoformat() + ' 로 맞추세요.')
 
@@ -1060,17 +1067,17 @@ def cmd_status():
 
 
 def cmd_set_plan(a):
-    """앱에서 바꾼 시험 일정을 저장소에 넣는다: --start YYYY-MM-DD [--target auto|회차] [--round 회차=YYYY-MM-DD ...] [--clear-rounds] [--fresh auto|1~10]"""
+    """앱에서 바꾼 시험 일정을 저장소에 넣는다: --start YYYY-MM-DD [--target auto|회차] [--round 회차=YYYY-MM-DD ...] [--clear-rounds] [--terms auto|3~15]"""
     global PLAN, START, EXAM, MOCK, TR, MR
     c = plan_conf()
     rounds = {} if '--clear-rounds' in a else dict(c.get('rounds', {}))
-    start, target, begin, fresh = c.get('start'), c.get('target', 'auto'), None, fresh_conf()
+    start, target, begin, terms = c.get('start'), c.get('target', 'auto'), None, terms_conf()
     i = 0
     while i < len(a):
-        if a[i] == '--fresh' and i + 1 < len(a):
-            if not FRESH_RE.match(a[i + 1]):
-                sys.exit(f'--fresh 는 auto 또는 1~10 (받은 값 {a[i + 1]})')
-            fresh = None if a[i + 1] == 'auto' else int(a[i + 1]); i += 2; continue
+        if a[i] == '--terms' and i + 1 < len(a):
+            if not TERMS_RE.match(a[i + 1]):
+                sys.exit(f'--terms 는 auto 또는 3~15 (받은 값 {a[i + 1]})')
+            terms = None if a[i + 1] == 'auto' else int(a[i + 1]); i += 2; continue
         if a[i] == '--start' and i + 1 < len(a):
             start = a[i + 1]; i += 2; continue
         if a[i] == '--begin' and i + 1 < len(a):
@@ -1103,8 +1110,8 @@ def cmd_set_plan(a):
     if begin and begin != start:
         conf['begin'] = begin
     conf.update({'target': target, 'rounds': rounds})
-    if fresh is not None:
-        conf['fresh'] = fresh   # 앱의 하루 새 용어 수(3.2.5)는 일정을 바꿔도 그대로
+    if terms is not None:
+        conf['terms'] = terms   # 앱의 하루 외울 용어 수(3.2.6)는 일정을 바꿔도 그대로
     save(p('pipeline', 'plan.json'), conf)
     PLAN = compute_plan()
     START, EXAM = PLAN['start'], PLAN['target']['d']
@@ -1125,18 +1132,19 @@ def cmd_set_plan(a):
     return 0
 
 
-PLAN_NOTE = ('앱 더보기 → 시험 일정과 같은 값. set-plan·sync-plan·set-fresh 명령으로만 바꾼다. begin: 앱의 준비 시작일(그 전 날은 세트를 만들지 않음). '
-             'fresh: 앱 설정의 하루 새 용어 수(없으면 단계 규칙).')
+PLAN_NOTE = ('앱 더보기 → 시험 일정과 같은 값. set-plan·sync-plan·set-terms 명령으로만 바꾼다. begin: 앱의 준비 시작일(그 전 날은 세트를 만들지 않음). '
+             'terms: 앱 설정의 하루 외울 용어 수 = 세트 카드 수(없으면 단계 규칙).')
 
 
-def fresh_write(fresh):
-    """plan.json의 fresh(앱의 하루 새 용어 수)만 바꾸고 index.json 일정 표시도 맞춘다. 바뀌었으면 True."""
+def terms_write(n):
+    """plan.json의 terms(앱의 하루 외울 용어 수)만 바꾸고 index.json 일정 표시도 맞춘다. 바뀌었으면 True."""
     c = plan_conf()
-    if fresh_conf() == fresh:
+    if terms_conf() == n and 'fresh' not in c:
         return False
-    c.pop('fresh', None)
-    if fresh is not None:
-        c['fresh'] = fresh
+    c.pop('fresh', None)   # 3.2.5의 하루 새 용어 수는 쓰지 않는다
+    c.pop('terms', None)
+    if n is not None:
+        c['terms'] = n
     c['note'] = PLAN_NOTE
     save(p('pipeline', 'plan.json'), c)
     idx = index()
@@ -1146,21 +1154,21 @@ def fresh_write(fresh):
     return True
 
 
-def fresh_txt(f):
-    return f'하루 새 용어 {f}개(앱 설정)' if f is not None else '하루 새 용어는 단계 규칙대로(4→3→2→1개)'
+def terms_txt(n):
+    return f'하루 외울 용어 {n}개(앱 설정)' if n is not None else '하루 외울 용어는 단계 규칙대로(10개)'
 
 
-def cmd_set_fresh(a):
-    """앱에서 정한 하루 새 용어 수를 저장소에 넣는다: set-fresh auto|1~10. 다음에 만드는 세트부터 이 수를 쓴다."""
+def cmd_set_terms(a):
+    """앱에서 정한 하루 외울 용어 수를 저장소에 넣는다: set-terms auto|3~15. 다음에 만드는 세트부터 이 수를 쓴다."""
     v = a[0] if a else ''
-    if not FRESH_RE.match(v):
-        sys.exit('사용법: tool.py set-fresh auto|1~10')
-    f = None if v == 'auto' else int(v)
-    if not fresh_write(f):
-        print(f'바꿀 것 없음: 이미 {fresh_txt(f)}입니다.')
+    if not TERMS_RE.match(v):
+        sys.exit('사용법: tool.py set-terms auto|3~15')
+    n = None if v == 'auto' else int(v)
+    if not terms_write(n):
+        print(f'바꿀 것 없음: 이미 {terms_txt(n)}입니다.')
         return 0
-    print(f'바꿈: {fresh_txt(f)}. 다음에 만드는 세트부터 적용됩니다.')
-    print(f'다음: git add pipeline/plan.json data/index.json && git commit -m "설정: {fresh_txt(f)}" && git fetch origin main && git rebase origin/main && git push origin HEAD:main')
+    print(f'바꿈: {terms_txt(n)}. 다음에 만드는 세트부터 적용됩니다.')
+    print(f'다음: git add pipeline/plan.json data/index.json && git commit -m "설정: {terms_txt(n)}" && git fetch origin main && git rebase origin/main && git push origin HEAD:main')
     return 0
 
 
@@ -1206,9 +1214,9 @@ def cmd_sync_plan(a):
         print(f'SYNC-SKIP: 앱 일정을 읽지 못했습니다({e.__class__.__name__}). ' + keep)
         return 0
     f = (doc or {}).get('fields') or {}
-    o = {k: fs_val(f.get(k)) for k in ('start', 'begin', 'target', 'rounds', 'tr', 'exam', 'next', 'nfrom', 'nexam', 'at', 'fresh')}
-    # 하루 새 용어 수(3.2.5부터, 없으면 3.2.4 이전 앱이라 그대로 둔다)
-    fw = 'keep' if not FRESH_RE.match(o['fresh']) else (None if o['fresh'] == 'auto' else int(o['fresh']))
+    o = {k: fs_val(f.get(k)) for k in ('start', 'begin', 'target', 'rounds', 'tr', 'exam', 'next', 'nfrom', 'nexam', 'at', 'terms')}
+    # 하루 외울 용어 수(3.2.6부터, 없으면 그 전 앱이라 그대로 둔다. 3.2.5의 fresh는 읽지 않는다)
+    fw = 'keep' if not TERMS_RE.match(o['terms']) else (None if o['terms'] == 'auto' else int(o['terms']))
     def day(s):
         try:
             return dt.date.fromisoformat(s) if DATE_RE.match(s or '') else None
@@ -1232,14 +1240,14 @@ def cmd_sync_plan(a):
     rounds = dict(x.split('=') for x in o['rounds'].split())
     c, s0 = plan_conf(), plan_sig()
     cur = lambda: {k: plan_sig()[k] for k in want}
-    fdiff = fw != 'keep' and fw != fresh_conf()
+    fdiff = fw != 'keep' and fw != terms_conf()
     if cur() == want and c.get('rounds', {}) == rounds and c.get('begin', c.get('start')) == o['begin']:
         if fdiff:
-            fresh_write(fw)
-            print(f'SYNC-CHANGED: 일정은 같고 {fresh_txt(fw)}로 바꿨습니다(다음에 만드는 세트부터).')
-            print(f'다음: git add pipeline/plan.json data/index.json && git commit -m "설정: {fresh_txt(fw)}" && git fetch origin main && git rebase origin/main && git push origin HEAD:main')
+            terms_write(fw)
+            print(f'SYNC-CHANGED: 일정은 같고 {terms_txt(fw)}로 바꿨습니다(다음에 만드는 세트부터).')
+            print(f'다음: git add pipeline/plan.json data/index.json && git commit -m "설정: {terms_txt(fw)}" && git fetch origin main && git rebase origin/main && git push origin HEAD:main')
             return 0
-        print(f'SYNC-SAME: 앱 일정과 같습니다({o["start"]} 시작 주, 준비 시작일 {o["begin"]}, 제{want["target"]}회 {want["exam"]}, {fresh_txt(fresh_conf())}). 바꿀 것이 없습니다.')
+        print(f'SYNC-SAME: 앱 일정과 같습니다({o["start"]} 시작 주, 준비 시작일 {o["begin"]}, 제{want["target"]}회 {want["exam"]}, {terms_txt(terms_conf())}). 바꿀 것이 없습니다.')
         return 0
     paths = [p('pipeline', 'plan.json'), p('data', 'index.json')]
     snap = {x: open(x, encoding='utf-8').read() if os.path.exists(x) else None for x in paths}
@@ -1265,9 +1273,9 @@ def cmd_sync_plan(a):
         print(f'SYNC-FAIL: 앱 일정({o["start"]} 시작, 제{want["target"]}회 {want["exam"]})으로 맞추지 못했습니다. {err or ""}{got} 일정은 그대로 두었습니다. 사용자에게 앱 시험 일정의 "변경 요청 복사"를 붙여 달라고 보고하세요.')
         return 1
     if fdiff:
-        fresh_write(fw)
+        terms_write(fw)
     print(f'SYNC-CHANGED: {s0["start"]} 시작, 제{s0["target"]}회 {s0["exam"]} → {o["start"]} 시작(준비 시작일 {o["begin"]}), 제{want["target"]}회 {want["exam"]}'
-          + (f', {fresh_txt(fw)}' if fdiff else ''))
+          + (f', {terms_txt(fw)}' if fdiff else ''))
     print_plan()
     print(f'다음: git add pipeline/plan.json data/index.json && git commit -m "일정: 앱 시험 일정에 맞춤({o["begin"]} 시작, 제{want["target"]}회)" && git fetch origin main && git rebase origin/main && git push origin HEAD:main')
     return 0
@@ -1429,8 +1437,8 @@ def main():
         return cmd_set_plan(a[1:])
     if c == 'sync-plan':
         return cmd_sync_plan(a[1:])
-    if c == 'set-fresh':
-        return cmd_set_fresh(a[1:])
+    if c == 'set-terms':
+        return cmd_set_terms(a[1:])
     if c == 'kds' and len(a) > 1:
         return cmd_kds(a[1], a[2:])
     if c == 'law' and len(a) > 1:

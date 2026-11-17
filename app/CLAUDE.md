@@ -9,7 +9,7 @@
 ## 이 저장소에서 지킬 것
 
 - 이 폴더(`app/`)는 아이폰 앱 코드다. Expo 프로젝트 루트도 `app/`으로 둔다(`app/package.json`).
-- 저장소의 `data/`와 `pipeline/`은 예약 작업(매일 세트, 토요일 모의고사) 영역이다. 앱 작업에서는 읽기만 하고 고치지 않는다. 예외(3.2.1, 사용자 요청): 앱 시험 일정을 예약 작업이 따라가게 하는 `pipeline/tool.py sync-plan`·`set-plan --begin`과 RUNBOOK 0단계(아래 "예약 작업 일정 맞추기"), 3.2.5의 하루 새 용어 수(`rule`·`set-fresh`·`sync-plan`의 `fresh`, 아래 "하루 새 용어 수").
+- 저장소의 `data/`와 `pipeline/`은 예약 작업(매일 세트, 토요일 모의고사) 영역이다. 앱 작업에서는 읽기만 하고 고치지 않는다. 예외(3.2.1, 사용자 요청): 앱 시험 일정을 예약 작업이 따라가게 하는 `pipeline/tool.py sync-plan`·`set-plan --begin`과 RUNBOOK 0단계(아래 "예약 작업 일정 맞추기"), 3.2.6의 하루 외울 용어 수(`rule`·`terms_split`·`set-terms`·`sync-plan`의 `terms`, 아래 "하루 외울 용어 수·시작 준비").
 - 예약 작업이 거의 매일 main에 올린다. main에 올릴 때는 `git fetch origin main && git rebase origin/main && git push origin HEAD:main`.
 - 이 저장소는 공개다. 키·비밀번호·인증서·`.env`를 올리지 않는다(`app/.gitignore`).
 
@@ -108,7 +108,7 @@
 
 ## 앱 폴더
 
-- `web/`: 앱 화면 원본(v3.2.5, 네이티브 다리 포함). `index.html`의 `?v=N`(지금 9)은 `tests/app.test.js`가 스크립트를 찾는 표시라 남겨 둔다. 버전은 `app.js`의 `APP_VER`, `app.json`의 `expo.version`, `package.json`의 `version`(과 `package-lock.json`의 앱 줄 두 곳)을 함께 올린다(`tests/native.test.js`가 확인)
+- `web/`: 앱 화면 원본(v3.2.6, 네이티브 다리 포함). `index.html`의 `?v=N`(지금 9)은 `tests/app.test.js`가 스크립트를 찾는 표시라 남겨 둔다. 버전은 `app.js`의 `APP_VER`, `app.json`의 `expo.version`, `package.json`의 `version`(과 `package-lock.json`의 앱 줄 두 곳)을 함께 올린다(`tests/native.test.js`가 확인)
 - `tests/`: jsdom 회귀 검사와 가짜 저장소(`tests/fake/data`)
 - 확대 막기: `index.html` viewport에 `maximum-scale=1, user-scalable=no`(WKWebView는 이것을 따른다. 글자 칸을 누를 때 16px보다 작은 칸이 확대되던 것도 막는다), `styles.css`의 `html{touch-action:manipulation}`(두 번 눌러 확대)
 - `assets/icon-1024.png`: iOS 앱 아이콘
@@ -192,15 +192,18 @@
 - 웹(`app.js` "20b"): 오늘 머리 아래 한 줄(`updNoteHTML`: 받아 둠·받는 중·있음·App Store, ×는 그 상태·버전만 숨김), 더보기 → 앱 "앱 업데이트" 줄(`updRowHTML`: 확인 전·최신·확인 중·받는 중·실패·꺼진 빌드). "최신 버전 받기"(`upd-get`)는 타이머가 돌면 멈춘 뒤에, 아니면 `flush()`로 기록을 먼저 네이티브 저장소에 쓰고(메시지 순서대로 처리) `apply`. 업데이트한 뒤 처음 열면 `S.tk.ver`로 한 번 알림(`verOnce`). 브라우저에는 이 줄들이 없다.
 - Firebase 설정은 빌드에 든 값을 키체인(`pe_fbcfg`)에도 적어 두어, 업데이트로 받은 코드에 값이 빠졌어도(`--environment` 없이 올린 경우) 회원 확인이 그대로 된다.
 
-## 하루 새 용어 수(3.2.5, app.js `setRule`·`freshHTML`, 설정 → "하루 새 용어")
+## 하루 외울 용어 수·시작 준비(3.2.6, app.js "하루 외울 용어 수"·`vSetup`)
 
-평일 세트 하나의 새 용어 수는 예약 작업이 정한다(앱은 세트를 받기만 한다). 예전에는 단계 규칙(`PE_SETRULE`·`curriculum.json` `setrule`: 준비 주·1단계 4 → 2단계 3 → 3단계 2 → 4단계 1, 파이널 0, 카드는 늘 10장)뿐이었고, 설정의 "하루 새 카드 수"(`S.settings.newPerDay`)는 연습 탭 "새 카드" 한도라 세트와 상관없었다(지금 이름 "연습 탭 '새 카드' 하루 한도(세트의 새 용어 수와 따로)").
+평일 세트 하나의 용어 수(새 용어 + 지난 카드 `ref`)는 예약 작업이 정한다. 예전에는 단계 규칙(`PE_SETRULE`·`curriculum.json` `setrule`: 10장, 새 용어 준비 주·1단계 4 → 2단계 3 → 3단계 2 → 4단계 1, 파이널 5장·새 용어 0)뿐이었다. 3.2.5에 "하루 새 용어 수"(새 용어만)를 넣었지만 세트가 여전히 10장이라 "용어 10개"로 보였고, 시작일을 다시 정한 날에도 그날 세트는 이미 10장으로 와 있었다. 3.2.6은 세트 카드 수 자체를 정하고, 받은 세트도 그 수만 보인다. 설정의 "하루 새 카드 수"(`S.settings.newPerDay`)는 연습 탭 "새 카드" 한도라 세트와 상관없다(이름 "연습 탭 '새 카드' 하루 한도(세트의 새 용어 수와 따로)").
 
-- 설정: "단계 규칙대로 / 직접 정하기"(`fresh-mode`, 직접이면 지금 단계 수에서 시작) + −/+ 1~10(`fresh-step`, `S.settings.fresh`). 바로 저장하고 1.2초 뒤 한 번 보낸다(`freshPushSoon` → `planPush`). 아래 두 줄: 지금 단계의 세트 모양("새 용어 6개 + 지난 카드 4개 = 10장")·단계 규칙, 상태(`freshState`: same 저장소와 같음 · sent 보냄, 다음 평일 아침 세트부터 · wait 못 보냄 · rules Firebase 규칙이 옛 판(노랑) · manual 브라우저처럼 보낼 수 없는 기기(노랑, "변경 요청 복사" `fresh-copy` → `tool.py set-fresh N`) · member 회원은 관리자 값을 읽기만).
-- 세트 모양 `setRule(ph)`(`tool.py rule`과 같은 셈): 새 용어가 있는 단계(0~4)만 그 수, 전체는 `max(단계 전체, 새 용어 + 3)`(지난 카드 3장 이상), 파이널은 0. 관리자·브라우저는 자기 설정, 회원은 저장소 값(`data/index.json` `plan.fresh`, `SETS.plan`). `coachWeek`·`wbCalc`·`taskCalc`(오지 않은 세트의 숙제 어림)·`hwAhead`가 이것을 쓴다. 이미 온 세트의 숙제는 그 세트의 실제 새 카드 수 그대로.
-- 보내기: `planDocNow`에 `fresh`("auto"·"1"~"10")를 더해 `config/plan`으로(`member.setPlan`). Firebase 규칙이 3.2.4 판이라 막히면 `fresh`를 빼고 일정만 다시 보내 `'nofresh'`를 돌려주고(`S.settings.freshNo`), 앱은 보낼 때마다 다시 해 본다. 규칙은 `fresh`를 없어도 되는 칸으로 받는다(3.2.4 이전 앱).
-- 예약 작업: `sync-plan`이 `fresh`를 읽어 `plan.json`의 `fresh`(1~10, auto면 지움)와 `data/index.json` `plan.fresh`(`plan_sig`)를 맞춘다(일정이 같고 새 용어 수만 다르면 그것만 바꿔 SYNC-CHANGED, `fresh` 칸이 없으면 그대로). `set-fresh auto|1~10`, `set-plan --fresh`(일정을 바꿔도 `fresh`는 남김). 브리프의 "규칙" 줄에 그 수와 "(새 용어 수는 사용자가 앱에서 정한 하루 새 용어 수)", `check-set`도 같은 `rule`. 오늘 세트는 그대로이고 다음 평일 06:21 세트부터 바뀐다.
-- 검사: `plan.test.js` 72(기본 규칙, 설정 화면·직접 정하기·1~10·전체 13장, 어림이 따라 늘어남, 브라우저 변경 요청 복사, 관리자 보내기(모아서 한 번)·nofresh 안내·다시 보내기, 저장소가 같으면 same, 회원은 관리자 값, 단계 규칙대로 되돌리기), `npm run test:firebase`(fresh 보내기·auto·없이·형식, 옛 규칙이면 nofresh, 규칙의 0·다른 글·숫자형 막기).
+- 기록: `S.settings.terms`(3~15, 없으면 단계 규칙)와 바꾼 날마다 `S.settings.termsLog [[날짜, 수|null]]`(`termsSet`). 3.2.5의 `fresh`는 앱을 열 때·복원할 때 한 번 `terms`로 옮긴다(`termsFix`).
+- 나누는 셈 `termsSplit(ph, N)`(= `tool.py terms_split`): N이 단계 전체 이하면 새 용어 `min(단계 새 용어, N)`, 나머지가 지난 카드(줄이면 지난 카드부터 빠짐: 5 → 4+1, 3 → 3+0), 넘으면 지난 카드는 단계 그대로 두고 새 용어를 늘림(12 → 6+6, 15 → 9+6). 새 용어가 없는 단계(파이널)는 그대로. `setRule(ph)`: 내 수, 없으면 회원은 관리자 수(저장소 `data/index.json` `plan.terms`, `SETS.plan`), 그 밖은 단계 규칙. `coachWeek`·`wbCalc`·`taskCalc`(오지 않은 세트의 숙제 어림)·`hwAhead`가 쓴다.
+- 받은 세트 줄이기 `setVis(d)`: 그 세트 날짜에 걸린 수(`termsAt(d)`, 정한 날부터)보다 카드가 많으면 새 용어 먼저, 남는 자리에 지난 카드를 순서대로 `[{sc, i}]`(i는 세트 파일의 자리라 읽음 `sp.read`·이어 하기·숙제 동그라미가 그대로 맞음). 세트 핵심 수·읽기 줄("용어 n개 읽기")·`firstUnread`·숙제(`hwItems`)·용어 퀴즈(`gqBuild`)·세트 화면 ① 용어(줄인 수 안내 `setHid`)·카드 넘겨 보기·가리며 외우기·빈칸 쓰기·세트 복습(`setReviewItems`·`setIds`·`revMin`)이 이것을 쓴다. 세트 퀴즈(예약 작업 5문)와 덱(`buildDeck`, 숨긴 새 용어도 연습에서 볼 수 있음)은 그대로. 그 수를 정하기 전 날짜의 세트는 그대로.
+- 설정 → "하루 외울 용어": "단계 규칙대로 / 직접 정하기"(`terms-mode`, 직접이면 지금 세트 수에서 시작) + −/+(`terms-step`), 지금 단계의 세트 모양·"오늘 세트도 n개만 보여요", 상태(`termsState`: same · sent "다음 평일 아침 세트부터" · wait · rules(노랑, Firebase 규칙 다시 게시) · manual(노랑, 브라우저 → "변경 요청 복사" `tool.py set-terms N`) · member(관리자 수로 오는 세트를 이 휴대폰에서 줄이기만, 보내지 않음)). 바꾸면 바로 저장·오늘 몫 다시 짬(`planChanged('budget')`)·1.2초 뒤 한 번 보냄(`termsPushSoon` → `planPush`). 맨 위 "시작 준비 다시 하기".
+- 보내기: `planDocNow`의 `terms`("auto"·"3"~"15") → `config/plan`(`member.setPlan`). 규칙이 3.2.6 전 판이라 막히면 `terms`를 빼고 일정만 다시 보내 `'noterms'`(`S.settings.termsNo`, 보낼 때마다 다시 해 봄). 규칙은 `terms`와 3.2.5의 `fresh`를 없어도 되는 칸으로 받는다.
+- 예약 작업: `sync-plan`이 `terms`를 읽어 `plan.json` `terms`·`index.json` `plan.terms`(`plan_sig`)를 맞춘다(일정이 같고 수만 다르면 그것만 SYNC-CHANGED, `terms`가 없으면 그대로, `fresh`는 읽지 않음). `set-terms auto|3~15`, `set-plan --terms`(일정을 바꿔도 남김). 브리프 "규칙: 카드 n개 = 새 용어 a개 + 기존 카드 b개 (카드 수는 사용자가 앱에서 정한 하루 외울 용어 수)", `check-set`도 같은 `rule`.
+- 시작 준비 `#setup`(`vSetup`, `PARENT.setup = 'settings'`): 준비 시작일을 다시 정해 저장하면(지우고 새로 시작·기록은 그대로 두기·`rec-wipe`) 오늘 화면 전에 이 화면으로(`setupDue`: `S.tk.setup = 'due'`). 네 걸음(`SV.setupStep`, 칸 `.stp4`): ① 하루 외울 용어(`termsHTML`) ② 하루 공부 시간(설정과 같은 `budget` 칸, 공부 시간 진단 권장 줄과 "권장 시간으로 맞추기" `coach-apply` — 진단은 정한 용어 수까지 셈) ③ 과목별 공부 시간(`subj-on`·`subj-off`, 켜면 요일마다 합과 "과목별 시간 자세히 정하기" → `#subj`) ④ 공부 속도(`pace`)와 요약. 아래 막대 "다음 · …"(`setup-step`), 접힌 "이전", 마지막 "이 설정으로 시작하기"(`setup-done`: 표시 지움, 오늘 몫 다시 짬, 보냄, 오늘 탭). 끝내기 전에 나가면 오늘 화면 위에 "시작 준비를 마저 해요"(`setupNoteHTML`, 보조 버튼).
+- 검사: `plan.test.js` 72(나누는 셈, 설정·직접 정하기 10에서 −로 5 → 오늘 세트 10장이 5장(새 용어 4 + 지난 1, 어제 세트 그대로)·세트 핵심 5·세트 화면 5장과 안내·넘겨 보기 5장, 3~15와 막힘, 브라우저 변경 요청 복사, 관리자 보내기(모아서 한 번)·noterms 안내·다시 보내기, 저장소가 같으면 same, 회원은 관리자 수에서 시작해 이 휴대폰만 줄임, 단계 규칙대로 되돌리기, 3.2.5 fresh 옮기기), 73(새로 시작 → #setup ① ~ ④, 이전, 시작하기 → 오늘, 끝내기 전 오늘 안내), `app.test.js`·`native.test.js`(시작일을 바꿔 저장하면 #setup), `npm run test:firebase`(terms 보내기·auto·없이·형식, 옛 규칙이면 noterms, 규칙의 2·16·다른 글·숫자형 막기).
 
 ## 과목별 공부 시간(3.2.4, app.js "11-0e", `#subj`)
 
@@ -238,7 +241,7 @@
 
 - 잰 기록: 공부 동작마다 `actTick`(`touchDay`·`evLog`)이 그날 공부한 분 `S.act[날짜]`(20분 넘는 틈은 쉰 것, 120일 넘으면 정리), 끝낸 일마다 `evLog(종류, 앱 어림 분)`이 `S.ev`에 `[시각, 종류, 어림, 바로 앞 공부 동작과의 틈]`(최근 300개). 종류 c 읽기·퀴즈·카드(카드 매김 `grade`, 세션 답 `sessDid`, 세트 퀴즈), d 단답 손글씨(숙제 dd·쓰기·말하기 동그라미, 답안 "다 썼어요"), e 논술(목차·그림 동그라미, 실전 25분 다 씀, 목차 떠올리기). 같은 동작 안에서 `touchDay`가 먼저 불려도 틈은 그 전 동작부터(`ACT_PREV`). 새로 시작(`restartRec`)해도 `S.ev`는 남긴다.
 - 내 속도 `evSpeed`: 틈 ÷ 어림의 가운데값(종류마다 최근 40개, c 10개·d·e 5개부터, 0.5~2.5배, 어림의 4배·어림+15분·90분을 넘는 틈은 뺌). 모의 공부하며 풀기는 예전 `paceF`.
-- 필요한 시간 `coachCalc(P)`: 이번 주부터 시험 주 전까지 주마다 `coachWeek`(그 주 단계의 세트 핵심 `PE_EST.core` · 숙제(권장은 `PE_HW` 학원 횟수, 필수만은 `PE_HW_MIN`) × 새 용어 수 `setRule`(단계 규칙 `PE_SETRULE` 또는 설정의 하루 새 용어 수) · 세트 복습(세트당 다섯 번 × 8분) · 카드 복습(하루 15분, 4단계는 50장 돌리기) · 3·4단계 오답 다시 쓰기 · 자기 전·틀린 이유·리포트)를 앱 어림(`MIN_PER`) × 내 속도로, 주간 모의는 `coachMock`(1·2단계 공부하며 풀기면 덱 전체 아는 정도의 문제당 공부 시간 `qAvg` × 단답 13문 + 논술 n문, 그 밖은 시험 시간, 정기시험 주는 0). 권장이 기준이고 필수만은 최소선. 지금 단계 평균으로 권장 하루 시간(평일 = 평일 몫 ÷ 5, 나머지를 토 55%·일 45%, 10분 단위)과 지금 설정(`S.settings.budget`)을 견준다.
+- 필요한 시간 `coachCalc(P)`: 이번 주부터 시험 주 전까지 주마다 `coachWeek`(그 주 단계의 세트 핵심 `PE_EST.core` · 숙제(권장은 `PE_HW` 학원 횟수, 필수만은 `PE_HW_MIN`) × 새 용어 수 `setRule`(단계 규칙 `PE_SETRULE` 또는 설정의 하루 외울 용어 수) · 세트 복습(세트당 다섯 번 × 8분) · 카드 복습(하루 15분, 4단계는 50장 돌리기) · 3·4단계 오답 다시 쓰기 · 자기 전·틀린 이유·리포트)를 앱 어림(`MIN_PER`) × 내 속도로, 주간 모의는 `coachMock`(1·2단계 공부하며 풀기면 덱 전체 아는 정도의 문제당 공부 시간 `qAvg` × 단답 13문 + 논술 n문, 그 밖은 시험 시간, 정기시험 주는 0). 권장이 기준이고 필수만은 최소선. 지금 단계 평균으로 권장 하루 시간(평일 = 평일 몫 ÷ 5, 나머지를 토 55%·일 45%, 10분 단위)과 지금 설정(`S.settings.budget`)을 견준다.
 - 화면 `vCoach`(더보기 → 시험 일정 아래 "공부 시간 진단", 설정 → 하루 공부 시간 링크, 시험 일정 미리 보기의 한 줄 `coachLine`): 권장 하루 평균·평일/토/일·필수만, 지금 설정과 모자람(호박색)·여유, 파란 버튼 "이 시간으로 하루 공부 시간 맞추기"(`coach-apply`, 오늘 몫을 다시 짬), 최근 7일 앱에서 잰 공부 시간, 한 주 나눔(막대), 단계별, 내 속도. 설정의 하루 공부 시간 칸은 고른 값이 목록에 없으면 그 값을 더해 보인다.
 - 사전 조사: 토목시공기술사 합격자의 공부 시간을 밝힌 믿을 만한 공개 통계를 찾지 못해(검색 결과는 강의 판매 페이지뿐), 시험 시간표와 이 앱의 단계별 필수 분량을 바탕으로 세고 화면에 그렇게 적었다.
 - 검사: `plan.test.js` 69(가까운 회차·자동, 압축 지도의 틀·단계, 보통 일정 E-12, 속도 셈, 틈과 하루 공부 분, 권장·필수만·단계, 속도 2배면 그 몫만 2배, 더보기 줄·화면·맞추기·설정, 시험 일정 압축 안내), `app.test.js`(6개월 안 목표 그대로, 4주가 안 남으면 자동).

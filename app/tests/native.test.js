@@ -233,7 +233,7 @@ function open(opt = {}) {
   await B.go('#more');
   const appVer = require('../app.json').expo.version;
   ok(B.txt().includes('기술사 6개월 v' + appVer), '더보기 버전 = app.json 버전 ' + appVer);
-  ok(appVer === '3.2.5' && require('../package.json').version === appVer && require('../package-lock.json').version === appVer && require('../package-lock.json').packages[''].version === appVer, `버전 ${appVer}: app.json = package.json = package-lock(앱 줄)`);
+  ok(appVer === '3.2.6' && require('../package.json').version === appVer && require('../package-lock.json').version === appVer && require('../package-lock.json').packages[''].version === appVer, `버전 ${appVer}: app.json = package.json = package-lock(앱 줄)`);
   ok(B.errors.length === 0, '다시 연 화면 콘솔 오류 없음 ' + B.errors.slice(0, 3).join(' | '));
 
   // 예전(2.x) 기록이 든 휴대폰에서 3.0.0을 처음 열면 "바뀐 점" 창 한 번(기록은 그대로), 표시는 네이티브 저장소에 남아 다시 열면 없음
@@ -429,6 +429,7 @@ function open(opt = {}) {
     const disk0 = Object.assign({}, disk); dev.clip = null;
     const gs = G.d.querySelector('#schStart'); gs.value = '2026-12-02'; gs.dispatchEvent(new G.w.Event('change', { bubbles: true })); await sleep(20);
     G.click('[data-act="sch-save"]'); await sleep(120);
+    ok(/#setup$/.test(G.w.location.hash), '회원도 시작일을 바꿔 저장하면 시작 준비 화면(3.2.6)'); await G.go('#schedule');
     ok(dev.clip === null && !dev.member.some(x => x[0] === 'plan') && G.pe.S().settings.start === '2026-12-02' && /세트 주제는 관리자 일정을 따라요/.test(G.txt()), '회원: 시작일을 바꿔 저장해도 변경 요청을 복사하지 않고 보내지도 않음(내 일정만 바뀜)');
     for (const k of Object.keys(disk)) delete disk[k]; Object.assign(disk, disk0);   // 다음 검사는 시작일을 바꾸기 전 기록으로
     { const st = JSON.parse(disk.pe_state_v1); ok(!!st.settings.pushSig, '앞서 연 관리자 앱(승인 관리·문자함)도 열 때 보냈음'); delete st.settings.pushSig; delete st.settings.pushAt; disk.pe_state_v1 = JSON.stringify(st); }
@@ -449,11 +450,12 @@ function open(opt = {}) {
     P.click('[data-act="sch-save"]'); await sleep(120);
     const p2 = dev.member.filter(x => x[0] === 'plan').pop()[1];
     ok(p2.begin === '2026-12-02' && p2.start === '2026-11-30' && /예약 작업에도 보냈어요/.test(P.toast()) && dev.clip === null, '시작일을 12/2(수)로 저장 → 그 주 월요일 11/30로 보내고 변경 요청은 복사하지 않음');
+    await P.go('#schedule');
     ok(/예약 작업에 이 일정을 보냈어요/.test(P.txt()), '저장한 뒤에도 회색 "보냈어요"');
     dev.planFail = '권한 없음';
     const se2 = P.d.querySelector('#schStart'); se2.value = '2026-12-09'; se2.dispatchEvent(new P.w.Event('change', { bubbles: true })); await sleep(20);
-    P.click('[data-act="sch-save"]'); await sleep(120);
-    ok(/set-plan --start 2026-12-07/.test(dev.clip || '') && /변경 요청을 복사했어요/.test(P.toast()) && /변경 요청을 복사해 두었어요/.test(P.txt()), '보내지 못하면(규칙 게시 전·인터넷 없음) 예전처럼 변경 요청을 복사');
+    P.click('[data-act="sch-save"]'); await sleep(120); const tt2 = P.toast(); await P.go('#schedule');
+    ok(/set-plan --start 2026-12-07/.test(dev.clip || '') && /변경 요청을 복사했어요/.test(tt2) && /변경 요청을 복사해 두었어요/.test(P.txt()), '보내지 못하면(규칙 게시 전·인터넷 없음) 예전처럼 변경 요청을 복사');
     delete P.pe.S().settings.schSent; P.pe.render(); await sleep(20);
     ok(/예약 작업은 아직 이전 일정이에요/.test(P.txt()) && P.d.querySelector('[data-act="plan-push"]'), '보낸 것도 복사한 것도 없으면 빨강 + "예약 작업에 보내기"');
     dev.planFail = null; P.click('[data-act="plan-push"]'); await sleep(80);

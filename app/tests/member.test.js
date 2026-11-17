@@ -165,16 +165,16 @@ const owner = (method, path, body) => fetch(`${FS}/${path}`, { method, headers: 
   ok(await err(A2.setPlan(plan)) === 'denied', '회원(관리자 아님)은 일정을 못 씀');
   ok(await err(phone().setPlan(plan)) === 'denied', '아이디 없는 휴대폰도 못 씀');
   ok(await err(admin.setPlan({ ...plan, start: '11/09' })) === 'badplan' && await err(admin.setPlan({ ...plan, next: '143' })) === 'badplan', '앱 쪽 형식 검사(날짜·다음 목표 짝)');
-  // 하루 새 용어 수(3.2.5): 같은 문서의 fresh 칸("auto"·"1"~"10", 없어도 됨)
-  ok(await admin.setPlan({ ...plan, fresh: '6' }) === true && (await phone().getPlan()).fresh === '6', '하루 새 용어 수 6 보내기 → 로그인 없이 읽힘');
-  ok(await admin.setPlan({ ...plan, fresh: 'auto' }) === true && (await phone().getPlan()).fresh === 'auto', 'auto(단계 규칙)로 되돌리기');
-  ok(await admin.setPlan(plan) === true && ((await phone().getPlan()).fresh || '') === '', '3.2.4 이전 앱처럼 fresh 없이 보내도 통과(칸이 빠짐)');
-  ok(await err(admin.setPlan({ ...plan, fresh: '11' })) === 'badplan' && await err(admin.setPlan({ ...plan, fresh: '0' })) === 'badplan', '앱 쪽 형식 검사(1~10·auto만)');
-  // 규칙을 다시 게시하지 않은 Firebase(3.2.4 판): fresh가 든 쓰기는 막히고, 일정만 다시 보낸다
-  const oldRules = (u, o) => (o && o.method === 'POST' && /:commit$/.test(String(u)) && /"fresh"/.test(String(o.body)) ? Promise.resolve(new Response(JSON.stringify({ error: { code: 403, status: 'PERMISSION_DENIED', message: 'Missing or insufficient permissions.' } }), { status: 403, headers: { 'Content-Type': 'application/json' } })) : fetch(u, o));
+  // 하루 외울 용어 수(3.2.6): 같은 문서의 terms 칸("auto"·"3"~"15", 없어도 됨)
+  ok(await admin.setPlan({ ...plan, terms: '6' }) === true && (await phone().getPlan()).terms === '6', '하루 외울 용어 6 보내기 → 로그인 없이 읽힘');
+  ok(await admin.setPlan({ ...plan, terms: '15' }) === true && await admin.setPlan({ ...plan, terms: 'auto' }) === true && (await phone().getPlan()).terms === 'auto', '15·auto(단계 규칙) 보내기');
+  ok(await admin.setPlan(plan) === true && ((await phone().getPlan()).terms || '') === '', '그 전 앱처럼 terms 없이 보내도 통과(칸이 빠짐)');
+  ok(await err(admin.setPlan({ ...plan, terms: '16' })) === 'badplan' && await err(admin.setPlan({ ...plan, terms: '2' })) === 'badplan', '앱 쪽 형식 검사(3~15·auto만)');
+  // 규칙을 다시 게시하지 않은 Firebase(3.2.6 전 판): terms가 든 쓰기는 막히고, 일정만 다시 보낸다
+  const oldRules = (u, o) => (o && o.method === 'POST' && /:commit$/.test(String(u)) && /"terms"/.test(String(o.body)) ? Promise.resolve(new Response(JSON.stringify({ error: { code: 403, status: 'PERMISSION_DENIED', message: 'Missing or insufficient permissions.' } }), { status: 403, headers: { 'Content-Type': 'application/json' } })) : fetch(u, o));
   const adminOld = phone(adminStore, oldRules);
-  ok(await adminOld.setPlan({ ...plan, start: '2026-11-16', fresh: '7' }) === 'nofresh' && (await phone().getPlan()).start === '2026-11-16' && ((await phone().getPlan()).fresh || '') === '', '옛 규칙: 일정만 보내고 nofresh');
-  ok(await err(phone(memStore(), oldRules).setPlan({ ...plan, fresh: '7' })) === 'denied', '옛 규칙이어도 관리자가 아니면 일정도 못 씀(그 오류 그대로)');
+  ok(await adminOld.setPlan({ ...plan, start: '2026-11-16', terms: '7' }) === 'noterms' && (await phone().getPlan()).start === '2026-11-16' && ((await phone().getPlan()).terms || '') === '', '옛 규칙: 일정만 보내고 noterms');
+  ok(await err(phone(memStore(), oldRules).setPlan({ ...plan, terms: '7' })) === 'denied', '옛 규칙이어도 관리자가 아니면 일정도 못 씀(그 오류 그대로)');
   await admin.setPlan(plan);
   const as = await admin.auth();
   const forgePlan = async (fields, transform = true) => (await fetch(`${FS}:commit`, { method: 'POST', headers: { Authorization: 'Bearer ' + as.idToken, 'Content-Type': 'application/json' },
@@ -188,6 +188,8 @@ const owner = (method, path, body) => fetch(`${FS}/${path}`, { method, headers: 
   ok(await forgePlan({ ...pf, extra: { stringValue: 'x' } }) === 403, '다른 칸 넣기 → 거부');
   ok(await forgePlan({ ...pf, fresh: { stringValue: '10' } }) === 200 && await forgePlan({ ...pf, fresh: { stringValue: 'auto' } }) === 200, '하루 새 용어 수 10·auto → 통과');
   ok(await forgePlan({ ...pf, fresh: { stringValue: '0' } }) === 403 && await forgePlan({ ...pf, fresh: { stringValue: '6; rm' } }) === 403 && await forgePlan({ ...pf, fresh: { integerValue: '6' } }) === 403, '하루 새 용어 수 0·다른 글·숫자형 → 거부');
+  ok(await forgePlan({ ...pf, terms: { stringValue: '3' } }) === 200 && await forgePlan({ ...pf, terms: { stringValue: '15' } }) === 200 && await forgePlan({ ...pf, terms: { stringValue: 'auto' } }) === 200, '하루 외울 용어 3·15·auto → 통과');
+  ok(await forgePlan({ ...pf, terms: { stringValue: '2' } }) === 403 && await forgePlan({ ...pf, terms: { stringValue: '16' } }) === 403 && await forgePlan({ ...pf, terms: { stringValue: '6; rm' } }) === 403 && await forgePlan({ ...pf, terms: { integerValue: '6' } }) === 403, '하루 외울 용어 2·16·다른 글·숫자형 → 거부');
   ok(await forgePlan({ ...pf, at: { timestampValue: '2020-01-01T00:00:00Z' } }, false) === 403, '보낸 시각 꾸미기 → 거부');
   const { tr, ...noTr } = pf;
   ok(await forgePlan(noTr) === 403, '칸이 빠지면 → 거부');

@@ -14,7 +14,7 @@ const INTERVALS=[0,1,3,7,14,30,60];
 const REVIEW_STEPS=[1,3,7,14,30];
 const KEY='pe_state_v1', SKEY='pe_sets_v1';
 const DATA_DEFAULT='https://raw.githubusercontent.com/woos-lee94/gisulsa-data/main/data/';
-const APP_VER='3.2.5';
+const APP_VER='3.2.6';
 const MOCK_GRADE_SINCE='2026-11-01';            /* v3.0.0을 내는 날. 이 날짜 전 모의고사는 "채점 받았어요"를 묻지 않는다 */
 const BUDGET_DEF={wd:180,sat:300,sun:240};       /* 하루 공부 시간(분) 기본값: 평일·토요일·일요일과 공휴일(S.settings.budget, budgetOf) */
 const PLAN_START=(window.PE_EXAM&&PE_EXAM.defaults.start)||'2026-10-19';
@@ -155,43 +155,86 @@ function schSentDel(){delete S.settings.schSent;delete S.settings.schSig;}
    보낸 뒤 3일 안에 저장소가 아직 다르면 auto(회색, 다음 세트부터 맞춰요), 그 뒤엔 diff(빨강, 변경 요청 복사) */
 function planDocNow(){const st=S.settings,N=st.nextTarget,ov=st.roundDates||{};
   const o={start:PLAN.start,begin:st.start,target:String(st.target||'auto'),rounds:Object.keys(ov).filter(r=>/^\d{3}$/.test(r)&&/^\d{4}-\d{2}-\d{2}$/.test(ov[r])).sort().map(r=>`${r}=${ov[r]}`).join(' '),tr:String(PLAN.target.r),exam:PLAN.target.d,next:'',nfrom:'',nexam:''};
-  if(N&&N.from){const P1=computePlan(st.start,N.r);o.next=String(P1.target.r);o.nfrom=N.from;o.nexam=P1.target.d;}o.fresh=freshWant()==null?'auto':String(freshWant());return o;}
+  if(N&&N.from){const P1=computePlan(st.start,N.r);o.next=String(P1.target.r);o.nfrom=N.from;o.nexam=P1.target.d;}o.terms=termsWant()==null?'auto':String(termsWant());return o;}
 function pushed(){const st=S.settings;return!!(st.pushSig&&st.pushAt)&&st.pushSig===JSON.stringify(planDocNow());}
 let PUSHING=null;
 function planPush(){if(!ibxOn())return Promise.resolve(false);const st=S.settings,o=planDocNow(),k=JSON.stringify(o);
-  if(st.pushSig===k&&st.pushAt&&!st.freshNo)return Promise.resolve(true);if(PUSHING&&PUSHING.k===k)return PUSHING.p;
-  /* 'nofresh': Firebase 규칙이 3.2.4 판이라 하루 새 용어 수는 빼고 일정만 보냄 → freshNo(설정에 "규칙 다시 게시" 안내, 보낼 때마다 다시 해 본다) */
-  const p=PE_IO.memberCall('plan',o).then(r=>{st.pushSig=k;st.pushAt=todayStr();if(r==='nofresh')st.freshNo=todayStr();else delete st.freshNo;save();if(R.page==='schedule'||R.page==='more'||R.page==='settings')softRender();return true;},()=>false).then(r=>{if(PUSHING&&PUSHING.k===k)PUSHING=null;return r;});
+  if(st.pushSig===k&&st.pushAt&&!st.termsNo)return Promise.resolve(true);if(PUSHING&&PUSHING.k===k)return PUSHING.p;
+  /* 'noterms': Firebase 규칙이 3.2.6 전 판이라 하루 외울 용어 수는 빼고 일정만 보냄 → termsNo(설정에 "규칙 다시 게시" 안내, 보낼 때마다 다시 해 본다) */
+  const p=PE_IO.memberCall('plan',o).then(r=>{st.pushSig=k;st.pushAt=todayStr();if(r==='noterms')st.termsNo=todayStr();else delete st.termsNo;save();if(['schedule','more','settings','setup'].includes(R.page))softRender();return true;},()=>false).then(r=>{if(PUSHING&&PUSHING.k===k)PUSHING=null;return r;});
   PUSHING={k,p};return p;}
 /* 회원 휴대폰(아이디가 있고 관리자가 아님). 브라우저·회원 확인 없는 빌드는 혼자 쓰는 앱이라 아니다 */
 function memOnly(){const me=PE_IO.member&&PE_IO.member();return!!(me&&!me.admin);}
-/* ── 하루 새 용어 수(3.2.5) ──
-   평일 세트의 새 용어 수는 예약 작업(pipeline/tool.py rule)이 정한다: 단계 규칙(PE_SETRULE, 4→4→3→2→1, 파이널 0) 또는 앱 설정 S.settings.fresh(1~10).
-   관리자 앱은 시험 일정과 함께 config/plan의 fresh로 보내고(planDocNow), 예약 작업이 아침에 sync-plan으로 plan.json에 맞춘 뒤 그 수로 세트를 만든다.
-   저장소가 쓰는 값은 data/index.json plan.fresh(SETS.plan, 없으면 단계 규칙). 회원 휴대폰은 관리자 설정(저장소 값)을 따른다.
-   setRule: 그 단계 세트의 {fresh 새 용어, total 카드 수}(tool.py rule과 같은 셈: 새 용어가 있는 단계만, 전체는 지난 카드가 3장 이상 남게) */
-const FRESH_MAX=10;
-const freshNum=v=>{const n=Number(v);return Number.isInteger(n)&&n>=1&&n<=FRESH_MAX?n:null;};
-const freshWant=()=>freshNum((S.settings||{}).fresh);
-const freshRepo=()=>freshNum(SETS.plan&&SETS.plan.fresh);
-function setRule(ph){const r=PE_SETRULE[ph]||PE_SETRULE[1],f=memOnly()?freshRepo():freshWant();return f==null||!r.fresh?r:{fresh:f,total:Math.max(r.total,f+3)};}
-/* 설정 칸 상태: member 관리자를 따름 · same 저장소와 같음 · rules 규칙을 다시 게시해야 함 · sent 보냄(다음 세트부터) · wait 아직 못 보냄 · manual 이 기기에선 못 보냄(변경 요청 복사) */
-function freshState(){if(memOnly())return'member';if(SETS.plan&&freshRepo()===freshWant())return'same';if(!ibxOn())return'manual';const st=S.settings;
-  if(st.freshNo)return'rules';return st.pushAt&&st.pushSig===JSON.stringify(planDocNow())?'sent':'wait';}
-let FRESH_T=null;
-function freshPushSoon(){clearTimeout(FRESH_T);FRESH_T=setTimeout(()=>{FRESH_T=null;planPush().then(()=>{if(R.page==='settings')softRender();});},1200);}
-const freshReq=()=>{const w=freshWant(),v=w==null?'auto':String(w);return`기술사 6개월 앱 설정: 평일 세트의 하루 새 용어 수를 ${w==null?'단계 규칙대로(auto)':w+'개로'} 바꿔 주세요.\npython3 pipeline/tool.py set-fresh ${v}\n를 실행하고, 출력의 "다음:" 명령으로 main에 올려 주세요.`;};
-function freshHTML(){const w=freshWant(),ph=phaseObj(Math.max(0,weekIndex(todayStr()))).id,r0=PE_SETRULE[ph]||PE_SETRULE[1],R1=setRule(ph),fs=freshState(),rp=freshRepo();
-  const rule=`단계 규칙: 준비 주·1단계 4개 → 2단계 3개 → 3단계 2개 → 4단계 1개, 파이널은 새 용어 없이 복습만`;
-  if(fs==='member')return`<p class="note">평일 세트는 관리자가 정한 수로 와요: ${rp==null?'단계 규칙대로(지금 '+r0.fresh+'개)':'하루 '+rp+'개'}. ${esc(rule)}.</p>`;
-  const now=ph===5?'파이널이라 새 용어가 없어요':`지금(${esc(PH_SHORT[ph]||'')}) 세트: 새 용어 ${R1.fresh}개 + 지난 카드 ${R1.total-R1.fresh}개 = ${R1.total}장`;
-  const stTxt={same:'예약 작업도 이 수로 세트를 만들어요.',sent:'예약 작업에 보냈어요. 오늘 세트는 그대로이고, 다음 평일 아침 세트부터 이 수로 와요.',wait:'아직 예약 작업에 보내지 못했어요. 인터넷이 연결되면 다시 보내요.',
-    rules:'일정만 보내졌어요. 새 용어 수까지 보내려면 Firebase 규칙을 다시 게시해 주세요(docs/firebase-setup.md 4-4).',manual:'이 기기에서는 예약 작업에 보낼 수 없어요. 아래 변경 요청을 복사해 Claude Code에 붙여 넣거나, 휴대폰 앱(관리자)에서 정하세요.'}[fs];
-  return`<div class="seg">${[['auto','단계 규칙대로'],['set','직접 정하기']].map(([v,l])=>`<button class="${(w==null)===(v==='auto')?'on':''}" data-act="fresh-mode" data-v="${v}">${l}</button>`).join('')}</div>
-  ${w==null?'':`<div class="group sjg"><div class="row noic sjrow"><span class="tx"><span class="tt">하루 새 용어</span><span class="ds">평일 세트 하나에 새로 배우는 용어 수(1~${FRESH_MAX}개)</span></span>
-    <span class="sjst"><button class="sjb" data-act="fresh-step" data-v="-1" aria-label="하루 새 용어 1개 줄이기"${w<=1?' disabled':''}>−</button><b class="num">${w}개</b><button class="sjb" data-act="fresh-step" data-v="1" aria-label="하루 새 용어 1개 늘리기"${w>=FRESH_MAX?' disabled':''}>+</button></span></div></div>`}
-  <p class="note">${now}. ${esc(rule)}. 새 용어가 늘면 그날 숙제(소리 내어 말하기·안 보고 쓰기)도 함께 늘어요.</p>
-  <p class="note${fs==='rules'||fs==='manual'?' sjlow':''}">${esc(stTxt)}</p>${fs==='manual'?`<div class="btns"><button class="btn sec" data-act="fresh-copy">변경 요청 복사</button></div>`:''}`;}
+/* ── 하루 외울 용어 수(3.2.6, 3.2.5의 "하루 새 용어 수"를 바꿈) ──
+   평일 세트 하나의 용어 수(새 용어 + 지난 카드) = S.settings.terms(3~15, 없으면 단계 규칙 10장). 바꾼 날마다 S.settings.termsLog [[날짜, 수|null]].
+   예약 작업(pipeline/tool.py rule·terms_split)이 관리자 앱이 config/plan terms로 보낸 수로 세트를 만든다: 단계 전체(10) 이하면 새 용어는 min(단계 새 용어, N)이고
+   나머지가 지난 카드(줄이면 지난 카드부터 뺀다), 넘으면 지난 카드는 단계 그대로 두고 새 용어를 늘린다. 새 용어가 없는 파이널은 그대로.
+   이미 받은 세트(그 수를 정하기 전에 만든 오늘 세트, 회원은 관리자 수로 온 세트)는 setVis가 정한 날부터 N장만 보인다(새 용어 먼저, 남는 자리에 지난 카드 순서대로).
+   카드 자리 i는 세트 파일 그대로라 읽음·이어 하기·숙제 동그라미 기록이 그대로 맞는다. 저장소 값은 data/index.json plan.terms(SETS.plan) */
+const TERMS_MIN=3,TERMS_MAX=15;
+const termsNum=v=>{const n=Number(v);return Number.isInteger(n)&&n>=TERMS_MIN&&n<=TERMS_MAX?n:null;};
+const termsWant=()=>termsNum((S.settings||{}).terms);
+const termsRepo=()=>termsNum(SETS.plan&&SETS.plan.terms);
+function termsSplit(ph,N){const r=PE_SETRULE[ph]||PE_SETRULE[1];if(N==null||!r.fresh)return{fresh:r.fresh,total:r.total};
+  return N>=r.total?{fresh:r.fresh+N-r.total,total:N}:{fresh:Math.min(r.fresh,N),total:N};}
+/* 그 단계 세트의 {fresh 새 용어, total 카드 수}: 내 설정, 없으면 회원은 관리자 수(저장소), 그 밖은 단계 규칙 */
+function setRule(ph){const own=termsWant();return termsSplit(ph,own!=null?own:memOnly()?termsRepo():null);}
+function termsSet(v){const st=S.settings,t=todayStr(),n=v==null?null:termsNum(v);if(n==null)delete st.terms;else st.terms=n;
+  const L=st.termsLog=Array.isArray(st.termsLog)?st.termsLog:[];if(L.length&&L[L.length-1][0]===t)L[L.length-1][1]=n;else L.push([t,n]);}
+/* 그 날짜 세트에 쓰는 수(정한 날부터): 없으면 null(세트 그대로) */
+function termsAt(d){const L=(S.settings||{}).termsLog;let n=null;if(Array.isArray(L))for(const x of L){if(Array.isArray(x)&&x[0]<=d)n=termsNum(x[1]);}return n;}
+/* 3.2.5의 하루 새 용어 수(fresh)는 이 수로 옮긴다(한 번) */
+function termsFix(){const st=S.settings||{};if(st.fresh!=null){if(st.terms==null){const f=Number(st.fresh);if(f>0)termsSet(Math.min(TERMS_MAX,Math.max(TERMS_MIN,Math.round(f))));}delete st.fresh;}delete st.freshNo;}
+/* 세트에서 보이는 카드 [{sc, i}](i = 세트 파일의 자리) */
+function setVis(d){const s=SETS.sets[d],cs=((s&&s.cards)||[]).map((sc,i)=>({sc,i})),N=termsAt(d);if(N==null||cs.length<=N)return cs;
+  const nw=cs.filter(x=>x.sc&&!x.sc.ref),keep=nw.slice(0,N);keep.push(...cs.filter(x=>!(x.sc&&!x.sc.ref)).slice(0,N-keep.length));return keep.sort((a,b)=>a.i-b.i);}
+const setHid=d=>{const s=SETS.sets[d];return Math.max(0,((s&&s.cards)||[]).length-setVis(d).length);};
+/* 설정 칸 상태: member 회원(관리자 수로 오는 세트를 이 휴대폰에서 줄이기만) · same 저장소와 같음 · rules 규칙을 다시 게시해야 함 · sent 보냄(다음 세트부터) · wait 아직 못 보냄 · manual 이 기기에선 못 보냄 */
+function termsState(){if(memOnly())return'member';if(SETS.plan&&termsRepo()===termsWant())return'same';if(!ibxOn())return'manual';const st=S.settings;
+  if(st.termsNo)return'rules';return st.pushAt&&st.pushSig===JSON.stringify(planDocNow())?'sent':'wait';}
+let TERMS_T=null;
+function termsPushSoon(){if(memOnly())return;clearTimeout(TERMS_T);TERMS_T=setTimeout(()=>{TERMS_T=null;planPush().then(()=>{if(R.page==='settings'||R.page==='setup')softRender();});},1200);}
+const termsReq=()=>{const w=termsWant(),v=w==null?'auto':String(w);return`기술사 6개월 앱 설정: 평일 세트의 하루 외울 용어 수(세트 카드 수)를 ${w==null?'단계 규칙대로(auto, 10장)':w+'개로'} 바꿔 주세요.\npython3 pipeline/tool.py set-terms ${v}\n를 실행하고, 출력의 "다음:" 명령으로 main에 올려 주세요.`;};
+const curPh=()=>phaseObj(Math.max(0,weekIndex(todayStr()))).id;
+function termsHTML(){const w=termsWant(),ph=curPh(),R1=setRule(ph),fs=termsState(),rp=termsRepo(),t=todayStr(),h=SETS.sets[t]?setHid(t):0;
+  const now=ph===5?'파이널은 새 용어 없이 복습 카드만 와요':`지금(${esc(PH_SHORT[ph]||'')}) 세트: 새 용어 ${R1.fresh}개 + 지난 카드 ${R1.total-R1.fresh}개 = ${R1.total}개`;
+  const rule='단계 규칙은 하루 10개(새 용어 4개 → 단계가 오르면 3·2·1개, 나머지는 지난 카드). 10개보다 줄이면 지난 카드부터 빼고, 늘리면 새 용어가 늘어요. 새 용어가 늘면 그날 숙제(안 보고 쓰기·말하기)도 함께 늘어요';
+  const stTxt={same:'예약 작업도 이 수로 세트를 만들어요.',sent:'예약 작업에 보냈어요. 다음 평일 아침 세트부터 이 수로 와요.',wait:'아직 예약 작업에 보내지 못했어요. 인터넷이 연결되면 다시 보내요.',
+    rules:'일정만 보내졌어요. 이 수까지 보내려면 Firebase 규칙을 다시 게시해 주세요(docs/firebase-setup.md 4-5).',manual:'이 기기에서는 예약 작업에 보낼 수 없어요. 아래 변경 요청을 복사해 Claude Code에 붙여 넣거나, 휴대폰 앱(관리자)에서 정하세요.',
+    member:`세트는 관리자가 정한 수(${rp==null?'단계 규칙 10개':'하루 '+rp+'개'})로 와요. 그보다 적게 정하면 이 휴대폰에서 그만큼만 보여요.`}[fs];
+  return`<div class="seg">${[['auto','단계 규칙대로'],['set','직접 정하기']].map(([v,l])=>`<button class="${(w==null)===(v==='auto')?'on':''}" data-act="terms-mode" data-v="${v}">${l}</button>`).join('')}</div>
+  ${w==null?'':`<div class="group sjg"><div class="row noic sjrow"><span class="tx"><span class="tt">하루 외울 용어</span><span class="ds">평일 세트 하나의 용어 수(새 용어 + 지난 카드, ${TERMS_MIN}~${TERMS_MAX}개)</span></span>
+    <span class="sjst"><button class="sjb" data-act="terms-step" data-v="-1" aria-label="하루 외울 용어 1개 줄이기"${w<=TERMS_MIN?' disabled':''}>−</button><b class="num">${w}개</b><button class="sjb" data-act="terms-step" data-v="1" aria-label="하루 외울 용어 1개 늘리기"${w>=TERMS_MAX?' disabled':''}>+</button></span></div></div>`}
+  <p class="note">${now}. ${esc(rule)}.</p>${h?`<p class="note">오늘 세트도 ${setVis(t).length}개만 보여요(지난 카드 ${h}개는 뺐어요).</p>`:''}
+  <p class="note${fs==='rules'||fs==='manual'?' sjlow':''}">${esc(stTxt)}</p>${fs==='manual'?`<div class="btns"><button class="btn sec" data-act="terms-copy">변경 요청 복사</button></div>`:''}`;}
+/* ── 시작 준비(3.2.6, #setup): 준비 시작일을 다시 정하면(새로 시작·기록은 그대로 두기·지우고 새로 시작) 오늘 화면 전에 먼저 정하는 네 걸음.
+   ① 하루 외울 용어 ② 하루 공부 시간(진단 권장으로 맞추기) ③ 과목별 공부 시간 ④ 공부 속도와 요약 → "이 설정으로 시작하기"(오늘 몫을 다시 짬).
+   정하는 값은 설정 화면과 같은 칸(바로 저장). 끝내기 전에 나가면 오늘 화면 위에 "시작 준비" 안내(S.tk.setup = 'due', 끝내면 지움) */
+const SETUP_N=4;
+function setupDue(){S.tk=S.tk||{};S.tk.setup='due';SV.setupStep=0;}
+function setupHTML(k){const bg=Object.assign({},BUDGET_DEF,S.settings.budget||{}),st=S.settings,c=coachCalc(),rec=c.rec;
+  if(k===0)return`<div class="sec-h stph"><h2>하루 외울 용어</h2></div><p class="lsub">평일 아침에 오는 세트 하나에 담을 용어 수예요. 시작하는 날이라 부담이 크면 줄여 두고, 익숙해지면 늘려요.</p>${termsHTML()}`;
+  if(k===1)return`<div class="sec-h stph"><h2>하루 공부 시간</h2></div><p class="lsub">오늘 몫은 이 시간 안에서 짜요.</p>${BUDGET_OPT.map(([key,l,vs])=>`<label class="f">${l}</label><div class="seg">${(vs.includes(Number(bg[key]))?vs:vs.concat(Number(bg[key])).sort((a,b)=>a-b)).map(v=>`<button class="${Number(bg[key])===v?'on':''}" data-act="budget" data-k="${key}" data-v="${v}">${mfmt(v)}</button>`).join('')}</div>`).join('')}
+    ${rec?`<p class="note">공부 시간 진단 권장(하루 외울 용어 수까지 셈): 평일 ${mfmt(rec.wd)} · 토 ${mfmt(rec.sat)} · 일 ${mfmt(rec.sun)}</p><div class="btns"><button class="btn sec" data-act="coach-apply">권장 시간으로 맞추기</button></div>`:''}`;
+  if(k===2)return`<div class="sec-h stph"><h2>과목별 공부 시간</h2></div><p class="lsub">하루 시간을 용어·단답·논술·복습·모의고사로 나눠 두면 오늘 몫을 과목마다 그 시간 안에서 짜요.</p>
+    <div class="seg">${[[0,'하루 시간만'],[1,'과목별로 정하기']].map(([v,l])=>`<button class="${subjOn()===!!v?'on':''}" data-act="${v?'subj-on':'subj-off'}">${l}</button>`).join('')}</div>
+    ${subjOn()?`<div class="group">${['wd','sat','sun'].map(x=>`<div class="row noic"><span class="tx"><span class="tt">${SUBJ_DL[x]} ${mfmt(subjSum(st.subj[x]))}</span><span class="ds">${esc(SUBJ.filter(([c0])=>Number(st.subj[x][c0])>0).map(([c0,l])=>`${l.replace(/\(.*\)/,'')} ${mfmt(Number(st.subj[x][c0]))}`).join(' · '))}</span></span></div>`).join('')}</div>
+      <div class="btns"><button class="btn sec" data-act="go" data-h="subj">과목별 시간 자세히 정하기</button></div>`:'<p class="note">나중에 더보기 → 과목별 공부 시간에서도 켤 수 있어요.</p>'}`;
+  const w=termsWant(),p=st.pace||'auto';
+  return`<div class="sec-h stph"><h2>공부 속도</h2></div><p class="lsub">주간 모의고사를 공부하며 풀 때 걸음마다 곱해요.</p><div class="seg">${[['auto','자동'],['fast','빠르게'],['mid','보통'],['slow','천천히']].map(([v,l])=>`<button class="${p===v?'on':''}" data-act="pace" data-v="${v}">${l}</button>`).join('')}</div>
+    <div class="sec-h stph"><h2>이렇게 시작해요</h2></div><div class="group">
+      <div class="row noic"><span class="tx"><span class="tt">하루 외울 용어</span><span class="ds">${w==null?'단계 규칙대로(10개)':w+'개'}</span></span></div>
+      <div class="row noic"><span class="tx"><span class="tt">하루 공부 시간</span><span class="ds">평일 ${mfmt(bg.wd)} · 토 ${mfmt(bg.sat)} · 일 ${mfmt(bg.sun)}</span></span></div>
+      <div class="row noic"><span class="tx"><span class="tt">과목별 공부 시간</span><span class="ds">${subjOn()?'과목별로 나눠요':'하루 시간만'}</span></span></div>
+      <div class="row noic"><span class="tx"><span class="tt">준비 시작일</span><span class="ds">${esc(korDate(st.start))}</span></span></div></div>
+    <p class="note">출장·야근처럼 미리 아는 쉬는 날은 설정 → 쉬는 날·짧은 날에서 정해요. 이 값들은 언제든 설정에서 바꿀 수 있어요.</p>`;}
+function vSetup(){const k=Math.min(SETUP_N-1,Math.max(0,SV.setupStep|0)),last=k===SETUP_N-1;
+  return topbar('시작 준비')+`<h1 class="ptitle">시작 준비</h1><p class="lsub">준비 시작일 ${esc(korDate(S.settings.start))} · 공부를 시작하기 전에 네 가지만 정해요.</p>
+  <div class="stp4">${['용어','시간','과목','속도'].map((l,i)=>`<span class="${i===k?'on':i<k?'done':''}">${i+1}. ${l}</span>`).join('')}</div>
+  ${setupHTML(k)}
+  ${k?`<div class="btns"><button class="btn ghost" data-act="setup-step" data-v="-1">이전</button></div>`:''}
+  <div class="nextbar"><button class="btn" data-act="${last?'setup-done':'setup-step'}" data-v="1">${last?'이 설정으로 시작하기':`다음 · ${['','하루 공부 시간','과목별 공부 시간','공부 속도'][k+1]}`}</button></div>`;}
+function setupNoteHTML(){return(S.tk||{}).setup==='due'?`<div class="notice"><span><b>시작 준비를 마저 해요</b><small>하루 외울 용어·공부 시간을 정하면 오늘 몫을 그대로 다시 짜요</small><button class="btn sm sec" data-act="go" data-h="setup">시작 준비</button></span></div>`:'';}
 /* 시험 일정을 바꾼 뒤 알리기: 저장소 일정이 가야 할 일정과 다르면 관리자는 예약 작업에 보내고(못 보내면) 변경 요청을 복사한다. 회원은 알림만 */
 function schTell(m,t){if(memOnly()){schSentDel();save();toast(m);return;}if(!(SETS.plan&&!sigEq(SETS.plan,repoWant()))){schSentDel();save();toast(m);planPush();return;}
   const cp=()=>{schSentSet(t);save();softRender();PE_IO.copy(schReq()).then(()=>toast(m+'. 변경 요청을 복사했어요'),()=>{schSentDel();save();toast(m+'. 변경 요청은 복사하지 못했어요');render();});};
@@ -399,7 +442,7 @@ function glOpen(raw){const r=glLookup(raw);if(!r)return false;if(r.t==='card'){c
 function sp(d){const p=S.sp[d]||(S.sp[d]={read:{},quiz:{},tasks:{},essay:{},rev:{}});if(!p.first){p.first=todayStr();save();}return p;}
 function spGet(d){return S.sp[d]||{read:{},quiz:{},tasks:{},essay:{},rev:{}};}
 /* nt·td: 세트 숙제(hwItems) 수와 다 한 수. core: 핵심(용어 읽기 + 세트 퀴즈, 논술 실전이 필수인 2단계는 + 논술) */
-function setStatus(d){const s=SETS.sets[d];if(!s)return null;const p=spGet(d);const nc=(s.cards||[]).length,nq=(s.quiz||[]).length,hs=hwSum(d),nt=hs.n,td=hs.done;
+function setStatus(d){const s=SETS.sets[d];if(!s)return null;const p=spGet(d);const nc=setVis(d).length,nq=(s.quiz||[]).length,hs=hwSum(d),nt=hs.n,td=hs.done;
   const read=Object.keys(p.read||{}).length,qa=Object.keys(p.quiz||{}).length,qok=Object.values(p.quiz||{}).filter(v=>v&&v.ok).length,ed=!!(p.essay&&p.essay.done);
   const done=read>=nc&&qa>=nq&&(ed||!s.essay)&&td>=nt,core=read>=nc&&qa>=nq&&(ed||!s.essay||!hwMin(d).ew);return{nc,nq,nt,read,qa,qok,td,ed,done,core};}
 function reviewDue(d){const p=S.sp[d];if(!p||!p.first)return null;const age=diffDays(p.first,todayStr());const done=p.rev||{};let due=null;REVIEW_STEPS.forEach(st=>{if(age>=st&&!done[st])due=st;});return due;}
@@ -452,8 +495,8 @@ function paintSyncBits(){document.querySelectorAll('[data-syncline]').forEach(el
    아래 탭: 오늘 · 이번 주 · 복습 · 연습 · 더보기. 예전 주소 #study(암기)·#test(테스트)는 연습 탭으로 읽는다(주소는 바꾸지 않고 그 탭을 그린다) */
 const TABS=['today','week','review','practice','more'],TAB_ALIAS={study:'practice',test:'practice'};
 const PARENT={set:'today',cal:'today',mock:'practice',kichul:'practice',dandap:'practice',stats:'week',archive:'review',wrong:'review',
-  match:'practice',subj:'more',guide:'more',timer:'more',plan:'more',schedule:'more',coach:'more',settings:'more',backup:'more',about:'more',prompts:'more',imp:'more',admin:'more',inbox:'more',msg:'more'};
-const PAGES={set:vSet,sess:vSess,memo:vMemo,match:vMatch,subj:vSubj,cal:vCal,dandap:vDandap,kichul:vKichul,mock:vMock,guide:vGuide,admin:vAdmin,inbox:vInbox,msg:vMsg,plan:vPlan,schedule:vSchedule,coach:vCoach,timer:vTimer,prompts:vPrompts,imp:vImport,settings:vSettings,backup:vBackup,about:vAbout,archive:vArchive,wrong:vWrong,stats:vStats};
+  match:'practice',subj:'more',setup:'settings',guide:'more',timer:'more',plan:'more',schedule:'more',coach:'more',settings:'more',backup:'more',about:'more',prompts:'more',imp:'more',admin:'more',inbox:'more',msg:'more'};
+const PAGES={setup:vSetup,set:vSet,sess:vSess,memo:vMemo,match:vMatch,subj:vSubj,cal:vCal,dandap:vDandap,kichul:vKichul,mock:vMock,guide:vGuide,admin:vAdmin,inbox:vInbox,msg:vMsg,plan:vPlan,schedule:vSchedule,coach:vCoach,timer:vTimer,prompts:vPrompts,imp:vImport,settings:vSettings,backup:vBackup,about:vAbout,archive:vArchive,wrong:vWrong,stats:vStats};
 const TAB_VIEWS={today:vToday,week:vWeek,review:vReview,practice:vPractice,more:vMore};
 const UP_LABEL={sess:'카드',today:'오늘',week:'이번 주',review:'복습',practice:'연습',study:'연습',test:'연습',more:'더보기',set:'세트',kichul:'기출','kichul/u':'단원별',mock:'모의고사',cal:'달력',inbox:'문자함'};
 const SET_TABS=['cards','quiz','essay','tasks'];
@@ -780,7 +823,7 @@ function estStudy(w){const sh=mockShape(w);if(!sh||w<0||weekObj(w).pre||addDays(
   return{m:Math.round((sh.p1||0)*dd+((sh.p2||0)+(sh.p3||0)+(sh.p4||0))*ee)+MIN_PER.grade,n:Object.keys(sh).length};}
 const exWeek=t=>{const W=wkStart(t),E=addDays(W,6);return[PLAN.mock&&PLAN.mock.d,PLAN.target&&PLAN.target.d].some(d=>d&&d>=W&&d<=E);};
 const redoDone=W=>Object.keys(S.tk||{}).filter(k=>{const m=/^x\.redo:(\d{4}-\d\d-\d\d)(:\d+)?$/.exec(k);return m&&m[1]>=W&&m[1]<=addDays(W,6);}).length;
-const revMin=d=>{const s=SETS.sets[d];return Math.ceil(MIN_PER.revItem*(s?(s.cards||[]).length+(s.quiz||[]).length:15));};
+const revMin=d=>{const s=SETS.sets[d];return Math.ceil(MIN_PER.revItem*(s?setVis(d).length+(s.quiz||[]).length:15));};
 /* 아직 오지 않은 이번 주 모의의 어림(분, 채점 30 포함). pipeline/tool.py mock_format과 같은 규칙(주차 틀 번호·리허설·실제 시험 날짜) */
 function estMock(w){const r=weekRange(w),inW=d=>!!d&&d>=r[0]&&d<=r[1];
   if(inW(PLAN.mock&&PLAN.mock.d)||inW(PLAN.target.d)||w>=PLAN.E)return 0;
@@ -815,7 +858,7 @@ function hwParts(d){return pm('h'+d,()=>{const o={restMin:0};if(!SETS.sets[d]||d
 function reqParts(d){const P=hwParts(d);return[['say','말하기'],['write','쓰기'],['dd','단답'],['eo','목차'],['qz','틀린 이유'],['sl','자기 전'],['fg','그림·표'],['essay','논술 실전']]
   .filter(([k])=>P[k]&&P[k].n).map(([k,t])=>({k,t,a:Math.min(P[k].k,P[k].n),n:P[k].n,done:P[k].k>=P[k].n}));}
 /* 세트 핵심(용어 읽기 + 세트 퀴즈): st 용어·퀴즈 수와 한 수(setStatus의 nc·nq·read·qa와 같은 셈, 숙제는 세지 않아 hwItems를 부르지 않음), r·q 남은 수, gap 남은 분, ok 다 함 */
-function setCore(d){return pm('c'+d,()=>{const s=SETS.sets[d];if(!s)return null;const p=spGet(d),st={nc:(s.cards||[]).length,nq:(s.quiz||[]).length,read:Object.keys(p.read||{}).length,qa:Object.keys(p.quiz||{}).length},
+function setCore(d){return pm('c'+d,()=>{const s=SETS.sets[d];if(!s)return null;const p=spGet(d),vs=setVis(d),st={nc:vs.length,nq:(s.quiz||[]).length,read:vs.filter(x=>(p.read||{})[x.i]).length,qa:Object.keys(p.quiz||{}).length},
   r=Math.max(0,st.nc-st.read),q=Math.max(0,st.nq-st.qa);return{st,r,q,gap:r*MIN_PER.read+q*MIN_PER.quiz,ok:!r&&!q};});}
 /* 세트만의 과제가 논술 그림과 같은 그림이면(그리기 낱말 + 그림 설명과 낱말 3개 이상 같음) 그림·표 숙제 하나로 친다 */
 function figDup(d,i){const s=SETS.sets[d],x=s&&(s.tasks||[])[i],fg=s&&s.essay&&s.essay.fig;if(!x||!fg||!/그리|그림|그려|도$/.test(x))return false;
@@ -1409,7 +1452,7 @@ let laterN=0;
 const shortQ=s=>(String(s||'').trim().split(/\s+/)[0]||'').replace(/(의|에|을|를|과|와|은|는)$/,'');
 /* 앱이 볼 수 없는 일(교재·다시 쓰기·준비물·원서접수 등): 손으로 "다 했어요"(S.tk) */
 const isManual=x=>!!x&&(!!(x.ex&&!x.ex.auto)||x.k==='apply'||x.k==='recap'||x.k==='ex');
-function firstUnread(d){const s=SETS.sets[d],p=spGet(d).read||{},n=((s&&s.cards)||[]).length;for(let i=0;i<n;i++)if(!p[i])return i;return 0;}
+function firstUnread(d){const p=spGet(d).read||{},vs=setVis(d);for(const x of vs)if(!p[x.i])return x.i;return vs.length?vs[0].i:0;}
 /* 밀린 세트의 빈 곳(짧게): 10/29(목) 용어·퀴즈 · 10/30(금) 용어 5·퀴즈 */
 function lateGap(d){const c=setCore(d);if(!c)return dlab(d);const g=[];if(c.r)g.push(c.st.read?'용어 '+c.st.read:'용어');if(c.q)g.push(c.st.qa?'퀴즈 '+c.st.qa:'퀴즈');return dlab(d)+(g.length?' '+g.join('·'):'');}
 /* 끝나 할 일 목록에서 빠진 줄의 이름 */
@@ -1642,7 +1685,7 @@ function vToday(){const t=todayStr(),V=planToday(t),w=wkIdx(t),de=Math.max(0,dif
   const ex=kind==='exam'?[PLAN.mock,PLAN.target].find(x=>x&&x.d===t):null,hol=KR_HOLI[t],mn=monNotice(t),ph=V.info.find(x=>x.k==='phase');
   const NT=S.settings.nextTarget,sub=esc(ex?korDate(t,true)+' · '+weekLabel(w):w<0||post?weekLabel(w):uniq([weekLabel(w),sun?'주간 마감일':phaseObj(w).n]).join(' · '))+(NT?` · <span class="nw">${esc(`${md(NT.from)}부터 제${nextR(NT)}회`)}</span>`:'');   /* 바꾸기를 기다리는 시험 일정(접수한 목표 시험 뒤 기다릴 때도, 한 덩이로) */
   const top=`<div class="ltitle today"><div class="ltl">${calIconHTML()}<div><h1>${esc(ex?`오늘 제${ex.r}회 시험${ex===PLAN.mock?'(실전 응시)':''}`:korDate(t,true))}${!ex&&hol?`<span class="hol"><span class="vh"> · </span>${esc(hol)}</span>`:''}</h1><p class="lsub">${sub}</p></div></div><div class="dday"><span>제${PLAN.target.r}회${post?'':'까지'}</span><b class="num">${post?'시험 후':'D-'+de}</b></div></div>
-  ${updNoteHTML()}${V.rows.filter(r=>r.blk==='pin').map(pinHTML).join('')}${mn?monNoticeHTML(mn,ph):ph?noticeHTML(ph):''}`;
+  ${updNoteHTML()}${setupNoteHTML()}${V.rows.filter(r=>r.blk==='pin').map(pinHTML).join('')}${mn?monNoticeHTML(mn,ph):ph?noticeHTML(ph):''}`;
   if(oop)return top+norowsHTML(V,t);   /* 준비 시작 전·본시험 뒤(복기 이틀 뒤부터): 머리와 카드 하나뿐(오늘 시간·다시 짜기 없음) */
   if(ex||post)return top+resumeRowHTML(src,null)+(ex?examHTML(t):norowsHTML(V,t))+weekSecHTML(V,b,t,c);   /* 시험 날·본시험 뒤 복기 날: 블록·오늘 시간·다시 짜기 없이 시험 카드(또는 카드 하나)와 이번 주 체크. 하다 만 흐름은 이어서 줄로 */
   planCal(t,V,its,nd);
@@ -1853,7 +1896,7 @@ const HW_RULES=[['보고 베끼기보다 덮고 떠올리기','떠올리려고 �
 const HW_GEN=[/새\s*용어.*(소리|설명|말하)/,/논술.*(손글씨|첨삭)/,/퀴즈.*(틀린|오답)/];
 function hwRule(d){return Object.assign({},PE_HW[1],PE_HW[setPh(d)]||{});}
 function hwItems(d){const s=SETS.sets[d];if(!s)return[];const p=spGet(d),R=hwRule(d),H=p.hw||{},out=[];
-  const cs=(s.cards||[]).map((sc,i)=>({i,sc,id:setCardId(d,i)})).filter(x=>x.id),tt=x=>(card(x.id)||x.sc).t||'';
+  const cs=setVis(d).map(({sc,i})=>({i,sc,id:setCardId(d,i)})).filter(x=>x.id),tt=x=>(card(x.id)||x.sc).t||'';
   const fresh=cs.filter(x=>!x.sc.ref),rev=cs.filter(x=>x.sc.ref);
   if(fresh.length&&(R.w||R.s))out.push({key:'fresh',kind:'term',t:`새 용어 ${fresh.length}개: 안 보고 쓰기 ${R.w}번, 소리 내어 말하기 ${R.s}번`,min:Math.round(fresh.length*(R.w*3+R.s*.5)),
     rows:fresh.map(x=>({t:tt(x),c:[['w'+x.i,'쓰기',R.w],['s'+x.i,'말하기',R.s]].filter(c=>c[2])})),go:[['set-flash','카드 넘겨 보기'],['memo-set','가리며 외우기']]});
@@ -1966,7 +2009,7 @@ function gqNumAlt(tok,rnd){const nums=tok.match(/\d+(?:[.,]\d+)?/g);if(!nums||/\
     if(!bad&&alt!==tok&&!out.includes(alt))out.push(alt);});
   return out.length===3?out:[];}
 /* 세트 카드 [{c, sc}] → 문제 목록 */
-function gqBuild(d){const s=SETS.sets[d];if(!s)return null;const cs=[];(s.cards||[]).forEach((sc,i)=>{const id=setCardId(d,i),c=id&&card(id);if(c)cs.push({c,sc});});if(!cs.length)return null;
+function gqBuild(d){const s=SETS.sets[d];if(!s)return null;const cs=[];setVis(d).forEach(({sc,i})=>{const id=setCardId(d,i),c=id&&card(id);if(c)cs.push({c,sc});});if(!cs.length)return null;
   const rnd=seedRnd('gq:'+d+':'+cs.map(x=>x.c.id).join(',')),mains=cs.map(x=>gqMain(x.c));
   const label=c=>{const m=gqMain(c);return mains.filter(x=>x===m).length>1?c.t:m;};
   const pool=[];cs.forEach(x=>{if(!pool.includes(x.c))pool.push(x.c);});
@@ -2068,7 +2111,8 @@ function vSet(){const d=R.a;const s=SETS.sets[d];
     body=`<div class="btns stools"><button class="btn sm sec" data-act="set-flash" data-d="${d}">${fr?`카드 넘겨 보기 이어서 (${fr})`:'카드 넘겨 보기'}</button><button class="btn sm sec" data-act="memo-set" data-d="${d}">${mr?`가리며 외우기 이어서 (${mr})`:'가리며 외우기'}</button><button class="lnk" data-act="start-fill" data-d="${d}">빈칸 쓰기</button></div>
       ${fr||mr?`<div class="btns stools2"><button class="btn ghost sm" data-act="resume-clear" data-k="flash:${d} memo:set:${d}">이어 하지 않고 처음부터</button></div>`:''}
       <p class="note snote">펼쳐 읽은 용어는 읽은 것으로 쳐요. 모르는 낱말은 꾹 누르세요.</p>`
-      +(s.cards||[]).map((sc,i)=>{const id=setCardId(d,i);const c=id?card(id):null;const t=c?c.t:sc.t;const open=SV[d+':o']===i;const read=!!p.read[i];
+      +(setHid(d)?`<p class="note snote">하루 외울 용어 ${setVis(d).length}개에 맞춰 지난 카드 ${setHid(d)}개는 뺐어요(설정 → 하루 외울 용어).</p>`:'')
+      +setVis(d).map(({sc,i})=>{const id=setCardId(d,i);const c=id?card(id):null;const t=c?c.t:sc.t;const open=SV[d+':o']===i;const read=!!p.read[i];
       return`<div class="acc ${open?'open':''} ${read?'read':''}"><button data-act="set-open" data-d="${d}" data-i="${i}"><span class="no">${read?'✓':i+1}</span><span class="tt">${esc(t||'(내용 없음)')}${sc.ref?'':' <span class="tag-new">새 용어</span>'}</span><span class="open-ic"></span></button>
       ${open?`<div class="body">${c?`<p class="defn">${glHTML(c.d,c.id)}</p><ul class="kws">${(c.k||[]).map(k=>`<li><span>${esc(k)}</span></li>`).join('')}</ul>`:`<p class="defn">${glHTML(sc.d||'','')}</p>`}
         ${sc.plus?`<p class="plus">${esc(sc.plus)}</p>`:''}${(sc.field||(c&&c.field))?`<p class="field">현장: ${esc(sc.field||c.field)}</p>`:''}
@@ -2125,7 +2169,7 @@ function setBarHTML(d){const n=setNext(d);if(!n)return'';const a=n.ks?`data-act=
   return`<div class="nextbar"><button class="btn" ${a}>${esc(n.t)}</button></div>`;}
 
 /* ════════ 13. 화면: 복습 ════════ */
-function setIds(d){const s=SETS.sets[d];return uniq(((s&&s.cards)||[]).map((_,i)=>setCardId(d,i)).filter(Boolean));}
+function setIds(d){return uniq(setVis(d).map(x=>setCardId(d,x.i)).filter(Boolean));}
 function wrongCardIds(){return uniq(wrongList().map(w=>w.type==='gq'?sessItemCard(w):w.id).filter(id=>id&&card(id)));}
 /* 세트 복습 순서(오늘·복습 탭·잇기 모두): 1·3일 차 먼저, 그다음 기한(처음 연 날 + 단계), 같으면 단계 */
 const revList=()=>revCands(todayStr()).map(x=>({d:x.d,step:x.step}));
@@ -2458,7 +2502,7 @@ function startDueAll(o){o=o||{};const sk=new Set(o.skip||[]);let ids=dueNow().ma
   startSession({kind:'cards',title:'카드 복습',items:cardItems(ids),requeue:true,k:o.k||null});}
 function startFree(){startSession({kind:'free',title:'자유 연습',items:cardItems(shuffle(deck().filter(rangeFilter(S.range))).slice(0,30).map(c=>c.id))});}
 /* 세트 복습 항목: 세트 카드(오늘 이미 매긴 카드는 빼서 같은 날 두 번 올리지 않음)와 세트 퀴즈 */
-function setReviewItems(d){const s=SETS.sets[d],t=todayStr(),items=[];(s.cards||[]).forEach((_,i)=>{const id=setCardId(d,i);if(id&&pget(id).last!==t)items.push({type:'card',id});});(s.quiz||[]).forEach((_,i)=>items.push({type:'quiz',d,i}));return items;}
+function setReviewItems(d){const s=SETS.sets[d],t=todayStr(),items=[];setVis(d).forEach(({i})=>{const id=setCardId(d,i);if(id&&pget(id).last!==t)items.push({type:'card',id});});(s.quiz||[]).forEach((_,i)=>items.push({type:'quiz',d,i}));return items;}
 /* 복습 날이 아니면(step 없음) 세트 복습 기록을 남기지 않는다(D4). 80% 이상 끝냈을 때만 친다(D3). 카드를 모두 오늘 매겨 항목이 없으면 바로 친다 */
 function revNow(rv){rv.forEach(x=>markReviewed(x.d,x.step));touchDay();closeModal();toast('오늘 이미 본 카드라 세트 복습으로 쳤어요');render();}
 function startSetReview(d,o){o=o||{};const step=reviewDue(d),items=setReviewItems(d);if(!items.length&&step&&setIds(d).length)return revNow([{d,step}]);
@@ -2467,7 +2511,7 @@ function startSetReviewAll(){const rv=dueSetReviews();let items=[];rv.forEach(x=
   startSession({kind:'rev',title:'세트 복습',items,rv,onDone:s=>{if(enough(s))rv.forEach(x=>markReviewed(x.d,x.step));}});}
 /* o.skipQ: 그 날짜 세트의 퀴즈 오답은 빼기(그날 숙제 "틀린 이유 한 줄"로 다룬다) */
 function startWrong(o){o=o||{};const wl=wrongList().filter(w=>!(o.skipQ&&w.type==='quiz'&&w.d===o.skipQ));startSession({kind:'wrong',title:'오답 다시 풀기',items:shuffle(wl.map(w=>w.type==='card'?{type:'card',id:w.id,wrongKey:w.key}:w.type==='quiz'?{type:'quiz',d:w.d,i:w.i,wrongKey:w.key}:w.type==='fill'?Object.assign(fillItem(card(w.id),S.fillLv||'중')||{type:'card',id:w.id},{wrongKey:w.key}):w.type==='gq'?{type:'gq',d:w.d,n:w.n,wrongKey:w.key}:{type:'cloze',id:w.id,k:w.k,wrongKey:w.key}))});}
-function startFill(lv,d){let pool;if(d){const s=SETS.sets[d];pool=((s&&s.cards)||[]).map((_,i)=>card(setCardId(d,i))).filter(Boolean);}else{pool=deck().filter(rangeFilter(S.range));const seen=pool.filter(c=>pget(c.id).seen>0);if(seen.length>=10)pool=seen;}
+function startFill(lv,d){let pool;if(d){pool=setVis(d).map(x=>card(setCardId(d,x.i))).filter(Boolean);}else{pool=deck().filter(rangeFilter(S.range));const seen=pool.filter(c=>pget(c.id).seen>0);if(seen.length>=10)pool=seen;}
   const items=shuffle(pool).slice(0,10).map(c=>fillItem(c,lv)).filter(Boolean);startSession({kind:'fill',title:'용어 빈칸 쓰기'+(d?', '+korDate(d)+' 세트':''),items,log:'fill',revD:d||null,lv,fd:d||''});}
 function startCloze(){const f=rangeFilter(S.range);let pool=deck().filter(f).filter(c=>clozeTokens(c.d).length);const seen=pool.filter(c=>pget(c.id).seen>0);if(seen.length>=10)pool=seen;
   const items=shuffle(pool).slice(0,10).map(c=>{const toks=clozeTokens(c.d);return{type:'cloze',id:c.id,k:Math.floor(Math.random()*toks.length)};});startSession({kind:'cloze',title:'기준 수치 빈칸',items,log:'cloze'});}
@@ -2656,12 +2700,12 @@ function resumeSet(key,i,n,ids){if(!key)return;S.resume=S.resume||{};if(i>0&&i<n
 /* 세트 카드 넘겨 보기: 하다 만 세션이면 그 자리로(연 곳을 새로, T4), 아니면 저장한 자리부터 */
 /* o.fresh(3.2.4): 숙제 "새 용어"에서 열면 새 용어(ref가 아닌 카드)만. 자리는 따로(flashn:), 끝까지 해도 세트 복습으로 치지 않는다(SES.part) */
 function setFlash(d,o){const nw=!!(o&&o.fresh),rk=(nw?'flashn:':'flash:')+d;if(SES&&SES.rkey===rk&&SES.i<SES.items.length){if(R.page!=='sess')SES.from=curH();flowKeep();return nav('sess');}
-  const s=SETS.sets[d];if(!s)return;const items=(s.cards||[]).map((sc,i)=>({type:'card',id:setCardId(d,i),si:i,rf:!!(sc&&sc.ref)})).filter(x=>x.id&&!(nw&&x.rf)).map(({rf,...x})=>x);if(!items.length)return toast('넘겨 볼 카드가 없어요');const r=resumeGet(rk),i0=r&&r.i<items.length?r.i:0;
+  const s=SETS.sets[d];if(!s)return;const items=setVis(d).map(({sc,i})=>({type:'card',id:setCardId(d,i),si:i,rf:!!(sc&&sc.ref)})).filter(x=>x.id&&!(nw&&x.rf)).map(({rf,...x})=>x);if(!items.length)return toast('넘겨 볼 카드가 없어요');const r=resumeGet(rk),i0=r&&r.i<items.length?r.i:0;
   /* 이어서 할 때 그 앞 카드 가운데 이미 본 것(세트의 읽음: 뒷면을 봤거나 펼쳐 읽음)은 끝낸 것으로 센다. 넘기기만 한 카드는 "이어서"로 남는다 */
   const rs=spGet(d).read||{},done={};items.slice(0,i0).forEach((x,j)=>{if(rs[x.si])done[j]=1;});
   if(i0)toast(`${i0+1}번째 카드부터 이어서 해요`);return startSession({kind:'flash',title:korDate(d)+(nw?' 새 용어 카드':' 세트 카드'),items,setD:d,rkey:rk,i:i0,done,part:nw?1:0});}
 function memoWrong(o){return startMemo(Object.assign({key:'memo:wrong',label:'오답 카드',title:'오답 카드 가리며 외우기',items:wrongCardIds().map(id=>({id}))},o||{}));}
-function memoSet(d,o){const nw=!!(o&&o.fresh),s=SETS.sets[d];if(!s)return;const items=(s.cards||[]).map((sc,i)=>({id:setCardId(d,i),si:i,rf:!!(sc&&sc.ref)})).filter(x=>x.id&&!(nw&&x.rf)).map(({rf,...x})=>x);
+function memoSet(d,o){const nw=!!(o&&o.fresh),s=SETS.sets[d];if(!s)return;const items=setVis(d).map(({sc,i})=>({id:setCardId(d,i),si:i,rf:!!(sc&&sc.ref)})).filter(x=>x.id&&!(nw&&x.rf)).map(({rf,...x})=>x);
   return startMemo({key:'memo:set:'+d+(nw?':new':''),label:korDate(d)+(nw?' 새 용어':' 세트'),title:korDate(d)+(nw?' 새 용어 가리며 외우기':' 가리며 외우기'),items,setD:d,part:nw?1:0});}
 
 /* ════════ 16. 화면: 기출(연습 → 실전 "기출 문제은행") ════════ */
@@ -3070,7 +3114,8 @@ function paceNote(){const p=paceF(),v=(S.settings||{}).pace||'auto';return'주�
 function vSettings(){const s=S.settings,bg=Object.assign({},BUDGET_DEF,s.budget||{});
   return topbar('설정')+`<h1 class="ptitle">설정</h1>
   ${sec('하루 공부 시간','',BUDGET_OPT.map(([k,l,vs])=>`<label class="f">${l}</label><div class="seg">${(vs.includes(Number(bg[k]))?vs:vs.concat(Number(bg[k])).sort((a,b)=>a-b)).map(v=>`<button class="${Number(bg[k])===v?'on':''}" data-act="budget" data-k="${k}" data-v="${v}">${mfmt(v)}</button>`).join('')}</div>`).join('')+`<p class="note">오늘 몫과 '이번 주' 계산이 이 시간을 써요. 바꾸면 오늘 몫을 다시 짜요. 내 기록으로 필요한 시간을 보려면 <button class="lnk" data-act="go" data-h="coach">공부 시간 진단</button></p><p class="note">${subjOn()?'과목별로 나눠 두었어요. 여기서 바꾸면 정한 비율대로 늘이거나 줄여요.':'과목마다 시간을 따로 정하려면'} <button class="lnk" data-act="go" data-h="subj">과목별 공부 시간</button></p>`+daysSetHTML())}
-  ${sec('하루 새 용어','',freshHTML())}
+  <div class="btns"><button class="btn ghost" data-act="go" data-h="setup">시작 준비 다시 하기(용어·시간·과목·속도 한 번에)</button></div>
+  ${sec('하루 외울 용어','',termsHTML())}
   ${sec('공부 속도','',`<div class="seg">${[['auto','자동'],['fast','빠르게'],['mid','보통'],['slow','천천히']].map(([v,l])=>`<button class="${(s.pace||'auto')===v?'on':''}" data-act="pace" data-v="${v}">${l}</button>`).join('')}</div><p class="note">${esc(paceNote())}</p>`)}
   <label class="f">글자 크기</label><div class="seg">${[['m','보통'],['l','크게'],['xl','아주 크게']].map(x=>`<button class="${(s.fs||'m')===x[0]?'on':''}" data-act="fs" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>
   <label class="f">화면</label><div class="seg">${[['auto','기기 설정 따라'],['light','밝게'],['dark','어둡게']].map(x=>`<button class="${(s.theme||'auto')===x[0]?'on':''}" data-act="theme" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>
@@ -3106,7 +3151,7 @@ function restoreFrom(text,name){let j,st;try{j=JSON.parse(String(text||'').repla
   const bd=(st.tk||{}).backup;
   return PE_IO.ask(name?`${bd?korDate(bd)+' 백업 파일':'고른 백업 파일'}로 지금 기록을 덮어씁니다. 계속할까요? 파일: ${name}`:'지금 기록을 덮어씁니다. 계속할까요?',()=>{try{adoptState(st);if(j.sets)SETS=setsMerge(SETS,j.sets);recalcPlan();flush();invalidate();applyLook();flowReset();toast('복원했어요');sync(true);nav('today');}catch(err){toast('백업 형식이 아니에요');}});}
 /* 다른 기록으로 바꾸기(복원·되돌리기): 빠진 칸은 새 기록 값으로, 이 휴대폰의 "바뀐 점" 표시·받아 오기 상태는 그대로 */
-function adoptState(st){const sv=(S.tk||{})['seen:v3'],sy=S.sync;S=Object.assign(fresh(),st);S.settings=Object.assign(fresh().settings,st.settings||{});if(!S.settings.roundDates)S.settings.roundDates={};if(!S.days||typeof S.days!=='object')S.days={};S.v=2;S.today=null;S.tk=S.tk||{};S.tk['seen:v3']=sv||S.tk['seen:v3']||todayStr();S.tk.ver=APP_VER;S.sync=sy||S.sync;}
+function adoptState(st){const sv=(S.tk||{})['seen:v3'],sy=S.sync;S=Object.assign(fresh(),st);S.settings=Object.assign(fresh().settings,st.settings||{});if(!S.settings.roundDates)S.settings.roundDates={};if(!S.days||typeof S.days!=='object')S.days={};S.v=2;S.today=null;S.tk=S.tk||{};S.tk['seen:v3']=sv||S.tk['seen:v3']||todayStr();S.tk.ver=APP_VER;S.sync=sy||S.sync;termsFix();}
 /* 새로 시작(3.1.3): 준비 시작일을 다시 정할 때 이전 공부 기록(카드 진도·별표·오답·세트 진도·모의고사·달력·주간 기록·오늘 몫·지난 쉬는 날)을 지운다.
    그대로 두는 것: 설정(하루 공부 시간·글자 크기·외우기 등)·내일부터 정해 둔 쉬는 날·짧은 날·내 카드·내 목차·숨긴 카드·가리며 외우기 표시·받은 세트·받아 오기 상태·"바뀐 점"·마지막 백업 날짜.
    지우기 전 기록은 7일 동안 되돌릴 수 있게 따로 둔다(PREV_KEY, 더보기 → 백업 "되돌리기") */
@@ -3738,10 +3783,12 @@ document.addEventListener('click',e=>{
     if(was)delete qd[id];else{const x=mockQs(d,k)[i];if(!x||x.skip)return;const b0=qSteps(k,x.q,x.l,1),an=(b0.find(a=>a[0]==='an')||[0,0])[1];qd[id]=[Date.now(),b0.reduce((a,z)=>a+z[1],0)-an,an];tDone('mq',d+':'+id);}
     touchDay();mockAuto(d,k);mqCal(d,k);save();if(was)return render();SV.scrollTo='#view .sq.cur';render();return scrollDo();}   /* 다 하면 다음 문제를 화면에 */
   case'sq-show':{const sk='sqs:'+D.d+':'+D.k+':'+D.i;SV[sk]=!SV[sk];return render();}
-  case'fresh-mode':{const st=S.settings,was=freshWant();if(D.v==='auto')delete st.fresh;else if(was==null){const ph=phaseObj(Math.max(0,weekIndex(todayStr()))).id;st.fresh=Math.max(1,(PE_SETRULE[ph]||PE_SETRULE[1]).fresh||4);}
-    if(freshWant()===was)return;save();freshPushSoon();toast(freshWant()==null?'세트 새 용어 수를 단계 규칙대로 해요':`평일 세트 새 용어를 하루 ${freshWant()}개로 해요`);return render();}
-  case'fresh-step':{const w=freshWant();if(w==null)return;const v=Math.min(FRESH_MAX,Math.max(1,w+(Number(D.v)||0)));if(v===w)return;S.settings.fresh=v;save();freshPushSoon();return render();}
-  case'fresh-copy':return PE_IO.copy(freshReq()).then(()=>toast('변경 요청을 복사했어요. Claude Code에 붙여 넣으세요'),()=>toast('복사하지 못했어요'));
+  case'terms-mode':{const was=termsWant();if(D.v==='auto'){if(was==null)return;termsSet(null);}else{if(was!=null)return;termsSet(setRule(curPh()).total||10);}
+    save();termsPushSoon();planChanged('budget');toast(termsWant()==null?'하루 외울 용어를 단계 규칙대로 해요':`하루 외울 용어를 ${termsWant()}개로 해요`);return render();}
+  case'terms-step':{const w=termsWant();if(w==null)return;const v=Math.min(TERMS_MAX,Math.max(TERMS_MIN,w+(Number(D.v)||0)));if(v===w)return;termsSet(v);save();termsPushSoon();planChanged('budget');return render();}
+  case'terms-copy':return PE_IO.copy(termsReq()).then(()=>toast('변경 요청을 복사했어요. Claude Code에 붙여 넣으세요'),()=>toast('복사하지 못했어요'));
+  case'setup-step':{SV.setupStep=Math.min(SETUP_N-1,Math.max(0,(SV.setupStep|0)+(Number(D.v)||0)));render();return window.scrollTo(0,0);}
+  case'setup-done':{S.tk=S.tk||{};delete S.tk.setup;SV.setupStep=0;save();planChanged('budget');termsPushSoon();toast('이 설정으로 시작해요. 오늘 몫을 짰어요');return goTab('today');}
   case'pace':{const v=['auto','fast','mid','slow'].includes(D.v)?D.v:'auto';mockAdj(null,()=>{S.settings.pace=v;});save();return render();}   /* 단계 줄에서 고른 교시를 지금 교시로(그 교시 시작은 아래 막대) */
   case'mock-next':{const n=mockNext(D.d);return n&&n.go?n.go():render();}
   /* 예전 모의고사 화면의 다 썼어요 칸(지금 화면에는 없음) */
@@ -3779,7 +3826,7 @@ document.addEventListener('click',e=>{
     /* 준비 시작일을 다시 정하면 이전 공부 기록을 지우고 새로 시작(3.1.3, "기록은 그대로 두기"를 고르지 않았을 때) */
     if(SCH.start!==S.settings.start&&hasRec()&&!SCH.keep){const ns=SCH.start,tg=SCH.target||'auto';
       return PE_IO.ask(`이전 공부 기록(${WIPE_TXT})을 지우고 ${korDate(ns)}부터 새로 시작할까요? 설정과 내 카드는 그대로이고, 지운 기록은 7일 동안 더보기 → 백업에서 되돌릴 수 있어요.`,()=>{
-        SCH=null;restartRec(ns,tg);schTell('이전 기록을 지우고 '+korDate(ns)+'부터 새로 시작해요',todayStr());render();});}
+        SCH=null;restartRec(ns,tg);setupDue();schTell('이전 기록을 지우고 '+korDate(ns)+'부터 새로 시작해요',todayStr());nav('setup');});}
     const t=todayStr(),st=S.settings,pre=planPre(),prev=st.target||'auto',tg=SCH.target||'auto',stCh=SCH.start!==st.start,P1=stCh?null:computePlan(st.start,tg);
     if(P1&&P1.target.r===PLAN.target.r){SCH=null;return render();}
     const from=stCh?null:schFrom(PLAN,P1,t);
@@ -3788,10 +3835,11 @@ document.addEventListener('click',e=>{
     else{lockLived(PLAN,wkIdx(t)+(stCh?1:0));if(stCh){st.start=SCH.start;delete st.schUndo;}else st.schUndo={r:prev,at:t};st.target=tg;delete st.nextTarget;SCH=null;recalcPlan();phaseReset(t);save();planChanged('sched',pre);}
     const msg=from?`${dlab(from)}부터 제${nextR(st.nextTarget)}회 일정이에요`:'시험 일정을 바꿨어요';
     schTell(SETS.plan&&!sigEq(SETS.plan,repoWant())&&!from&&!stCh?`제${PLAN.target.r}회로 바꿨어요`:msg,t);
+    if(stCh){setupDue();save();return nav('setup');}   /* 준비 시작일을 다시 정하면 시작 준비부터(3.2.6) */
     return render();}
   case'sch-cancel':SCH=null;return render();
   case'sch-keep':if(SCH){SCH.keep=!SCH.keep;}return render();   /* 시작일을 바꿀 때 이전 기록 지우기 ↔ 그대로 두기 */
-  case'rec-wipe':return PE_IO.ask(`이전 공부 기록(${WIPE_TXT})을 지우고 ${korDate(S.settings.start)}부터 새로 시작할까요? 설정과 내 카드는 그대로이고, 지운 기록은 7일 동안 더보기 → 백업에서 되돌릴 수 있어요.`,()=>{restartRec();toast('이전 기록을 지웠어요. 새로 시작해요');render();});
+  case'rec-wipe':return PE_IO.ask(`이전 공부 기록(${WIPE_TXT})을 지우고 ${korDate(S.settings.start)}부터 새로 시작할까요? 설정과 내 카드는 그대로이고, 지운 기록은 7일 동안 더보기 → 백업에서 되돌릴 수 있어요.`,()=>{restartRec();setupDue();save();toast('이전 기록을 지웠어요. 새로 시작해요');nav('setup');});
   case'rec-undo':{const p=prevRec();if(!p)return toast('되돌릴 기록이 없어요');
     return PE_IO.ask(`${korDate(p.at)}에 지운 공부 기록으로 되돌릴까요? 그 뒤에 한 공부 기록은 없어져요.`,()=>{adoptState(p.state);try{PE_IO.set(PREV_KEY,'');}catch(e){}recalcPlan();flush();invalidate();applyLook();flowReset();toast('지운 기록을 되돌렸어요');sync(true);nav('today');});}
   case'sch-pick':SCH={start:S.settings.start,target:D.r==='auto'?'auto':Number(D.r)};SV.scrollTo='#schPrev';render();return scrollDo();   /* 회차 견주기·되돌리기 줄 → 미리 보기 */
@@ -3832,9 +3880,9 @@ window.addEventListener('scroll',()=>{if(TM.running||TM.remain>0&&TM.remain<TM.t
 /* ════════ 23. 시작 ════════ */
 PE_IO.init({toast});recalcPlan();applyLook();setPreset('essay');R=parseHash();
 if(!location.hash)history.replaceState(null,'','#today');
-calOpen();sync(true);route();v3Once();verOnce();   /* 받아 오기를 먼저 시작해 첫 화면이 오래된 자료로 오늘 몫을 고정하지 않게(받아 온 뒤 고정) */
+termsFix();calOpen();sync(true);route();v3Once();verOnce();   /* 받아 오기를 먼저 시작해 첫 화면이 오래된 자료로 오늘 몫을 고정하지 않게(받아 온 뒤 고정) */
 const fresh2=f=>(...a)=>{PLN++;return f(...a);};
-window.__pe={setRule,freshWant,freshRepo,freshState,freshReq,planDocNow,planPush,hwAhead,subjCaps,subjDefault,subjFit,subjOf,subjKey,subjSum,MG:()=>MG,mgPick,mgText,mgCut,mgCount,mgStart,mgTap,mgStop,mgRec,mgDur,coachCalc,evSpeed,evLog,actAvg,actTick,qAvg,coachWeek,nearRounds,buildMapShort,p12End,p3Week,studySince:v=>{if(v)STUDY_SINCE=v;PLN++;return STUDY_SINCE;},mockQs,knowAuto,qSteps,paceF,paceSamples,mockMode,mockMin,mockTot,estStudy,mockShape,cardLv,essayLv,qKey,planDoneMin,mockRowsSync,S:()=>S,rParts,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession,
+window.__pe={subjOn,setRule,termsSplit,termsWant,termsRepo,termsState,termsReq,termsAt,termsFix,setVis,setHid,setCore,planDocNow,planPush,hwAhead,subjCaps,subjDefault,subjFit,subjOf,subjKey,subjSum,MG:()=>MG,mgPick,mgText,mgCut,mgCount,mgStart,mgTap,mgStop,mgRec,mgDur,coachCalc,evSpeed,evLog,actAvg,actTick,qAvg,coachWeek,nearRounds,buildMapShort,p12End,p3Week,studySince:v=>{if(v)STUDY_SINCE=v;PLN++;return STUDY_SINCE;},mockQs,knowAuto,qSteps,paceF,paceSamples,mockMode,mockMin,mockTot,estStudy,mockShape,cardLv,essayLv,qKey,planDoneMin,mockRowsSync,S:()=>S,rParts,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession,
   enough,setReviewItems,startDueAll,startWrong,budgetOf,dayKind,TM:()=>TM,go:h=>{nav(h);v3Again();},goUp,goTab,R:()=>R,navBadgeN,tabWords,
   /* 오늘 몫·이번 주(검사용: 부를 때마다 새로 센다) */
   taskList:fresh2(taskList),dayPlan:fresh2(dayPlan),planToday:fresh2(planToday),weekBoard:fresh2(weekBoard),weekSnap:fresh2(weekSnap),reqParts:fresh2(reqParts),cardsOut:fresh2(cardsOut),hwParts:fresh2(hwParts),

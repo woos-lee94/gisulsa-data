@@ -334,6 +334,14 @@ The app is an independent study aid and is not affiliated with HRD Korea or any 
 가릴 곳을 살짝 꾹 눌렀다가 그으면 테이프가 붙고, 그냥 밀면 화면이 움직이도록 바꿨습니다.
 ```
 
+## 3.2.6 보내는 순서(심사 없음)
+
+시작 준비(준비 시작일을 다시 정하면 하루 외울 용어 → 공부 시간 → 과목별 → 속도)와 "하루 외울 용어"(세트 카드 수, 받은 세트도 그 수만)는 화면·계산(`web/`)과 회원 요청(`native/member.js`의 JS)만 바뀌어 네이티브 지문이 3.2.0과 같다.
+
+1. Firebase 규칙 다시 게시(`docs/firebase-setup.md` 4-5, `config/plan`에 `'terms'`가 있는 판). 게시 전에도 시험 일정 맞추기는 그대로 되고, 앱 안에서 받은 세트를 그 수만 보여 주는 것도 된다. 예약 작업이 그 수로 세트를 만드는 것만 게시 뒤부터.
+2. PowerShell 순서의 마지막 줄을 `npm run ota`로.
+3. App Privacy: 그대로.
+
 ## 3.2.5 보내는 순서(심사 없음)
 
 설정의 "하루 새 용어"(평일 세트의 새 용어 수)는 화면·계산(`web/`)과 회원 요청(`native/member.js`의 JS)만 바뀌어 네이티브 지문이 3.2.0과 같다.
