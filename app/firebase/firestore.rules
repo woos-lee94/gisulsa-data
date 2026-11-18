@@ -7,12 +7,14 @@ rules_version = '2';
 // msgs/{자동 ID}: 관리자에게 보낸 문자(3.0.1부터)
 // replies/{자동 ID}: 관리자가 보낸 답장(3.1.3부터, 승인·거절과 함께 보낼 수 있다)
 // config/plan: 관리자 앱의 시험 일정(3.2.1부터). 예약 작업(세트·모의고사를 만드는 Claude)이 로그인 없이 읽고 같은 일정으로 맞춘다
+// figs/{카드 번호}: 관리자가 단답 답안지 그림 칸에 넣은 그림(3.2.7부터). 승인된 회원 모두가 본다
 service cloud.firestore {
   match /databases/{db}/documents {
     function signedIn() { return request.auth != null; }
     function isAdmin() { return signedIn() && exists(/databases/$(db)/documents/admins/$(request.auth.uid)); }
     function validId(id) { return id is string && id.size() >= 2 && id.size() <= 16 && id.matches('^[a-z0-9_가-힣]+$'); }
     function isDate(s) { return s is string && s.matches('^20[0-9]{2}-[01][0-9]-[0-3][0-9]$'); }
+    function approved() { return signedIn() && get(/databases/$(db)/documents/members/$(request.auth.uid)).data.status == 'approved'; }
 
     match /members/{uid} {
       allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
@@ -91,6 +93,21 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
         && request.resource.data.read == true;
       allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+    }
+
+    // figs/{카드 번호}: 단답 답안지 그림 칸의 그림(3.2.7). 관리자만 넣고·바꾸고·지우며, 승인된 회원과 관리자가 읽는다.
+    // img 그림 바이트(JPEG·PNG, 100B~900KB: 문서 한도 1MiB 안) · type 그 형식 · w·h 픽셀 크기 · at 서버 시각
+    match /figs/{cid} {
+      allow get, list: if isAdmin() || approved();
+      allow create, update: if isAdmin() && cid.matches('^[A-Za-z0-9-]{1,40}$')
+        && request.resource.data.keys().hasOnly(['img', 'type', 'w', 'h', 'at'])
+        && request.resource.data.keys().hasAll(['img', 'type', 'w', 'h', 'at'])
+        && request.resource.data.img is bytes && request.resource.data.img.size() >= 100 && request.resource.data.img.size() <= 900000
+        && request.resource.data.type in ['image/jpeg', 'image/png']
+        && request.resource.data.w is int && request.resource.data.w >= 1 && request.resource.data.w <= 4000
+        && request.resource.data.h is int && request.resource.data.h >= 1 && request.resource.data.h <= 4000
+        && request.resource.data.at == request.time;
+      allow delete: if isAdmin();
     }
 
     // config/plan: 관리자 앱이 시험 일정을 저장할 때 쓴다(관리자만, 칸과 형식이 정해진 문자열만, 서버 시각).

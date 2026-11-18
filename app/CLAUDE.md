@@ -108,7 +108,7 @@
 
 ## 앱 폴더
 
-- `web/`: 앱 화면 원본(v3.2.6, 네이티브 다리 포함). `index.html`의 `?v=N`(지금 9)은 `tests/app.test.js`가 스크립트를 찾는 표시라 남겨 둔다. 버전은 `app.js`의 `APP_VER`, `app.json`의 `expo.version`, `package.json`의 `version`(과 `package-lock.json`의 앱 줄 두 곳)을 함께 올린다(`tests/native.test.js`가 확인)
+- `web/`: 앱 화면 원본(v3.2.7, 네이티브 다리 포함). `index.html`의 `?v=N`(지금 9)은 `tests/app.test.js`가 스크립트를 찾는 표시라 남겨 둔다. 버전은 `app.js`의 `APP_VER`, `app.json`의 `expo.version`, `package.json`의 `version`(과 `package-lock.json`의 앱 줄 두 곳)을 함께 올린다(`tests/native.test.js`가 확인)
 - `tests/`: jsdom 회귀 검사와 가짜 저장소(`tests/fake/data`)
 - 확대 막기: `index.html` viewport에 `maximum-scale=1, user-scalable=no`(WKWebView는 이것을 따른다. 글자 칸을 누를 때 16px보다 작은 칸이 확대되던 것도 막는다), `styles.css`의 `html{touch-action:manipulation}`(두 번 눌러 확대)
 - `assets/icon-1024.png`: iOS 앱 아이콘
@@ -191,6 +191,17 @@
 - 앱 쪽 요청 `{t:'update', op}`(`host.js` `UPDATE_OPS`): `check`(지금 확인, `{found, v}`), `apply`(받는 중이면 기다리고, 받아 둔 것이 없으면 확인·받기 → `reloadAsync`, 다시 열 때 잠깐 보이는 화면은 앱 바탕색. 최신이면 `{s:'none'}`), `store`(앱이 가진 App Store 주소를 연다).
 - 웹(`app.js` "20b"): 오늘 머리 아래 한 줄(`updNoteHTML`: 받아 둠·받는 중·있음·App Store, ×는 그 상태·버전만 숨김), 더보기 → 앱 "앱 업데이트" 줄(`updRowHTML`: 확인 전·최신·확인 중·받는 중·실패·꺼진 빌드). "최신 버전 받기"(`upd-get`)는 타이머가 돌면 멈춘 뒤에, 아니면 `flush()`로 기록을 먼저 네이티브 저장소에 쓰고(메시지 순서대로 처리) `apply`. 업데이트한 뒤 처음 열면 `S.tk.ver`로 한 번 알림(`verOnce`). 브라우저에는 이 줄들이 없다.
 - Firebase 설정은 빌드에 든 값을 키체인(`pe_fbcfg`)에도 적어 두어, 업데이트로 받은 코드에 값이 빠졌어도(`--environment` 없이 올린 경우) 회원 확인이 그대로 된다.
+
+## 빈칸 한 문제씩·짝 맞추기 내 세트 용어·단답 답안지 그림(3.2.7)
+
+- 빈칸 채우기 한 문제씩(app.js "7-2b", `startFillOne`·`fillOneMore`): 정해진 문제 수 없이 용어 하나씩 빈칸(`fillItem`)을 풀고, 답을 본 뒤 "다른 빈칸으로 한 번 더"(`fill1-again`, 같은 용어로 빈칸을 새로 고름)·"다음 용어 · 이름"(`fill1-next`, 차례의 다음 카드, 빈칸을 못 만드는 카드는 건너뜀)·"그만하기 · 결과 보기"(`sess-next` → 끝 화면). 차례 `SES.f1 = {ids, k, d}`. 풀기 전에는 난이도 칩 하·중·상(`fill1-lv`, `S.fillLv`에 남김, 그 용어로 다시 만듦). 들어가는 곳: 연습 탭 "빈칸 채우기 한 문제씩"(범위를 섞은 차례), 세트 ① 용어 카드를 펼친 "빈칸 채우기"(그 용어부터 세트 차례 `setIds`, 끝나면 처음으로), 카드 창 "가리며 외우기 · 빈칸 채우기"(그 용어만). `setD`를 넣지 않아 한 문제로 세트 복습이 끝난 것으로 치지 않는다. 틀리면 오답 노트(`F:`), 기록은 `logTest('fill')` 그대로.
+- 짝 맞추기 "내 세트 용어"(`mgSrc`·`mgPool`): 시작 화면 "카드: 연습 범위 / 내 세트 용어"(`mg-src`, `S.mg.src`). 내 세트 용어는 준비 시작일(`S.settings.start`)부터 오늘까지 받은 세트(`mySetDays`)의 용어(`setIds` = 하루 외울 용어 수로 줄인 것, `mySetCards`)만. `mgPick`·`mgCount`·시작 안내가 이 카드 묶음을 쓴다. 5장이 안 되면 "세트가 더 오면 할 수 있어요".
+- 단답 답안지 그림(`FIG`, `figBoxHTML`): 관리자가 `#dandap` 그림 칸에서 "그림 넣기·바꾸기·지우기" → Firestore `figs/{카드 번호}`(`img` 바이트 JPEG·PNG 100B~900KB, `type`, `w`, `h`, `at` 서버 시각). 승인된 회원과 관리자만 읽고, 관리자만 쓰고 지운다(`firestore.rules` `approved()`). 앱(회원)만 보이고 브라우저는 예전 그림 칸 그대로.
+  - 고르기: `PE_IO.pickImage()` → 앱 `{t:'pickimg'}`(`host.js`) → `files.js pickImage`(파일 앱 `File.pickFileAsync({mimeTypes:['image/*']})`, 8MB까지, `base64()`). 카메라·사진 앱을 바로 열려면 Info.plist 권한 문구가 든 새 빌드가 필요해서(웹뷰의 `<input type=file>`은 카메라 권한 문구가 없으면 앱이 꺼짐) OTA로 되는 파일 고르기를 쓴다. 사진은 "공유 → 파일에 저장" 뒤 고른다.
+  - 줄이기(웹 `figShrink`): 긴 변 1600px, 흰 바탕 JPEG, 품질 .86→.56, 그래도 크면 크기를 3/4씩(base64 880,000자 = 약 650KB 안). HEIC는 iOS 17 웹뷰가 읽는다.
+  - 받기: 답안지를 열면 목록(`fig-list`, `mask`로 바이트 없이 번호·크기·때)을 받아 10분(실패면 1분) 쓰고, 그림은 처음 볼 때 한 장씩(`fig-get`) 받아 메모리에 둔다(올린 때가 바뀌면 다시 받음). 그림 칸만 다시 그린다(`figPaint`, 스크롤 그대로). 누르면 크게 보기(`fig-view`). 못 받으면 회원에게 "인터넷이 연결되면 …", 규칙을 게시하기 전이면 관리자에게 "Firebase 규칙을 새로 게시해야 …"(4-6).
+  - 앱 쪽 요청 `{t:'member', op:'fig-list'|'fig-get'|'fig-set'|'fig-del'}`(`MEMBER_OPS`) → `member.figList/figGet/figSet/figDel`(번호 `CID_RE`, 형식, base64, 바이트 수, 크기 검사).
+- 검사: `plan.test.js` 74(한 문제씩: 연습 줄·칩·한 번 더·다음 용어·그만하기 결과·세트 카드에서 그 용어부터·세트 복습으로 치지 않음, 내 세트 용어: 10/26~10/29 세트만·화면·고른 짝·시작한 게임, 그림: 관리자 넣기·줄여 올림·크게 보기·회원 보기·지우기·규칙 전·인터넷 없음·브라우저), `native.test.js`(pickimg·fig 요청 연결), `npm run test:firebase`(관리자 넣기·바꾸기·지우기, 승인 회원 목록·받기, 거절·대기·아이디 없음·회원 쓰기 막힘, 900KB·100B·글·형식·크기·모르는 칸·서버 시각 없음·이상한 번호 막기).
 
 ## 하루 외울 용어 수·시작 준비(3.2.6, app.js "하루 외울 용어 수"·`vSetup`)
 

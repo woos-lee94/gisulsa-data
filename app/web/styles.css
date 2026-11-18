@@ -476,6 +476,12 @@ table.at td:first-child{white-space:nowrap}
 .asheet.dd.over{border-color:var(--red)}
 .ddfig{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:calc(var(--h) * 2.05em);border:1.5px dashed var(--rule);border-radius:8px;color:var(--ink3);font-weight:700;text-align:center}
 .ddfig small{font-weight:500;font-size:.72rem}
+.ddfig.has{padding:6px;border-style:solid;border-color:var(--rule2);background:#fff}
+.ddimg{display:block;padding:0;border:0;background:none;cursor:zoom-in;max-width:100%}
+.ddimg img{display:block;max-width:100%;max-height:22em;height:auto;margin:0 auto}
+.ddftool{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;margin-top:6px;font-weight:500}
+.ddfnote{display:block;font-size:.72rem;font-weight:500;color:var(--ink2);margin-top:4px}
+.figbig{display:block;width:100%;height:auto;max-height:70vh;object-fit:contain;background:#fff;border-radius:8px;margin:6px 0 4px}
 .ddph{color:var(--ink3);font-style:italic}
 .ddend{float:right;padding-left:1em}
 .ddstat{margin:12px 2px 0;font-size:.92rem;color:var(--ink2)}.ddstat b{color:var(--ink);font-size:1.05rem}
@@ -932,6 +938,9 @@ textarea.in.plain{font-family:inherit;font-size:1rem;line-height:1.6;min-height:
 .sjon,.sjday{margin-top:12px}
 .sjday button{display:flex;flex-direction:column;align-items:center;line-height:1.25;padding-top:6px;padding-bottom:6px}
 .sjday button small{font-size:.8rem;font-weight:600;color:var(--ink2)}
+.f1lv{margin:10px 0 4px}
+.f1lv button{display:flex;flex-direction:column;align-items:center;line-height:1.25;padding-top:6px;padding-bottom:6px}
+.f1lv button small{font-size:.8rem;font-weight:600;color:var(--ink2)}
 .sjg{margin-top:12px}
 .sjrow{align-items:center}
 .sjrow .ds.sjlow{color:var(--amber);font-weight:600}

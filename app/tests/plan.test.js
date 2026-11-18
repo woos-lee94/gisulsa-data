@@ -2606,6 +2606,111 @@ function runWeek(W, sets, st) {
     S2.tk.setup = 'due'; pe.render(); await sleep(10);
     ok(/시작 준비를 마저 해요/.test(T_(V$())) && V$().querySelector('.notice [data-act="go"][data-h="setup"]'), '73-7. 끝내기 전엔 오늘 위에 "시작 준비를 마저 해요"');
     delete S2.tk.setup; IO.ask = ask0; pe.goTab('today'); await sleep(40); }
+  // 74. 3.2.7: 빈칸 채우기 한 문제씩 · 짝 맞추기 "내 세트 용어" · 단답 답안지 그림(관리자 넣기·바꾸기·지우기, 회원 보기)
+  {
+    const J = JSON.stringify, T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), tap = async s => { click(s); await sleep(30); };
+    const IO = w.PE_IO, mem0 = IO.member, call0 = IO.memberCall, pick0 = IO.pickImage, ask0 = IO.ask, F = pe.FIG;
+    scene('2026-10-29T07:00:00', ST);
+    const S = pe.S(), D = '2026-10-29'; S.range = 'all'; S.fillLv = '중';
+    const fillRight = () => { const X = pe.SES(), it = X.items[X.i], c = pe.card(it.id); [...V$().querySelectorAll('.fill-in')].forEach((el, k) => { el.value = c.d.substr(it.b[k].i, it.b[k].len); }); };
+    // 74-1. 연습 탭 "빈칸 채우기 한 문제씩" → 한 문제, 난이도 칩(하·중·상), 정해진 문제 수 없음
+    await show('#practice'); const r1 = V$().querySelector('[data-act="fill-one"]:not([data-id])');
+    ok(r1 && /빈칸 채우기 한 문제씩/.test(T_(r1)), `74-1. 연습 줄 "${T_(r1)}"`);
+    await tap('[data-act="fill-one"]:not([data-id])'); let X = pe.SES();
+    ok(/#sess$/.test(w.location.hash) && X && X.kind === 'fill' && X.f1 && X.items.length === 1 && X.items[0].lv === '중' && !X.setD
+      && V$().querySelectorAll('.f1lv [data-act="fill1-lv"]').length === 3 && /빈칸 채우기 1번째/.test(T_(V$())) && /1칸·첫소리/.test(T_(V$())), `74-1. 한 문제씩 시작: ${T_(V$()).slice(0, 80)}`);
+    // 74-2. 난이도 칩 "하" → 같은 용어로 다시 만들고 설정에 남김
+    const id0 = X.items[0].id; await tap('.f1lv [data-act="fill1-lv"][data-v="하"]'); X = pe.SES();
+    ok(X.items.length === 1 && X.items[0].id === id0 && X.items[0].lv === '하' && X.items[0].b.length === 1 && S.fillLv === '하' && V$().querySelector('.f1lv button.on[data-v="하"]'), '74-2. 난이도 하로 바꿈(같은 용어, 1칸)');
+    // 74-3. 맞히면 "다른 빈칸으로 한 번 더"·"다음 용어 · 이름"·"그만하기", 난이도 칩은 숨김
+    fillRight(); await tap('[data-act="fill-check"]'); X = pe.SES();
+    const nx = V$().querySelector('[data-act="fill1-next"]');
+    ok(X.answered && X.answered.all && V$().querySelector('[data-act="fill1-again"]') && nx && /^다음 용어 · .+/.test(T_(nx)) && V$().querySelector('[data-act="sess-next"]') && !V$().querySelector('.f1lv'),
+      `74-3. 정답 뒤 버튼: ${[...V$().querySelectorAll('.btns .btn')].map(T_).join(' / ')}`);
+    await tap('[data-act="fill1-again"]'); X = pe.SES();
+    ok(X.i === 1 && X.items.length === 2 && X.items[1].id === id0 && !X.answered && /빈칸 채우기 2번째/.test(T_(V$())), '74-3. 한 번 더 → 같은 용어 2번째 문제');
+    await tap('[data-act="fill-giveup"]'); X = pe.SES();
+    ok(X.answered && !X.answered.all && V$().querySelector('[data-act="fill-accept"]') && S.wrong['F:' + id0], '74-3. 모르겠어요 → 오답 노트, "맞은 걸로 하기"');
+    await tap('[data-act="fill1-next"]'); X = pe.SES();
+    ok(X.i === 2 && X.items[2].id !== id0 && X.f1.k === 1 && /빈칸 채우기 3번째/.test(T_(V$())), '74-3. 다음 용어 → 차례의 다음 카드');
+    fillRight(); await tap('[data-act="fill-check"]'); await tap('[data-act="sess-next"]');
+    ok(/맞힘 2/.test(T_(V$())) && /틀림 1/.test(T_(V$())), `74-3. 그만하기 → 결과(${T_(V$()).slice(0, 60)})`);
+    // 74-4. 세트 ① 용어 카드의 "빈칸 채우기": 그 용어부터 세트 차례, 세트 복습으로 치지 않음
+    pe.goTab('today'); await sleep(30);
+    const vis = pe.setVis(D), id1 = pe.setIds(D)[1]; pe.SV()[D] = 'cards'; pe.SV()[D + ':o'] = vis[1].i; await show('#set/' + D);
+    const b4 = V$().querySelector(`[data-act="fill-one"][data-d="${D}"]`);
+    ok(b4 && b4.getAttribute('data-id') === id1 && T_(b4) === '빈칸 채우기', '74-4. 펼친 용어 카드에 "빈칸 채우기"');
+    await tap(`[data-act="fill-one"][data-d="${D}"]`); X = pe.SES();
+    const ord = pe.setIds(D);
+    ok(X && X.f1 && J(X.f1.ids) === J(ord.slice(1).concat(ord.slice(0, 1))) && X.items[0].id === id1 && !X.setD && /세트/.test(X.title) && X.f1.d === D, `74-4. 그 용어부터 세트 차례(${X.title})`);
+    fillRight(); await tap('[data-act="fill-check"]');
+    ok(T_(V$().querySelector('[data-act="fill1-next"]')) === '다음 용어 · ' + pe.gqMain(pe.card(ord[2])), '74-4. 다음 용어 = 세트의 다음 카드');
+    const rev0 = J((S.sp[D] || {}).rev || {}); await tap('[data-act="sess-next"]');
+    ok(J((S.sp[D] || {}).rev || {}) === rev0, '74-4. 한 문제로 세트 복습을 끝낸 것으로 치지 않음');
+    // 74-5. 짝 맞추기 "내 세트 용어": 준비 시작일부터 오늘까지 받은 세트의 용어로만
+    pe.goTab('today'); await sleep(30);
+    S.settings.start = '2026-10-26'; pe.invalidate();
+    const days = pe.mySetDays(), mine = pe.mySetCards().map(c => c.id), ondays = new Set([].concat(...days.map(x => pe.setIds(x))));
+    const only19 = pe.setIds('2026-10-19').filter(id => !ondays.has(id));
+    ok(J(days) === J(['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29']) && mine.length === ondays.size && only19.length && !only19.some(id => mine.includes(id)),
+      `74-5. 내 세트 ${days.length}개(10/30·10/19 빼고) 용어 ${mine.length}개`);
+    await show('#match');
+    ok(V$().querySelectorAll('[data-act="mg-src"]').length === 2 && V$().querySelector('[data-act="mg-src"][data-v="range"].on') && V$().querySelector('#rangeSel'), '74-5. 기본은 "연습 범위"(범위 고르기)');
+    await tap('[data-act="mg-src"][data-v="mine"]');
+    ok(pe.mgSrc() === 'mine' && !V$().querySelector('#rangeSel') && /준비 시작일\)부터 받은 세트 4개의 용어로만/.test(T_(V$())) && /내 세트 카드 \d+장/.test(T_(V$())), `74-5. 내 세트 용어: ${T_(V$()).slice(0, 140)}`);
+    const flat = (pe.mgPick('all', 'd') || []).flat();
+    ok(flat.length >= 5 && flat.every(p => mine.includes(p.id)) && pe.mgCount('all', 'd') <= mine.length, `74-5. 고른 짝 ${flat.length}개가 모두 내 세트 용어`);
+    await tap('[data-act="mg-start"]'); const M = pe.MG();
+    ok(M && !M.end && M.rs.flat().every(p => mine.includes(p.id)), '74-5. 시작한 게임도 내 세트 용어로만');
+    pe.mgStop();
+    S.mg.src = 'range'; S.settings.start = '2026-10-19'; pe.invalidate();
+    // 74-6. 단답 답안지 그림: 관리자 넣기(파일에서 고름 → 줄여서 올림) → 그림 칸에 보임, 크게 보기, 바꾸기·지우기
+    const CID = pe.setIds(D)[0], IMG = 'QUJD'.repeat(50), sent = [];
+    let figs = [], fail = null;
+    IO.member = () => ({ id: 'boss', admin: true, uid: 'U1' });
+    IO.memberCall = (op, a) => { sent.push([op, a]); if (fail) return Promise.reject(new Error(fail));
+      if (op === 'fig-list') return Promise.resolve(figs.map(f => ({ cid: f.cid, w: f.w, h: f.h, at: f.at })));
+      if (op === 'fig-get') { const f = figs.find(x => x.cid === a.cid); return Promise.resolve(f ? Object.assign({ type: 'image/jpeg' }, f) : null); }
+      if (op === 'fig-set') { figs = figs.filter(x => x.cid !== a.cid).concat([{ cid: a.cid, b64: a.b64, w: a.w, h: a.h, at: '2026-10-29T07:00:01Z' }]); return Promise.resolve({ cid: a.cid, w: a.w, h: a.h, at: '2026-10-29T07:00:01Z' }); }
+      if (op === 'fig-del') { figs = figs.filter(x => x.cid !== a.cid); return Promise.resolve(true); }
+      return Promise.resolve(null); };
+    let srcIn = '';
+    IO.pickImage = () => Promise.resolve({ name: 'fig.png', type: 'image/png', b64: 'AAAA' });
+    F.shrink = src => { srcIn = src; return Promise.resolve({ b64: IMG, w: 800, h: 600, type: 'image/jpeg' }); };
+    IO.ask = (m, yes) => yes();
+    const fresh = () => { F.list = null; F.at = 0; F.ok = false; F.img = {}; F.err = ''; F.up = ''; Object.keys(F.busy).forEach(k => delete F.busy[k]); };
+    const box = () => V$().querySelector(`.ddfig[data-cid="${CID}"]`);
+    fresh(); await show('#dandap/' + encodeURIComponent(CID)); await sleep(30);
+    ok(sent.some(x => x[0] === 'fig-list') && box() && /그림 칸/.test(T_(box())) && box().querySelector('[data-act="fig-add"]') && T_(box().querySelector('[data-act="fig-add"]')) === '그림 넣기',
+      `74-6. 관리자: 빈 그림 칸에 "그림 넣기"(${T_(box())})`);
+    await tap(`.ddfig [data-act="fig-add"]`); await sleep(30);
+    const put = sent.find(x => x[0] === 'fig-set');
+    ok(srcIn === 'data:image/png;base64,AAAA' && put && put[1].cid === CID && put[1].b64 === IMG && put[1].type === 'image/jpeg' && put[1].w === 800 && put[1].h === 600,
+      '74-6. 고른 그림을 줄여(JPEG 800×600) 그 카드 번호로 올림');
+    const im = box() && box().querySelector('img');
+    ok(box().classList.contains('has') && im && im.getAttribute('src') === 'data:image/jpeg;base64,' + IMG && /그림 바꾸기/.test(T_(box())) && /그림 지우기/.test(T_(box())) && /회원 모두의 답안지에 보여요/.test(T_(d.querySelector('#toast') || d.body)),
+      '74-6. 올린 뒤 그림 칸에 그림, "그림 바꾸기·지우기"');
+    await tap('[data-act="fig-view"]');
+    ok(d.querySelector('#modal-wrap .figbig') && d.querySelector('#modal-wrap .figbig').getAttribute('src') === im.getAttribute('src'), '74-6. 그림을 누르면 크게 보기');
+    click('[data-act="modal-close"]'); await sleep(20);
+    // 74-7. 회원(관리자 아님): 처음 열면 목록 → 그림 한 장 받아 보여 줌, 넣기 버튼 없음
+    IO.member = () => ({ id: 'kim', admin: false, uid: 'U2' }); fresh(); sent.length = 0;
+    await show('#dandap/' + encodeURIComponent(CID)); await sleep(40);
+    ok(sent.some(x => x[0] === 'fig-get' && x[1].cid === CID) && box().querySelector('img') && !box().querySelector('[data-act="fig-add"]') && !box().querySelector('[data-act="fig-del"]'),
+      `74-7. 회원: 관리자가 넣은 그림이 보임, 버튼 없음(${sent.map(x => x[0]).join(',')})`);
+    // 74-8. 관리자 지우기 → 그림 칸으로
+    IO.member = () => ({ id: 'boss', admin: true, uid: 'U1' }); pe.render(); await sleep(20);
+    await tap('[data-act="fig-del"]'); await sleep(30);
+    ok(sent.some(x => x[0] === 'fig-del' && x[1].cid === CID) && !figs.length && /그림 칸/.test(T_(box())) && !box().querySelector('img') && box().querySelector('[data-act="fig-add"]'), '74-8. 지우면 다시 빈 그림 칸');
+    // 74-9. 규칙을 게시하기 전(관리자) · 인터넷 없음(회원) · 브라우저(회원 아님)
+    fresh(); fail = 'PERMISSION_DENIED'; await show('#dandap/' + encodeURIComponent(CID)); await sleep(30);
+    ok(/Firebase 규칙을 새로 게시해야/.test(T_(box())), '74-9. 규칙 전: 관리자에게 "Firebase 규칙을 새로 게시해야"');
+    IO.member = () => ({ id: 'kim', admin: false, uid: 'U2' }); fresh(); fail = '인터넷에 연결할 수 없어요'; pe.render(); await sleep(30);
+    ok(/인터넷이 연결되면 관리자가 넣은 그림이 보여요/.test(T_(box())) && !/규칙/.test(T_(box())), '74-9. 인터넷 없음: 회원에게 안내 한 줄');
+    IO.member = () => null; fresh(); fail = null; sent.length = 0; pe.render(); await sleep(30);
+    ok(!sent.length && /그림 칸/.test(T_(box())) && !/인터넷|규칙/.test(T_(box())), '74-9. 브라우저: 서버에 묻지 않고 그림 칸만');
+    IO.member = mem0; IO.memberCall = call0; IO.pickImage = pick0; IO.ask = ask0; F.shrink = null; fresh();
+    pe.goTab('today'); await sleep(30); }
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);

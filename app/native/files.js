@@ -76,6 +76,21 @@ export async function pickFile() {
   }
 }
 
+// 단답 답안지 그림 고르기(3.2.7, 관리자): 파일 앱에서 그림 하나. 사진 앱의 사진은 "공유 → 파일에 저장"으로 먼저 옮겨 둔다
+// (카메라·사진 앱을 바로 열려면 Info.plist 권한 문구가 든 새 빌드가 필요해서, OTA로 되는 파일 고르기를 쓴다). 줄이기는 웹에서 한다
+const IMG_MAX = 8 * 1024 * 1024;
+export async function pickImage() {
+  const r = await File.pickFileAsync({ mimeTypes: ['image/*'] });
+  if (!r || r.canceled || !r.result) return null;
+  const f = r.result;
+  try {
+    if (f.size > IMG_MAX) throw new Error('그림 파일이 너무 커요(8MB까지). 화면을 캡처한 그림으로 넣어 보세요');
+    return { name: f.name, type: f.type || 'image/jpeg', b64: await f.base64() };
+  } finally {
+    try { f.delete(); } catch (e) { /* 임시 사본 */ }
+  }
+}
+
 // 백업 파일: 임시 폴더에 쓰고 iOS 공유 시트로 내보낸다("파일에 저장"으로 아이폰·iCloud Drive에 둘 수 있다)
 export async function saveFile(name, text, type) {
   const f = new File(Paths.cache, name);

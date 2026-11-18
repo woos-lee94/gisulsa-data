@@ -194,6 +194,40 @@ const owner = (method, path, body) => fetch(`${FS}/${path}`, { method, headers: 
   const { tr, ...noTr } = pf;
   ok(await forgePlan(noTr) === 403, '칸이 빠지면 → 거부');
 
+  // 단답 답안지 그림(figs, 3.2.7): 관리자만 넣고·바꾸고·지우며, 승인된 회원과 관리자가 읽는다
+  const img1 = Buffer.alloc(3000, 7).toString('base64'), img2 = Buffer.alloc(5000, 9).toString('base64');
+  ok(JSON.stringify(await admin.figList()) === '[]', '그림: 처음엔 목록이 비어 있음');
+  const fs1 = await admin.figSet('K31', img1, 'image/jpeg', 800, 600);
+  ok(fs1.cid === 'K31' && fs1.w === 800 && fs1.h === 600 && /^20\d\d-/.test(fs1.at), '관리자: 그림 넣기(서버 시각)');
+  const fl = await A2.figList();
+  ok(fl.length === 1 && fl[0].cid === 'K31' && fl[0].w === 800 && fl[0].h === 600 && fl[0].at === fs1.at && !('b64' in fl[0]), '승인된 회원: 목록(그림 바이트 없이 번호·크기·때)');
+  const fg = await A2.figGet('K31');
+  ok(fg && fg.b64 === img1 && fg.type === 'image/jpeg' && fg.w === 800 && fg.at === fs1.at, '승인된 회원: 그림 받기(올린 바이트 그대로)');
+  ok(await A2.figGet('A01') === null && await err(A2.figGet('../x')) === 'badcid', '없는 그림 → null, 이상한 번호 → 안 물음');
+  ok(await err(B.figList()) === 'denied' && await err(B.figGet('K31')) === 'denied', '거절된 회원: 못 읽음');
+  const P0 = phone(); await P0.register('park', '');
+  ok(await err(P0.figGet('K31')) === 'denied' && await err(P0.figList()) === 'denied', '승인 대기 회원: 못 읽음');
+  ok(await err(phone().figList()) === 'denied', '아이디 없는 휴대폰: 못 읽음');
+  ok(await err(A2.figSet('K31', img2, 'image/jpeg', 10, 10)) === 'denied' && await err(A2.figSet('Z9', img2, 'image/jpeg', 10, 10)) === 'denied' && await err(A2.figDel('K31')) === 'denied',
+    '회원은 넣기·바꾸기·지우기 못 함');
+  await admin.figSet('K31', img2, 'image/png', 400, 300);
+  const fg2 = await A2.figGet('K31');
+  ok(fg2.b64 === img2 && fg2.type === 'image/png' && fg2.w === 400 && (await A2.figList()).length === 1, '관리자: 바꾸기(같은 카드를 덮어씀)');
+  ok(await err(admin.figSet('bad/id', img1, 'image/jpeg', 1, 1)) === 'badcid' && await err(admin.figSet('K31', img1, 'image/gif', 1, 1)) === 'badtype'
+    && await err(admin.figSet('K31', 'not base64!', 'image/jpeg', 1, 1)) === 'badimg' && await err(admin.figSet('K31', Buffer.alloc(900001).toString('base64'), 'image/jpeg', 1, 1)) === 'bigimg'
+    && await err(admin.figSet('K31', 'QUJD', 'image/jpeg', 1, 1)) === 'bigimg' && await err(admin.figSet('K31', img1, 'image/jpeg', 0, 5)) === 'badsize', '앱 쪽 형식 검사(번호·형식·바이트·크기)');
+  const ad = await admin.auth();
+  const forgeFig = async (cid, fields, transform = true) => (await fetch(`${FS}:commit`, { method: 'POST', headers: { Authorization: 'Bearer ' + ad.idToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ writes: [{ update: { name: `projects/${PROJECT}/databases/(default)/documents/figs/${cid}`, fields }, updateTransforms: transform ? [{ fieldPath: 'at', setToServerValue: 'REQUEST_TIME' }] : [] }] }) })).status;
+  const ff = { img: { bytesValue: img1 }, type: { stringValue: 'image/jpeg' }, w: { integerValue: '10' }, h: { integerValue: '10' } };
+  ok(await forgeFig('X1', ff) === 200, '규칙대로 쓴 그림은 통과(대조군)');
+  ok(await forgeFig('X1', { ...ff, img: { bytesValue: Buffer.alloc(900001, 1).toString('base64') } }) === 403 && await forgeFig('X1', { ...ff, img: { bytesValue: 'QUJD' } }) === 403, '900KB 넘거나 100B 안 되는 그림 → 거부');
+  ok(await forgeFig('X1', { ...ff, img: { stringValue: 'data:image/jpeg;base64,' + img1 } }) === 403, '그림이 바이트가 아니면(글) → 거부');
+  ok(await forgeFig('X1', { ...ff, type: { stringValue: 'text/html' } }) === 403 && await forgeFig('X1', { ...ff, w: { integerValue: '5000' } }) === 403 && await forgeFig('X1', { ...ff, h: { stringValue: '10' } }) === 403,
+    '형식·크기 칸이 다르면 → 거부');
+  ok(await forgeFig('X1', { ...ff, by: { stringValue: 'x' } }) === 403 && await forgeFig('X1', ff, false) === 403 && await forgeFig('a.b', ff) === 403, '모르는 칸·서버 시각 없이·이상한 번호 → 거부');
+  ok(await admin.figDel('K31') === true && await admin.figDel('X1') === true && (await A2.figList()).length === 0, '관리자: 지우기 → 목록 비움');
+
   // 인터넷이 없으면: 확인은 실패하지만 마지막 상태는 남아 있다
   const off = phone(aStore, async () => { throw new TypeError('Network request failed'); });
   ok(await err(off.check()) === 'offline' && (await off.cached()).state === 'approved', '오프라인: 확인 실패, 마지막 승인 상태는 남음');

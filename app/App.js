@@ -13,7 +13,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as Updates from 'expo-updates';
 import { WebView } from 'react-native-webview';
 import { bootScript, createHost, jsLiteral } from './native/host';
-import { pickFile, prepareWeb, readNotifConfig, readStore, saveFile, writeStore } from './native/files';
+import { pickFile, pickImage, prepareWeb, readNotifConfig, readStore, saveFile, writeStore } from './native/files';
 import * as notify from './native/notify';
 import { createMember } from './native/member';
 import Gate from './native/Gate';
@@ -271,6 +271,7 @@ export default function App() {
     copy: text => Clipboard.setStringAsync(text),
     saveFile,
     pickFile,
+    pickImage,
     confirm: confirmAlert,
     keepAwake: on => (on ? activateKeepAwakeAsync(AWAKE_TAG) : deactivateKeepAwake(AWAKE_TAG)).catch(() => {}),
     fetchText,
@@ -286,6 +287,11 @@ export default function App() {
       if (op === 'thread') return member.thread();
       if (op === 'reply-read') return member.readReplies(a.rids);
       if (op === 'plan') return member.setPlan(a);   // 관리자: 시험 일정 → config/plan(예약 작업이 읽음, 3.2.1)
+      // 단답 답안지 그림(3.2.7): 목록(번호·크기·올린 때) · 한 장 받기 · 관리자 넣기(바꾸기)·지우기
+      if (op === 'fig-list') return member.figList();
+      if (op === 'fig-get') return member.figGet(String(a.cid || ''));
+      if (op === 'fig-set') return member.figSet(String(a.cid || ''), String(a.b64 || ''), String(a.type || ''), Number(a.w), Number(a.h));
+      if (op === 'fig-del') return member.figDel(String(a.cid || ''));
       if (op === 'msg-send') return sendMsg(String(a.text || ''), 'app');
       if (op === 'set') return member.setStatus(String(a.uid), String(a.status));
       if (op === 'del') return member.removeMember(String(a.uid), String(a.id || ''));

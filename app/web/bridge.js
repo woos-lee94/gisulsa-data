@@ -21,6 +21,11 @@ function webPick(){return new Promise((res,rej)=>{const x=document.createElement
   const done=()=>x.remove();x.addEventListener('cancel',()=>{done();res(null);});
   x.addEventListener('change',()=>{const f=x.files&&x.files[0];done();if(!f)return res(null);const r=new FileReader();r.onload=()=>res({name:f.name,text:String(r.result)});r.onerror=()=>rej(r.error||new Error('읽지 못함'));r.readAsText(f);});
   document.body.appendChild(x);x.click();});}
+/* 그림 고르기(단답 답안지 그림, 3.2.7): 이름·형식·base64. 취소하면 null */
+function webPickImg(){return new Promise((res,rej)=>{const x=document.createElement('input');x.type='file';x.accept='image/*';x.style.display='none';
+  const done=()=>x.remove();x.addEventListener('cancel',()=>{done();res(null);});
+  x.addEventListener('change',()=>{const f=x.files&&x.files[0];done();if(!f)return res(null);const r=new FileReader();r.onload=()=>{const u=String(r.result),k=u.indexOf(',');res({name:f.name,type:f.type||'image/jpeg',b64:k>=0?u.slice(k+1):''});};r.onerror=()=>rej(r.error||new Error('읽지 못함'));r.readAsDataURL(f);});
+  document.body.appendChild(x);x.click();});}
 function webFetch(url){return fetch(url,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});}
 
 let awake=false,lock=null,toast=()=>{};
@@ -35,6 +40,7 @@ const IO={
   copy(text){return N?call('copy',{text}):webCopy(text);},
   saveFile(name,text,type){type=type||'application/json';return N?call('save',{name,text,type}):webSave(name,text,type);},
   pickFile(){return N?call('pick',{}):webPick();},
+  pickImage(){return N?call('pickimg',{}):webPickImg();},
   /* 확인 창: 앱에서는 네이티브 Alert(취소·확인), 웹에서는 confirm(). 취소하면 no(있을 때) */
   ask(msg,yes,no){const r=ok=>{if(ok)yes();else if(no)no();};if(N){call('confirm',{msg}).then(r,()=>r(confirm(msg)));return;}r(confirm(msg));},
   keepAwake(on){on=!!on;if(on===awake)return;awake=on;

@@ -13,6 +13,12 @@ const ALNUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const DATE_RE = /^20\d{2}-[01]\d-[0-3]\d$/;
 const ROUNDS_RE = /^(\d{3}=20\d{2}-[01]\d-[0-3]\d( \d{3}=20\d{2}-[01]\d-[0-3]\d)*)?$/;
 const TERMS_RE = /^(auto|[3-9]|1[0-5])$/;
+// 단답 답안지 그림(3.2.7): figs/{카드 번호}. 그림은 JPEG·PNG 바이트로 900KB까지(Firestore 문서 한도 1MiB 안)
+const CID_RE = /^[A-Za-z0-9-]{1,40}$/;
+const FIG_TYPES = ['image/jpeg', 'image/png'];
+const FIG_MAX = 900000;
+const B64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+const b64Bytes = b => Math.floor(b.length * 3 / 4) - (b.endsWith('==') ? 2 : b.endsWith('=') ? 1 : 0);
 function planDoc(a) {
   a = a && typeof a === 'object' ? a : {};
   const s = k => String(a[k] == null ? '' : a[k]);
@@ -317,8 +323,48 @@ function createMember({ apiKey, projectId, fetch, store, now = () => Date.now(),
     try { return fromDoc(await call(`${FS}/config/plan`, { method: 'GET' })); } catch (e) { if (e.code === 'notfound') return null; throw e; }
   }
 
+  // 단답 답안지 그림(3.2.7). 목록은 그림 바이트 없이 번호·크기·올린 때만(mask), 그림은 한 장씩 받는다
+  async function figList() {
+    const out = [];
+    let tok = '';
+    for (let i = 0; i < 10; i++) {
+      const b = await req('GET', `figs?pageSize=300&mask.fieldPaths=w&mask.fieldPaths=h&mask.fieldPaths=at${tok ? '&pageToken=' + enc(tok) : ''}`);
+      out.push(...(b.documents || []).map(fromDoc));
+      if (!b.nextPageToken) break;
+      tok = b.nextPageToken;
+    }
+    return out.filter(f => CID_RE.test(f._id)).map(f => ({ cid: f._id, w: f.w || 0, h: f.h || 0, at: f.at || '' }));
+  }
+  async function figGet(cid) {
+    if (!CID_RE.test(cid)) throw new MemberError('badcid', '잘못된 카드 번호예요');
+    let b;
+    try { b = await req('GET', `figs/${enc(cid)}`); } catch (e) { if (e.code === 'notfound') return null; throw e; }
+    const f = b.fields || {}, num = x => (x && x.integerValue != null ? Number(x.integerValue) : 0);
+    return { cid, b64: (f.img && f.img.bytesValue) || '', type: (f.type && f.type.stringValue) || 'image/jpeg', w: num(f.w), h: num(f.h), at: (f.at && f.at.timestampValue) || '' };
+  }
+  // 관리자: 그림 넣기·바꾸기(같은 카드면 덮어씀). 돌려주는 값 { cid, w, h, at }
+  async function figSet(cid, b64, type, w, h) {
+    if (!CID_RE.test(cid)) throw new MemberError('badcid', '잘못된 카드 번호예요');
+    if (!FIG_TYPES.includes(type)) throw new MemberError('badtype', 'JPEG·PNG 그림만 올릴 수 있어요');
+    b64 = String(b64 || '');
+    if (!B64_RE.test(b64)) throw new MemberError('badimg', '그림을 읽지 못했어요');
+    const n = b64Bytes(b64);
+    if (n < 100 || n > FIG_MAX) throw new MemberError('bigimg', '그림이 너무 커요(900KB까지)');
+    w = Math.round(Number(w)); h = Math.round(Number(h));
+    if (!(w >= 1 && w <= 4000 && h >= 1 && h <= 4000)) throw new MemberError('badsize', '그림 크기를 알 수 없어요');
+    const fields = { img: { bytesValue: b64 }, type: { stringValue: type }, w: { integerValue: String(w) }, h: { integerValue: String(h) } };
+    const r = await req('POST', `${FS}:commit`, { writes: [{ update: { name: docName(`figs/${cid}`), fields }, updateTransforms: [{ fieldPath: 'at', setToServerValue: 'REQUEST_TIME' }] }] });
+    const wr = (r.writeResults || [])[0] || {}, tr = (wr.transformResults || [])[0] || {};
+    return { cid, w, h, at: tr.timestampValue || wr.updateTime || new Date(now()).toISOString() };
+  }
+  async function figDel(cid) {
+    if (!CID_RE.test(cid)) throw new MemberError('badcid', '잘못된 카드 번호예요');
+    await req('DELETE', `figs/${enc(cid)}`);
+    return true;
+  }
+
   return { configured, auth, check, cached, register, remove, sendMsg, list, setStatus, removeMember, codes, addCode, delCode, msgs, unread, markRead, delMsgs,
-    replies, reply, thread, readReplies, delReplies, setPlan, getPlan, uid: () => session && session.uid };
+    replies, reply, thread, readReplies, delReplies, setPlan, getPlan, figList, figGet, figSet, figDel, uid: () => session && session.uid };
 }
 
-module.exports = { createMember, MemberError, cleanId, planDoc, ID_RE, MSG_FROM, MSG_MAX, DECS };
+module.exports = { createMember, MemberError, cleanId, planDoc, ID_RE, MSG_FROM, MSG_MAX, DECS, CID_RE, FIG_TYPES, FIG_MAX };

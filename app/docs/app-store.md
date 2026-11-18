@@ -334,6 +334,15 @@ The app is an independent study aid and is not affiliated with HRD Korea or any 
 가릴 곳을 살짝 꾹 눌렀다가 그으면 테이프가 붙고, 그냥 밀면 화면이 움직이도록 바꿨습니다.
 ```
 
+## 3.2.7 보내는 순서(심사 없음)
+
+빈칸 채우기 한 문제씩, 짝 맞추기 "내 세트 용어", 단답 답안지 그림은 화면·계산(`web/`)과 JS(`native/member.js`·`host.js`·`files.js`·`App.js`)만 바뀌어 네이티브 지문이 3.2.0과 같다. 그림 고르기는 이미 들어 있는 파일 고르기(expo-file-system)를 쓰므로 새 빌드가 필요 없다.
+
+1. Firebase 규칙 다시 게시(`docs/firebase-setup.md` 4-6, `match /figs/{cid}`가 있는 판). 게시 전에도 다른 기능은 그대로 되고 그림만 넣고 볼 수 없다.
+2. PowerShell 순서의 마지막 줄을 `npm run ota`로.
+3. App Privacy: 그대로. 그림은 관리자(개발자)가 올리는 학습 자료이고 회원 휴대폰은 받기만 한다(사용자에게서 사진을 모으지 않는다). 개인정보 처리방침에 그림 줄을 더했다.
+4. 나중에 사진 앱·카메라에서 바로 고르게 하려면 `expo-image-picker`(또는 Info.plist의 `NSPhotoLibraryUsageDescription`·`NSCameraUsageDescription`)를 넣은 새 빌드와 심사가 필요하다.
+
 ## 3.2.6 보내는 순서(심사 없음)
 
 시작 준비(준비 시작일을 다시 정하면 하루 외울 용어 → 공부 시간 → 과목별 → 속도)와 "하루 외울 용어"(세트 카드 수, 받은 세트도 그 수만)는 화면·계산(`web/`)과 회원 요청(`native/member.js`의 JS)만 바뀌어 네이티브 지문이 3.2.0과 같다.

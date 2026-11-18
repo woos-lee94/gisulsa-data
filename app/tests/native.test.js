@@ -233,7 +233,7 @@ function open(opt = {}) {
   await B.go('#more');
   const appVer = require('../app.json').expo.version;
   ok(B.txt().includes('기술사 6개월 v' + appVer), '더보기 버전 = app.json 버전 ' + appVer);
-  ok(appVer === '3.2.6' && require('../package.json').version === appVer && require('../package-lock.json').version === appVer && require('../package-lock.json').packages[''].version === appVer, `버전 ${appVer}: app.json = package.json = package-lock(앱 줄)`);
+  ok(appVer === '3.2.7' && require('../package.json').version === appVer && require('../package-lock.json').version === appVer && require('../package-lock.json').packages[''].version === appVer, `버전 ${appVer}: app.json = package.json = package-lock(앱 줄)`);
   ok(B.errors.length === 0, '다시 연 화면 콘솔 오류 없음 ' + B.errors.slice(0, 3).join(' | '));
 
   // 예전(2.x) 기록이 든 휴대폰에서 3.0.0을 처음 열면 "바뀐 점" 창 한 번(기록은 그대로), 표시는 네이티브 저장소에 남아 다시 열면 없음
@@ -482,6 +482,20 @@ function open(opt = {}) {
   ok(['unread', 'msg-read', 'msg-del', 'msg-send'].every(op => seen.includes('op:' + op)), '문자 요청(unread·msg-read·msg-del·msg-send)은 앱에 넘김');
   await H3(JSON.stringify({ t: 'pick', id: 10 }));
   ok(/"id":10,"ok":true,"v":\{"name":"a.json","text":"\{\}"\}/.test(seen[seen.length - 1]), '파일 고르기(pick): 이름과 글을 돌려줌');
+  // 단답 답안지 그림(3.2.7): 그림 고르기(pickimg)와 그림 요청(fig-*)
+  const imgs = [{ name: 'f.jpg', type: 'image/jpeg', b64: 'QUJD' }, null, { name: 'a.json', type: 'application/json', b64: 'e30=' }];
+  const H4 = host.createHost({ inject: c => seen.push(c), member: async (op, a) => { seen.push('op:' + op + ':' + (a.cid || '')); return op === 'fig-list' ? [] : true; }, pickImage: async () => imgs.shift() });
+  await H4(JSON.stringify({ t: 'pickimg', id: 11 }));
+  ok(/"id":11,"ok":true,"v":\{"name":"f.jpg","type":"image\/jpeg","b64":"QUJD"\}/.test(seen[seen.length - 1]), '그림 고르기(pickimg): 이름·형식·base64');
+  await H4(JSON.stringify({ t: 'pickimg', id: 12 }));
+  ok(/"id":12,"ok":true,"v":null/.test(seen[seen.length - 1]), '그림 고르기 취소 → null');
+  await H4(JSON.stringify({ t: 'pickimg', id: 13 }));
+  ok(/"id":13,"ok":false/.test(seen[seen.length - 1]) && /그림 파일이 아니에요/.test(seen[seen.length - 1]), '그림이 아닌 파일 → 오류');
+  for (const op of ['fig-list', 'fig-get', 'fig-set', 'fig-del']) await H4(JSON.stringify({ t: 'member', id: 14, op, args: { cid: 'K31' } }));
+  ok(['fig-list', 'fig-get', 'fig-set', 'fig-del'].every(op => seen.includes('op:' + op + ':K31')) && host.MEMBER_OPS.includes('fig-set'), '그림 요청(fig-list·get·set·del)은 앱에 넘김');
+  const appSrc = fs.readFileSync(path.join(__dirname, '..', 'App.js'), 'utf8'), filesSrc = fs.readFileSync(path.join(__dirname, '..', 'native', 'files.js'), 'utf8');
+  ok(/pickImage,/.test(appSrc) && /op === 'fig-set'\) return member\.figSet/.test(appSrc) && /export async function pickImage\(\)/.test(filesSrc) && /mimeTypes: \['image\/\*'\]/.test(filesSrc) && /f\.base64\(\)/.test(filesSrc),
+    'App.js·files.js: 그림 고르기(파일 앱, image/*, base64)와 그림 요청 연결');
   ok(/maximum-scale=1, user-scalable=no/.test(bundle.files['index.html']) && /touch-action:manipulation/.test(bundle.files['styles.css']), '확대 막기: viewport와 두 번 눌러 확대 막기');
   ok(/"member":\{"id":"boss","admin":true/.test(host.bootScript({ store: {}, notif: null, version: '1', member: { id: 'boss', admin: true, uid: 'U1' } })) && /"member":null/.test(host.bootScript({ store: {}, notif: null, version: '1' })), 'bootScript: 회원 정보 주입');
 

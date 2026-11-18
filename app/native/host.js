@@ -1,7 +1,8 @@
 // 앱 쪽 다리: 웹 페이지(web/bridge.js의 PE_IO)와 주고받는 규칙.
 // expo 모듈은 deps로 받으므로 같은 코드가 앱(App.js)과 Node 검사(tests/native.test.js)에서 돈다.
 const STORE_KEYS = ['pe_state_v1', 'pe_sets_v1', 'pe_state_prev'];   // pe_state_prev: 시작일을 다시 정하며 지운 기록(7일 동안 되돌리기, 3.1.3)
-const MEMBER_OPS = ['list', 'set', 'del', 'code-add', 'code-del', 'remove', 'unread', 'msg-read', 'msg-del', 'msg-send', 'reply', 'thread', 'reply-read', 'plan'];   // plan: 관리자 앱의 시험 일정을 예약 작업에 보냄(3.2.1)
+const MEMBER_OPS = ['list', 'set', 'del', 'code-add', 'code-del', 'remove', 'unread', 'msg-read', 'msg-del', 'msg-send', 'reply', 'thread', 'reply-read', 'plan',
+  'fig-list', 'fig-get', 'fig-set', 'fig-del'];   // plan: 관리자 앱의 시험 일정을 예약 작업에 보냄(3.2.1) · fig-*: 단답 답안지 그림(3.2.7, 넣기·바꾸기·지우기는 관리자)
 const NOTIF_DEFAULT = { wd: { on: false, time: '07:00' }, su: { on: false, time: '20:00' } };
 const UPDATE_OPS = ['check', 'apply', 'store'];   // 앱 업데이트(3.2.0): 지금 확인 · 최신 버전 받기(받아서 다시 열기) · App Store 열기
 
@@ -47,6 +48,7 @@ function safeFileName(name) {
 }
 
 // deps: inject(code), writeStore(key, text), copy(text), saveFile(name, text, type), pickFile() → Promise<{name, text}|null>, confirm(msg) → Promise<boolean>,
+//       pickImage() → Promise<{name, type, b64}|null>(단답 답안지 그림 고르기, 3.2.7),
 //       keepAwake(on), fetchText(url) → Promise<{ok, status, text}>, setNotif(cfg) → Promise<cfg>, look(dark),
 //       member(op, args) → 관리자 화면·문자함·아이디 지우기·관리자에게 문자(list, set, del, code-add, code-del, remove, unread, msg-read, msg-del, msg-send)
 //       ·관리자 답장(reply: 승인·거절과 함께)·회원의 주고받은 문자(thread)·답장 읽음(reply-read)
@@ -72,6 +74,11 @@ function createHost(deps) {
         case 'copy': await deps.copy(String(m.text)); break;
         case 'save': await deps.saveFile(safeFileName(m.name), String(m.text), String(m.type || 'application/json')); break;
         case 'pick': { const f = await deps.pickFile(); v = f ? { name: String(f.name || ''), text: String(f.text) } : null; break; }
+        case 'pickimg': {
+          const f = await deps.pickImage();
+          if (f && !/^image\//.test(String(f.type || ''))) throw new Error('그림 파일이 아니에요');
+          v = f ? { name: String(f.name || ''), type: String(f.type), b64: String(f.b64 || '') } : null; break;
+        }
         case 'confirm': v = (await deps.confirm(String(m.msg))) === true; break;
         case 'fetch':
           if (!/^https:\/\//.test(m.url)) throw new Error('https 주소만 받아 와요');
