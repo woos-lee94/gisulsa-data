@@ -116,7 +116,7 @@ https://github.com/woos-lee94/gisulsa-data/blob/main/app/docs/privacy.md
 - 기본: 교육. 토목시공기술사 필기 시험 공부가 핵심 기능
 - 추가: 참고. 기출 문제 요지와 용어 카드를 찾아보는 용도
 
-## 앱 심사 메모 (3987자 / 4,000자)
+## 앱 심사 메모 (3985자 / 4,000자)
 
 ```
 OVERVIEW
@@ -126,8 +126,8 @@ DEMO ACCOUNT (no password)
 On first launch type the ID apple_review, tap "초대 코드가 있어요" (I have an invite code), enter the invite code INVITE_CODE (also in the password field of Sign-In Information) and tap "아이디 만들기" (Create ID). The app opens at once. The code stays valid until review ends.
 
 HOW TO TEST (the Korean labels can be pasted)
-The tab bar has five tabs: "오늘" (Today), "이번 주" (This week), "복습" (Review), "연습" (Practice) and "더보기" (More).
-1. "오늘" shows the days left to the exam and today's numbered study list with one blue button.
+Tabs: "오늘" (Today), "이번 주" (This week), "복습" (Review), "연습" (Practice), "분석" (Analysis); "더보기" (More) is the top-right "..." button.
+1. "오늘" shows days left to the exam and today's numbered study list.
 2. Tap "이번 주": what is due by Sunday and a weekly score.
 3. Tap "연습", then "4지선다 10문" (10 multiple-choice questions). Pick an answer, then tap "다음" (Next). To leave, tap "닫기" (Close).
 4. On "연습" tap "기출 문제은행" (Past exam bank), then "제140회" (Round 140). Tap a question in the first period to see the linked study cards.
@@ -333,6 +333,10 @@ The app is an independent study aid and is not affiliated with HRD Korea or any 
 가리며 외우기 테이프
 가릴 곳을 살짝 꾹 눌렀다가 그으면 테이프가 붙고, 그냥 밀면 화면이 움직이도록 바꿨습니다.
 ```
+
+## 3.3.0 보내는 순서(심사 없음)
+
+설정 "못 한 공부"(다른 날로 옮기기 · 다음 날 이어서), 분석 탭, 더보기를 오른쪽 위 단추로 옮긴 것은 화면·계산(`web/`)만 바뀌어 네이티브 지문이 3.2.0과 같다. PowerShell 순서의 마지막 줄을 `npm run ota`로. Firebase 규칙·App Privacy는 그대로(분석은 휴대폰 안의 기록만 읽는다). 앱 설명이나 스크린숏에 "더보기 탭"이 나오면 다음 App Store 버전 때 "오른쪽 위 더보기"로 고친다.
 
 ## 3.2.7 보내는 순서(심사 없음)
 

@@ -1319,7 +1319,7 @@ function runWeek(W, sets, st) {
     scene('2027-05-18T09:00:00', BLANK, XE); await show('#today');
     ok(!V$().querySelector('.pin') && pe.navBadgeN('2027-05-18') === 0 && T_(V$().querySelector('.dday b')) === '시험 후' && T_(V$().querySelector('.lsub')) === '시험 후' && /시험 후 · 복기와 면접 준비/.test(T_(V$().querySelector('.dcard'))), '43-17. 5/18: 핀 없음, 머리 줄 "시험 후" 한 번, 카드 하나');
     { const st = clone(BLANK); st.settings.start = '2026-11-30'; scene('2026-11-20T08:00:00', st); await show('#today');
-      ok(V$().children.length === 2 && /준비 시작 전 · 11월 30일부터/.test(T_(V$().querySelector('.dcard'))) && T_(V$().querySelector('.lsub')) === '시작 전' && !V$().querySelector('.daysum, .wksec, .pin, [data-act="plan-reset"]'), '43-17. 시작 전(11/20, 시작일 11/30): 머리와 카드 하나뿐'); }
+      ok([...V$().children].filter(e => !e.matches('.ibxrow')).length === 2 && /준비 시작 전 · 11월 30일부터/.test(T_(V$().querySelector('.dcard'))) && T_(V$().querySelector('.lsub')) === '시작 전' && !V$().querySelector('.daysum, .wksec, .pin, [data-act="plan-reset"]'), '43-17. 시작 전(11/20, 시작일 11/30): 머리와 카드 하나뿐'); }
     scene('2026-10-21T08:00:00', ST); await show('#today'); ok(T_(V$().querySelector('.lsub')) === '준비 주', '43-17. 준비 주 머리 줄은 "준비 주" 한 번');
 
     // 10. 토요일 세트 복습 묶음은 블록·꼬리표(필수·권장)마다: 11/14 "세트 복습 4개"(필수, 다시 나와요) · 카드 · "세트 복습 5개 권장", 시작은 그 묶음의 줄만 잇는다
@@ -2711,6 +2711,66 @@ function runWeek(W, sets, st) {
     ok(!sent.length && /그림 칸/.test(T_(box())) && !/인터넷|규칙/.test(T_(box())), '74-9. 브라우저: 서버에 묻지 않고 그림 칸만');
     IO.member = mem0; IO.memberCall = call0; IO.pickImage = pick0; IO.ask = ask0; F.shrink = null; fresh();
     pe.goTab('today'); await sleep(30); }
+  // 75. 3.3.0: 못 한 공부 "다음 날 이어서"(차례대로) · 분석 탭 · 더보기는 오른쪽 위
+  {
+    const J = JSON.stringify, T_ = el => (el && el.textContent || '').replace(/\s+/g, ' ').trim(), tap = async s => { click(s); await sleep(30); }, IO = w.PE_IO, ask0 = IO.ask;
+    const wdN = (a, z) => { let n = 0; for (let x = a; x <= z; x = add(x, 1)) { const g = new Date(x + 'T12:00:00').getDay(); if (g >= 1 && g <= 5) n++; } return n; };
+    scene('2026-10-29T07:00:00', ST);
+    const S = pe.S(), t = '2026-10-29', ids = () => pe.taskList(t).map(x => x.id);
+    // 75-1. 기본은 "다른 날로 옮기기"(예전 그대로): 오늘 세트 줄, 이번 주 밀린 세트
+    ok(!pe.seqOn() && ids().includes('set.read:' + t) && ids().some(id => /^late:/.test(id)), '75-1. 기본: 오늘 세트 + 밀린 세트 줄(예전 그대로)');
+    await show('#settings');
+    ok(V$().querySelector('[data-act="carry-mode"][data-v="move"].on') && /못 한 공부/.test(T_(V$())) && /일요일까지 못 하면 놓아주고/.test(T_(V$())), '75-1. 설정 "못 한 공부": 다른 날로 옮기기(켜짐)');
+    // 75-2. 다음 날 이어서로 바꾸면: 이번 주 월요일부터 차례, 오늘 몫을 새로 짬(그날 할 세트를 고정)
+    await tap('[data-act="carry-mode"][data-v="seq"]');
+    const h = pe.seqHeads(t), F = S.today;
+    ok(pe.seqOn() && S.settings.seqFrom === '2026-10-26' && F && F.d === t && J(F.seq) === J(h) && h.c === '2026-10-28' && /다음 공부일에 이어서/.test(T_(V$())) && /밀린 세트 \d개/.test(T_(V$())),
+      `75-2. 차례대로로 바꿈: 차례 10/26부터, 머리 ${J(h)}, 오늘 몫 고정에 함께`);
+    const T = pe.taskList(t), hw = T.filter(x => /^hw\.(write|dd|eo|fg)$/.test(x.k));
+    ok(ids().includes('set.quiz:2026-10-28') && !ids().includes('set.read:' + t) && !ids().some(id => /^late:/.test(id)) && (!h.h || hw.length && hw.every(x => x.d === h.h && x.roll === '내일 이어서')),
+      `75-2. 평일 몫: 가장 오래된 세트의 핵심(10/28), 숙제는 ${h.h} 세트, 오늘 세트·밀린 세트 줄은 없음`);
+    const lg = pe.seqLag(t), lagRow = T.find(x => x.id === 'seq.lag');
+    ok(lagRow && lagRow.info && lagRow.label === `차례대로 · 밀린 세트 ${Math.max(lg.core, lg.hw, lg.es)}개` && lg.core === 1, `75-2. 안내 줄 "${lagRow && lagRow.label}"(핵심 밀림 ${lg.core})`);
+    // 75-3. 남은 시간이 모자라면 다른 날로 옮기지 않고 "다음 공부일에 이어서"
+    const P = pe.dayPlan(t, { now: 20 * 60, user: 30 }), mv = P.moved.filter(x => x.need === '필수');
+    ok(mv.length && mv.filter(x => /^(set\.|hw\.(write|dd|eo|fg)|late|essay)/.test(x.id)).every(x => x.dest === '다음 공부일에 이어서') && !mv.some(x => /토요일 따라잡기|놓아줘요/.test(x.dest) && /^(set\.|hw\.(write|dd|eo|fg))/.test(x.id)),
+      `75-3. 30분이면 옮긴 것: ${mv.map(x => x.id.split(':')[0] + '→' + x.dest).join(', ')}`);
+    // 75-4. 그날 세트를 끝내면 고정한 머리는 그대로, 다음 세트는 "미리 하기"
+    const s28 = pe.SETS().sets['2026-10-28']; s28.quiz.forEach((q, i) => { S.sp['2026-10-28'].quiz[i] = { pick: q.a, ok: true }; }); pe.render();
+    const h2 = pe.seqHeads(t), ah = pe.seqAhead(t);
+    ok(J(pe.seqDay(t)) === J(F.seq) && pe.seqDay(t).c === '2026-10-28' && h2.c === t && ah[0] && ah[0].id === 'late:' + t && ah[0].need === '권장', `75-4. 끝내도 오늘 할 세트는 10/28, 다음(${h2.c})은 미리 하기`);
+    // 75-5. 이번 주 줄(차례대로): 이번 주 공부할 평일 5 = 끝낸 세트 + 차례 + 오지 않은 날
+    const cl = pe.weekBoard(t).lines.find(l => l.k === 'core');
+    ok(cl.b === 5 && cl.a >= 3, `75-5. 세트 핵심 ${cl.a}/${cl.b}(이번 주 평일 5)`);
+    // 75-6. 토요일: 차례의 밀린 세트를 따라잡기로(남은 시간만큼), 못 넣으면 다음 공부일에 이어서
+    S.today = null; at('2026-10-31T08:00:00'); pe.invalidate();
+    const Ts = pe.taskList('2026-10-31'), lt = Ts.filter(x => x.k === 'late');
+    ok(lt.length && lt.every(x => x.roll === '내일 이어서') && lt[0].d === '2026-10-29' && !Ts.some(x => x.k === 'carry.sets'), `75-6. 토요일 따라잡기: ${lt.map(x => x.d).join(', ')}`);
+    const Ps = pe.dayPlan('2026-10-31', { now: 9 * 60, user: 30 });
+    ok(Ps.moved.filter(x => x.k === 'late' || x.quota).every(x => x.dest === '다음 공부일에 이어서'), '75-6. 토요일에 못 넣은 밀린 세트·손글씨 몫 → 다음 공부일에 이어서');
+    // 75-7. 다음 주 월요일: 지난주 것을 놓아주지 않고 차례대로(오늘 세트보다 지난 세트 먼저), 지난주 기록에 "놓아준 것" 없음
+    S.today = null; S.wk = {}; at('2026-11-02T07:30:00'); pe.invalidate(); pe.planToday('2026-11-02');
+    const Tm = pe.taskList('2026-11-02'), rd = Tm.find(x => x.k === 'set.read' || x.k === 'set.quiz');
+    ok(rd && rd.d === '2026-10-29' && !Tm.some(x => x.k === 'carry.sets') && !(S.wk['2026-10-26'] && (S.wk['2026-10-26'].rel || []).length), `75-7. 월요일: 지난주 세트(${rd && rd.d})부터, 놓아준 것 없음`);
+    // 75-8. 분석: 계획한 세트(시작일 ~ 시험 전날 평일) · 한 것 · 속도 · 예상, 그래프·표·개선하려면
+    const A = pe.anaCalc('2026-11-02'), b0 = S.settings.start, last = add(pe.PLAN().target.d, -1);
+    ok(A.total === wdN(b0, last) && A.done === Object.keys(pe.SETS().sets).filter(d => d >= b0 && d <= '2026-11-02' && pe.setCore(d).ok).length && A.seq && A.lag >= 1 && A.weeks.length > 20 && A.proj <= A.total,
+      `75-8. 분석: 계획 ${A.total} · 한 것 ${A.done} · 밀림 ${A.lag} · 예상 ${A.proj} · 주 ${A.weeks.length}`);
+    await show('#ana');
+    const tips = [...V$().querySelectorAll('.sec')].find(x => /개선하려면/.test(T_(x)));
+    ok(d.querySelector('#nav button.on').dataset.tab === 'ana' && V$().querySelector('.dcard.ana h3') && V$().querySelectorAll('.atile').length === 4 && V$().querySelector('svg.achart path.lp.did') && V$().querySelector('svg.achart path.lp.plan')
+      && V$().querySelectorAll('table.atab').length === 2 && tips && /밀린 세트 \d+개 따라잡기/.test(T_(tips)) && V$().querySelector('#view > .ibxrow .ibx.more'),
+      `75-8. 분석 탭: ${T_(V$().querySelector('.dcard.ana'))} · 팁 ${T_(tips).slice(0, 60)}`);
+    const pts = V$().querySelectorAll('svg.achart .ah'); click('svg.achart .ah[data-i="1"]'); await sleep(20);
+    ok(pts.length === A.weeks.length && /준비 주|1주차/.test(T_(V$().querySelector('.apt'))), `75-8. 그래프의 주를 누르면 그 주의 수: ${T_(V$().querySelector('.apt'))}`);
+    // 75-9. 밀린 세트 건너뛰기 · 다른 날로 옮기기로 되돌리기
+    IO.ask = (m, yes) => yes(); S.settings.seqFrom = '2026-10-19'; pe.invalidate();
+    pe.goTab('ana'); await sleep(30);
+    if (V$().querySelector('[data-act="seq-skip"]')) { await tap('[data-act="seq-skip"]'); ok(S.settings.seqFrom === '2026-11-02' && pe.seqLag('2026-11-02').core === 0, '75-9. 밀린 세트 건너뛰기 → 오늘부터 차례'); }
+    else ok(pe.anaCalc('2026-11-02').lag < 5, '75-9. 밀린 세트가 5개 아래라 건너뛰기 단추 없음');
+    await show('#settings'); await tap('[data-act="carry-mode"][data-v="move"]');
+    ok(!pe.seqOn() && !S.settings.seqFrom && !(S.today || {}).seq && /일요일까지 못 하면 놓아주고/.test(T_(V$())), '75-9. 다른 날로 옮기기로 되돌림(차례 기록·고정한 머리 지움)');
+    IO.ask = ask0; delete S.settings.carry; pe.goTab('today'); await sleep(30); }
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);

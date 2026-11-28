@@ -1160,7 +1160,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     const H = () => w.location.hash, L = () => w.history.length, tabOn = () => [...d.querySelectorAll('#nav button.on')].map(b => b.dataset.tab).join();
     const upTxt = () => { const b = d.querySelector('.topbar [data-act="back"]'); return b ? b.textContent.trim() : ''; };
     const tap = async (sel, root) => { click(sel, root); await sleep(60); };
-    const back = () => tap('.topbar [data-act="back"]'), tab = t => tap(`#nav button[data-tab="${t}"]`);
+    const back = () => tap('.topbar [data-act="back"]'), tab = t => tap(`#nav button[data-tab="${t}"]`), moreBtn = () => tap('#view > .ibxrow .ibx.more');
     const edge = async (x0, x1, dy, el) => { el = el || view(); const a = new w.Event('touchstart', { bubbles: true }); a.touches = [{ clientX: x0, clientY: 300 }]; el.dispatchEvent(a); const b = new w.Event('touchend', { bubbles: true }); b.changedTouches = [{ clientX: x1, clientY: 300 + (dy || 0) }]; el.dispatchEvent(b); await sleep(60); };
     const emptyFlow = () => /진행 중인 (학습이|외우기가) 없어요/.test(txt()), focus = () => d.body.classList.contains('focus');
     const primaries = () => view().querySelectorAll('.btn:not(.sec):not(.ghost)').length;
@@ -1170,7 +1170,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     // 아래 탭 다섯(오늘 · 이번 주 · 복습 · 연습 · 더보기). 탭은 바꿔 쓰기만 해서 쌓이지 않고(T7), 탭 첫 화면에서 가장자리를 밀어도 아무 데도 가지 않는다(I)
     // 탭 이름은 버튼의 글자 마디만(이번 주 배지 .nb의 수는 빼고 읽는다: 배지가 뜨는 날에도 "이번 주")
     const navLab = b => [...b.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim(), navLabs = () => [...d.querySelectorAll('#nav button')].map(b => b.dataset.tab + ':' + navLab(b)).join();
-    ok(navLabs() === 'today:오늘,week:이번 주,review:복습,practice:연습,more:더보기', '아래 탭 다섯: 오늘 · 이번 주 · 복습 · 연습 · 더보기');
+    ok(navLabs() === 'today:오늘,week:이번 주,review:복습,practice:연습,ana:분석', '아래 탭 다섯: 오늘 · 이번 주 · 복습 · 연습 · 분석(3.3.0, 더보기는 오른쪽 위)');
     const h1 = () => (view().querySelector('.ltitle h1') || {}).textContent || '';
     await go('#today'); let hl = L();
     await tab('week');
@@ -1179,12 +1179,17 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(H() === '#practice' && L() === hl && tabOn() === 'practice' && !view().querySelector('.topbar') && h1() === '연습' && primaries() === 0, '이번 주 → 탭 연습: 방문 기록 그대로, 연습은 파란 버튼 없는 모음');
     await edge(8, 150);
     ok(H() === '#practice' && L() === hl && !emptyFlow(), 'I: 오늘 → 이번 주 → 연습 뒤 탭 첫 화면에서 왼쪽 가장자리 밀기는 그대로(탭이 쌓이지 않음)');
-    await tab('review'); await tab('more');
-    ok(H() === '#more' && L() === hl && tabOn() === 'more', 'T7: 탭을 네 번 바꿔도 방문 기록이 그대로(탭이 쌓이지 않음)');
+    await tab('review'); await tab('ana');
+    ok(H() === '#ana' && L() === hl && tabOn() === 'ana' && h1() === '분석', 'T7: 탭을 네 번 바꿔도 방문 기록이 그대로(탭이 쌓이지 않음)');
     await edge(8, 150);
-    ok(H() === '#more' && L() === hl && !emptyFlow(), 'I: 더보기에서도 가장자리 밀기는 그대로');
-    await tap('#nav button[data-tab="more"]');
-    ok(H() === '#more' && L() === hl, '지금 탭을 다시 눌러도 그대로(맨 위로)');
+    ok(H() === '#ana' && L() === hl && !emptyFlow(), 'I: 분석에서도 가장자리 밀기는 그대로');
+    await tap('#nav button[data-tab="ana"]');
+    ok(H() === '#ana' && L() === hl, '지금 탭을 다시 눌러도 그대로(맨 위로)');
+    // 더보기(3.3.0): 탭 첫 화면 오른쪽 위 단추(우편함 옆, 맨 오른쪽) → 더보기 화면(위쪽 "분석", 아래 탭은 연 탭), 뒤로 → 분석
+    ok(['today', 'week', 'review', 'practice', 'ana'].every(() => true) && d.querySelector('#view > .ibxrow .ibx.more:last-child'), '탭 첫 화면 오른쪽 위 줄 맨 오른쪽에 더보기 단추');
+    await moreBtn();
+    ok(H() === '#more' && L() === hl && tabOn() === 'ana' && upTxt() === '분석' && /더보기/.test((view().querySelector('.ptitle') || {}).textContent || '') && view().querySelector('[data-h="settings"]'), '오른쪽 위 더보기 → 더보기 화면(위쪽 "분석", 아래 탭 분석)');
+    await edge(8, 150); ok(H() === '#ana' && L() === hl, '더보기에서 가장자리 밀기 → 연 탭(분석)');
     // 예전 주소 #study(암기)·#test(테스트)는 연습 탭으로(주소는 그대로, 탭 강조는 연습). 검사들이 누르는 버튼이 모두 연습 탭에 있다
     for (const h of ['#study', '#test']) {
       await go(h);
@@ -1207,13 +1212,13 @@ const go = async h => { w.location.hash = h; await sleep(30); };
       const addD = (x, n) => { const z = new w.Date(x + 'T12:00:00'); z.setDate(z.getDate() + n); return z.getFullYear() + '-' + String(z.getMonth() + 1).padStart(2, '0') + '-' + String(z.getDate()).padStart(2, '0'); };
       const nb = () => d.querySelector('#nav button[data-tab="week"] .nb'), rvb = () => d.querySelector('#nav button[data-tab="review"] .nb');
       const moveTo = ex => { S().settings.roundDates = Object.assign(JSON.parse(rd0), { [nx.r]: ex }); S().settings.start = addD(addD(T0, 33), -190); pe.recalcPlan(); S().today = null; pe.render(); };   // 시험 일정을 바꾸면 오늘 몫을 다시 고르듯(sch-save) 새로
-      await tab('more'); const n0 = pe.navBadgeN();
+      await tab('ana'); const n0 = pe.navBadgeN();
       ok(!rvb() && (n0 ? nb() && nb().textContent === String(n0) : !nb()), `배지(지금 ${n0}개): 이번 주 탭에만, 날짜가 3일 안인 일만`);
       const nx = pe.roundList().find(x => x.d > T0);
       moveTo(addD(T0, 40)); const nFar = pe.navBadgeN(), farOk = pe.PLAN().target.r === nx.r && !pe.taskList(T0).some(x => x.id === 'apply:' + nx.r);
       moveTo(addD(T0, 33)); const n1 = pe.navBadgeN();
       ok(farOk && pe.PLAN().target.r === nx.r && n1 === nFar + 1 && pe.taskList(T0).some(x => x.id === 'apply:' + nx.r) && nb() && nb().textContent === String(n1) && nb().classList.contains('due') && !rvb(), `원서접수가 8일 뒤면 배지에 없고(${nFar}), 내일 시작하면 이번 주 탭에 빨간 ${n1}(오늘 몫의 원서접수 핀과 같은 날)`);
-      ok(navLabs() === 'today:오늘,week:이번 주,review:복습,practice:연습,more:더보기' && nb(), '배지가 떠도 아래 탭 이름은 그대로(이번 주, 수는 배지에만)');
+      ok(navLabs() === 'today:오늘,week:이번 주,review:복습,practice:연습,ana:분석' && nb(), '배지가 떠도 아래 탭 이름은 그대로(이번 주, 수는 배지에만)');
       // 배지가 세는 일은 이번 주 탭에도: "일요일까지 끝낼 것" 맨 위 원서접수 줄(동그라미, 누르면 접수했어요 → 배지에서 빠지고 ✓로 아래, 다시 누르면 되돌림). 오늘은 맨 위 핀만
       const aid = 'apply:' + nx.r, apl = () => view().querySelector(`#ql-apply[data-act="tk"][data-id="${aid}"]`), qls = () => [...view().querySelectorAll('.qline')], atTop = () => { const q = qls(), i = q.indexOf(apl()); return i >= 0 && q.slice(0, i).every(x => x.classList.contains('tkl') && !x.classList.contains('done')); };   // 맨 위(앞에는 다른 날짜 일 핀 줄만, 예: 전 회차 48시간 복기)
       await tab('today');
@@ -1227,7 +1232,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
       ok(!S().tk[aid] && pe.navBadgeN() === n1 && nb() && nb().textContent === String(n1) && atTop() && !apl().querySelector('.tkc.on'), '다시 누르면 되돌림(배지 다시 빨간 수, 줄은 맨 위로)');
       S().tk[aid] = T0; pe.render();
       ok(pe.navBadgeN() === nFar && (nFar ? nb().textContent === String(nFar) : !nb()), '"접수했어요"(S.tk) → 배지에서 빠짐');
-      await tab('more');
+      await tab('ana');
       S().settings.start = st0; S().settings.roundDates = JSON.parse(rd0); S().tk = JSON.parse(tk0); S().today = JSON.parse(td0); pe.recalcPlan(); pe.render();
       ok(pe.navBadgeN() === n0 && pe.PLAN().start === st0, '(되돌림) 시작일·회차 날짜'); }
     // 준비 시작 전(시작일을 2주 뒤로)에도 이번 주 탭 아래 기록(학습 달력 · 세트 보관함 · 통계·주간 리포트 · 로드맵): 통계는 이번 주 탭에서만 들어간다(시험 뒤는 plan.test가 본다)
@@ -1268,12 +1273,12 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     mw().innerHTML = '<div class="modal" data-act="modal-close"><div class="msheet" data-stop="1">창</div></div>';
     w.PE_IO._go('today'); await sleep(60);
     ok(H() === '#today' && !mw().innerHTML && L() === hl && tabOn() === 'today', 'O: 깊이 3에서 알림(PE_IO._go) → 오늘 첫 화면(창 닫힘, 방문 기록 그대로)');
-    // K: 깊은 흐름에서 탭 더보기 → 더보기 첫 화면(들어온 곳 기록은 비움)
+    // K: 깊은 흐름에서 탭 분석 → 분석 첫 화면(들어온 곳 기록은 비움)
     await toSet(); await termOpen(); await tap('.acc.open [data-act="go"][data-h^="dandap/"]'); await tap('[data-act="timer-go"][data-p="one1"]');
-    await tab('more');
-    ok(H() === '#more' && L() === hl && tabOn() === 'more', 'K: 깊이 3에서 탭 더보기 → 더보기 첫 화면(방문 기록 그대로)');
+    await tab('ana');
+    ok(H() === '#ana' && L() === hl && tabOn() === 'ana', 'K: 깊이 3에서 탭 분석 → 분석 첫 화면(방문 기록 그대로)');
     await go('#timer');
-    ok(upTxt() === '더보기' && tabOn() === 'more', 'K: 탭을 바꾸면 들어온 곳 기록을 비움(타이머의 위 화면은 더보기)');
+    ok(upTxt() === '더보기' && tabOn() === 'today', 'K: 탭을 바꾸면 들어온 곳 기록을 비움(타이머의 위 화면은 더보기, 아래 탭은 기본 오늘)');
     await back(); ok(H() === '#more', 'K: 뒤로 → 더보기');
 
     // E·T6·T10: 연습 → 기출 → 단원별(회차별과 오가도 기록 그대로) → 한 단원 → 이 단원 카드 외우기 → 끝 → 돌아가기 → 뒤로 → 뒤로
@@ -1440,7 +1445,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
 
     // 위쪽 이름: 들어온 곳(오늘 → 달력은 "오늘", 더보기 → 달력은 "더보기")
     await tab('today'); await tap('.calbtn'); ok(H() === '#cal' && upTxt() === '오늘' && tabOn() === 'today', '오늘 → 학습 달력(위쪽 "오늘")');
-    await tab('more'); await tap('#view [data-act="go"][data-h="cal"]'); ok(H() === '#cal' && upTxt() === '더보기' && tabOn() === 'more', '더보기 → 학습 달력(위쪽 "더보기", 아래 탭 더보기)');
+    await tab('review'); await moreBtn(); await tap('#view [data-act="go"][data-h="cal"]'); ok(H() === '#cal' && upTxt() === '더보기' && tabOn() === 'review', '복습 → 오른쪽 위 더보기 → 학습 달력(위쪽 "더보기", 아래 탭은 연 탭 복습)');
 
     // G: 모의고사 "1교시 시작"(이 화면에서 타이머, 집중 모드) → 닫기 → 세트 ④ "타이머 25분" → 묻고, 취소하면 100분 타이머 그대로. 위쪽 알약 → 그 모의고사 화면
     {
@@ -1459,14 +1464,14 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     }
 
     // N: 더보기 → 백업 → 복원 → 오늘 첫 화면 → 탭 더보기. 초기화도 오늘 첫 화면으로(뒤에 백업으로 되돌림). 입력 칸을 쓰는 동안은 body.kb, 가장자리 밀기도 안 함
-    await tab('more'); hl = L(); await tap('[data-act="go"][data-h="backup"]');
-    ok(H() === '#backup' && upTxt() === '더보기' && tabOn() === 'more', 'N: 더보기 → 백업(위쪽 "더보기")');
+    await tab('today'); await moreBtn(); hl = L(); await tap('[data-act="go"][data-h="backup"]');
+    ok(H() === '#backup' && upTxt() === '더보기' && tabOn() === 'today', 'N: 더보기 → 백업(위쪽 "더보기")');
     const bk = JSON.stringify({ state: S(), sets: pe.SETS() }), ta = d.querySelector('#restoreText');
     ta.value = bk; ta.focus(); await edge(6, 140);
     ok(d.body.classList.contains('kb') && H() === '#backup', '입력 칸을 쓰는 동안 body.kb(아래 붙은 막대 숨김), 가장자리 밀기는 하지 않음');
     click('[data-act="restore"]'); await sleep(80);
     ok(H() === '#today' && L() === hl && tabOn() === 'today' && !d.body.classList.contains('kb'), 'N: 복원 → 오늘 첫 화면(방문 기록 그대로)');
-    await tab('more'); ok(H() === '#more' && L() === hl && tabOn() === 'more', 'N: 그다음 탭 더보기');
+    await moreBtn(); ok(H() === '#more' && L() === hl && tabOn() === 'today', 'N: 그다음 오른쪽 위 더보기');
     await tap('[data-act="go"][data-h="backup"]'); click('[data-act="reset"]'); await sleep(300);
     ok(H() === '#today' && L() === hl && !Object.keys(S().cards).length, 'N: 초기화 → 오늘 첫 화면(방문 기록 그대로)');
     await go('#backup'); d.querySelector('#restoreText').value = bk; click('[data-act="restore"]'); await sleep(80);
@@ -1689,7 +1694,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     lay(700); ok(pill() && /^⏱ /.test(pill().textContent) && d.body.classList.contains('haspill') && /^\d+px$/.test(d.body.style.getPropertyValue('--pw')), '화면 안 타이머 숫자가 아래 막대에 가리면 알약(body.haspill, 알약 폭 --pw)');
     lay(80); ok(pill(), '숫자가 위쪽 막대 밑에 걸치면 알약');
     lay(400); ok(!pill() && !d.body.classList.contains('haspill'), '숫자가 위쪽 막대와 아래 막대 사이에 다 보이면 알약 없음');
-    await go('#today'); ok(pill() && d.body.classList.contains('haspill') && view().firstElementChild.classList.contains('ltitle'), '오늘(탭 첫 화면): 알약 + body.haspill(머리가 알약 아래에서 시작)');
+    await go('#today'); ok(pill() && d.body.classList.contains('haspill') && view().firstElementChild.classList.contains('ibxrow') && view().children[1].classList.contains('ltitle'), '오늘(탭 첫 화면): 알약 + body.haspill(오른쪽 위 단추 줄은 알약 왼쪽, 머리는 그 아래)');
     await go('#timer'); click('[data-act="timer-reset"]'); click('[data-act="timer-preset"][data-p="essay"]'); await sleep(10); await go('#today');
     ok(!pill() && !d.body.classList.contains('haspill') && !TM.ctx, '타이머를 처음으로 → 알약·body.haspill 없음');
     if (JSON.parse(mp0)) S().mockp['2026-10-24'] = JSON.parse(mp0); else delete S().mockp['2026-10-24'];

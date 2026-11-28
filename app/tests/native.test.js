@@ -233,7 +233,7 @@ function open(opt = {}) {
   await B.go('#more');
   const appVer = require('../app.json').expo.version;
   ok(B.txt().includes('기술사 6개월 v' + appVer), '더보기 버전 = app.json 버전 ' + appVer);
-  ok(appVer === '3.2.7' && require('../package.json').version === appVer && require('../package-lock.json').version === appVer && require('../package-lock.json').packages[''].version === appVer, `버전 ${appVer}: app.json = package.json = package-lock(앱 줄)`);
+  ok(appVer === '3.3.0' && require('../package.json').version === appVer && require('../package-lock.json').version === appVer && require('../package-lock.json').packages[''].version === appVer, `버전 ${appVer}: app.json = package.json = package-lock(앱 줄)`);
   ok(B.errors.length === 0, '다시 연 화면 콘솔 오류 없음 ' + B.errors.slice(0, 3).join(' | '));
 
   // 예전(2.x) 기록이 든 휴대폰에서 3.0.0을 처음 열면 "바뀐 점" 창 한 번(기록은 그대로), 표시는 네이티브 저장소에 남아 다시 열면 없음
@@ -306,12 +306,13 @@ function open(opt = {}) {
   msgs = MSGS(); dev.member.length = 0;
   const I = open({ member: { id: 'boss', admin: true, uid: 'U1' } });
   await sleep(300);
-  for (const t of ['#today', '#week', '#review', '#practice', '#more']) { await I.go(t); await sleep(20); ok(I.d.querySelector('#view > .ibxrow .ibx'), '관리자: ' + t + ' 오른쪽 위에 문자함 단추'); }
+  for (const t of ['#today', '#week', '#review', '#practice', '#ana']) { await I.go(t); await sleep(20); const bs = [...I.d.querySelectorAll('#view > .ibxrow .ibx')]; ok(bs.length === 2 && !bs[0].classList.contains('more') && bs[1].classList.contains('more'), `관리자(${bs.map(b => b.className).join('|')}): ` + t + ' 오른쪽 위에 문자함 단추, 그 오른쪽에 더보기(3.3.0)'); }
   const bdg = I.d.querySelector('.ibx .bdg');
   ok(bdg && bdg.textContent === '2' && /안 읽은 문자 2개/.test(I.d.querySelector('.ibx').getAttribute('aria-label')), '안 읽은 문자 2개 → 빨간 동그라미 2');
   ok(dev.member.filter(x => x[0] === 'unread').length === 1, '안 읽은 수는 1분에 한 번만 셈(탭을 옮겨 다녀도)');
+  await I.go('#more'); await sleep(20);
   ok(/문자함/.test(I.txt()) && /안 읽은 문자 2개/.test(I.txt()), '더보기 관리에도 문자함 줄과 안 읽은 수');
-  await I.go('#more');
+  await I.go('#today'); await sleep(20);
   I.click('#view .ibxrow .ibx'); await sleep(60);
   ok(I.w.location.hash === '#inbox' && dev.member.some(x => x[0] === 'list'), '문자함 단추 → 문자함(목록 불러옴)');
   const il = I.txt();
@@ -346,7 +347,8 @@ function open(opt = {}) {
   I.click('.topbar .back'); await sleep(60);
   ok(I.w.location.hash === '#inbox' && !I.d.querySelector('.ibxlist .badge'), '뒤로 → 문자함 목록(안 읽은 수 없어짐)');
   I.click('.topbar .back'); await sleep(60);
-  ok(I.w.location.hash === '#more' && !I.d.querySelector('.ibx .bdg') && /새 문자 없음/.test(I.txt()), '문자함에서 뒤로 → 연 탭(더보기), 빨간 동그라미 없어짐');
+  ok(I.w.location.hash === '#today' && !I.d.querySelector('.ibx .bdg'), '문자함에서 뒤로 → 연 탭(오늘), 빨간 동그라미 없어짐');
+  await I.go('#more'); await sleep(20); ok(/새 문자 없음/.test(I.txt()), '더보기 문자함 줄 "새 문자 없음"');
   await I.go('#inbox/U3'); await sleep(20);
   dev.answers.push(true);
   I.click('[data-act="ibx-del"]'); await sleep(80);
@@ -363,7 +365,7 @@ function open(opt = {}) {
   const W = open({ member: { id: 'kim', admin: false, uid: 'U2' } });
   await sleep(300);
   await W.go('#today');
-  ok(!W.d.querySelector('.ibx') && !dev.member.some(x => x[0] === 'unread') && dev.member.some(x => x[0] === 'thread'), '회원: 답장이 없으면 문자함 단추 없음, 안 읽은 수는 세지 않고 답장만 받아 옴');
+  ok(!W.d.querySelector('.ibx:not(.more)') && !dev.member.some(x => x[0] === 'unread') && dev.member.some(x => x[0] === 'thread'), '회원: 답장이 없으면 문자함 단추 없음, 안 읽은 수는 세지 않고 답장만 받아 옴');
   await W.go('#more');
   W.click('[data-act="go"][data-h="msg"]'); await sleep(40);
   ok(W.w.location.hash === '#msg' && W.d.querySelector('#msgText'), '더보기 → 관리자에게 문자 보내기');
@@ -386,13 +388,13 @@ function open(opt = {}) {
   ok(mb && mb.querySelector('.bdg').textContent === '1' && /안 읽은 답장 1개/.test(mb.getAttribute('aria-label')), '안 읽은 답장 1개 → 오늘 오른쪽 위 단추와 빨간 동그라미 1');
   await W.go('#more'); await sleep(20);
   ok(/관리자와 문자/.test(W.txt()) && /새 답장 1개/.test(W.txt()), '더보기: 관리자와 문자 · 새 답장 1개');
-  W.click('#view .ibxrow .ibx.mt'); await sleep(80);
+  await W.go('#today'); await sleep(20); W.click('#view .ibxrow .ibx.mt'); await sleep(80);
   const items = [...W.d.querySelectorAll('.msg')];
   ok(W.w.location.hash === '#msg' && items.length === 2 && items[0].classList.contains('rp') && /관리자 답장/.test(items[0].textContent) && /새 답장/.test(items[0].textContent) && /받아 오기를 한 번/.test(items[0].textContent) && /오늘 세트가 안 보여요/.test(items[1].textContent),
     '단추 → 관리자와 문자: 새것부터(관리자 답장에 "새 답장"), 내가 보낸 문자');
   ok(dev.member.some(x => x[0] === 'reply-read' && x[1].rids.join() === 'R7') && thread.replies[0].read, '열면 답장을 읽음으로(앱에 읽음 요청)');
   await W.go('#today'); await sleep(20);
-  ok(!W.d.querySelector('.ibx'), '읽은 뒤 오늘에는 단추 없음');
+  ok(!W.d.querySelector('.ibx:not(.more)'), '읽은 뒤 오늘에는 단추 없음(더보기 단추만)');
   await W.go('#inbox'); ok(/관리자만 볼 수 있어요/.test(W.txt()) && !dev.member.some(x => x[0] === 'list'), '회원이 #inbox를 열어도 목록을 부르지 않음');
   ok(W.errors.length === 0, '회원 문자 화면 콘솔 오류 없음 ' + W.errors.slice(0, 3).join(' | '));
 

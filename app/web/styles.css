@@ -958,3 +958,43 @@ textarea.in.plain{font-family:inherit;font-size:1rem;line-height:1.6;min-height:
 .stph{margin-top:18px}
 :root[data-theme="dark"] .stp4 span.on{color:#08142E}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .stp4 span.on{color:#08142E}}
+
+/* 3.3.0: 탭 첫 화면 오른쪽 위 더보기 단추(우편함 옆), 분석 탭 */
+.ibx.more svg circle{fill:currentColor;stroke:none}
+.dcard.ana .ak{margin:0 0 2px;font-size:.86rem;font-weight:700;color:var(--ink2)}
+.dcard.ana h3{font-size:1.45rem;font-weight:800;line-height:1.3;margin:0 0 6px}
+.dcard.ana.good h3{color:var(--ok)}
+.dcard.ana.low h3{color:var(--amber)}
+.atiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 4px}
+.atile{background:var(--sheet);border-radius:var(--r-md);padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.atile .k{font-size:.8rem;font-weight:700;color:var(--ink2)}
+.atile b{font-size:1.45rem;font-weight:800;line-height:1.2}
+.atile .d{font-size:.8rem;color:var(--ink2);line-height:1.35}
+.alg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.86rem;color:var(--ink2);margin:2px 0 6px}
+.alg span{display:inline-flex;align-items:center;gap:6px}
+.alg .lk{display:inline-block;width:20px;height:0;border-top:2px solid var(--blue)}
+.alg .lk.plan{border-top:2px dashed var(--ink3)}
+.alg .lk.fut{border-top:2px dashed var(--blue)}
+.achart{display:block;width:100%;height:auto;background:var(--sheet);border-radius:var(--r-md)}
+.achart .ag{stroke:var(--rule2);stroke-width:1}
+.achart .ay,.achart .ax{fill:var(--ink2);font-size:.8rem;font-family:inherit}
+.achart .ay{text-anchor:end}
+.achart .at{stroke:var(--rule);stroke-width:1}
+.achart .as{stroke:var(--ink3);stroke-width:1;stroke-dasharray:2 3}
+.achart .lp{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.achart .lp.plan{stroke:var(--ink3);stroke-dasharray:5 4}
+.achart .lp.did{stroke:var(--blue)}
+.achart .lp.fut{stroke:var(--blue);stroke-dasharray:5 4;opacity:.8}
+.achart .ad{fill:var(--blue);stroke:var(--sheet);stroke-width:2}
+.achart .al{font-size:.8rem;font-weight:700;font-family:inherit;fill:var(--ink2)}
+.achart .ah{fill:transparent;cursor:pointer}
+.apt{margin-top:6px}
+.atab{width:100%;border-collapse:collapse;font-size:.86rem}
+.atab th,.atab td{padding:7px 6px;border-bottom:1px solid var(--rule2);text-align:left;vertical-align:top}
+.atab th{font-weight:700;color:var(--ink2);font-size:.8rem}
+.atab td.num,.atab th:not(:first-child){text-align:right;white-space:nowrap}
+.atab td small{display:block;color:var(--ink2);font-size:.8rem}
+.atab tr:last-child td{border-bottom:0}
+.atab.wk td:first-child,.atab.wk th:first-child{white-space:nowrap}
+.atab.wk th,.atab.wk td{padding-left:4px;padding-right:4px}
+.group.plain>.note{margin:8px 6px 4px}
