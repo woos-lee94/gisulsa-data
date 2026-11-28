@@ -217,7 +217,7 @@ function open(opt = {}) {
   await A.go('#backup');
   dev.answers.push(true, false);
   A.click('[data-act="reset"]'); await sleep(40);
-  ok(dev.asked.slice(-2).join('|') === '모든 학습 기록과 내 카드를 지웁니다. 초기화할까요?|마지막 확인: 백업을 복사해 두었나요?' && A.pe.S().cards['K04'], '초기화 두 번째에서 취소 → 그대로');
+  ok(dev.asked.slice(-2).join('|') === '모든 학습 기록과 내 카드를 지웁니다. 시험 일정과 설정은 그대로예요. 초기화할까요?|마지막 확인: 백업을 복사해 두었나요?' && A.pe.S().cards['K04'], '초기화 두 번째에서 취소 → 그대로');
   ok(A.errors.length === 0, '콘솔 오류 없음 ' + A.errors.slice(0, 3).join(' | '));
 
   // 2) 앱을 완전히 닫았다 다시 열기: 저장소에서 넣어 준 기록으로 시작
@@ -233,7 +233,7 @@ function open(opt = {}) {
   await B.go('#more');
   const appVer = require('../app.json').expo.version;
   ok(B.txt().includes('기술사 6개월 v' + appVer), '더보기 버전 = app.json 버전 ' + appVer);
-  ok(appVer === '3.3.0' && require('../package.json').version === appVer && require('../package-lock.json').version === appVer && require('../package-lock.json').packages[''].version === appVer, `버전 ${appVer}: app.json = package.json = package-lock(앱 줄)`);
+  ok(appVer === '3.3.1' && require('../package.json').version === appVer && require('../package-lock.json').version === appVer && require('../package-lock.json').packages[''].version === appVer, `버전 ${appVer}: app.json = package.json = package-lock(앱 줄)`);
   ok(B.errors.length === 0, '다시 연 화면 콘솔 오류 없음 ' + B.errors.slice(0, 3).join(' | '));
 
   // 예전(2.x) 기록이 든 휴대폰에서 3.0.0을 처음 열면 "바뀐 점" 창 한 번(기록은 그대로), 표시는 네이티브 저장소에 남아 다시 열면 없음

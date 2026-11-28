@@ -1619,7 +1619,7 @@ const go = async h => { w.location.hash = h; await sleep(30); };
     ok(/이번 주 필수/.test(txt()) && /핵심 끝낸 세트/.test(txt()) && /주간 기록/.test(txt()) && !/7일 체크/.test(txt()), '통계: 이번 주 필수 n%, 핵심 끝낸 세트, 주간 기록(7일 체크 달성은 없음)');
     const rk = 'report:' + W, rk0 = S().tk[rk], dw = new w.Date().getDay(); delete S().tk[rk];
     click(`[data-act="report"][data-w="${W}"]`); await sleep(20);
-    ok((wkOn ? /이번 주 필수 \d+%|시험이 든 주/ : /이번 주는 (시험 뒤라|준비 시작 전이라) 필수 점수가 없어요/).test(copied) && copied.indexOf(`] ${W} ~ `) > 0 && (dw === 0 || dw === 6 ? S().tk[rk] === T0 : !S().tk[rk] && /토·일요일에 복사하면 이번 주 리포트로 쳐요/.test(toastTxt())), '주간 리포트: "이번 주 필수"(시험 뒤는 "필수 점수가 없어요"), 이번 주 월요일부터, 토·일요일에만 이번 주 리포트로 침');
+    ok((wkOn ? /이번 주 필수 \d+%|시험이 든 주/ : /이번 주는 (시험 뒤라|준비 시작 전이라) 필수 점수가 없어요/).test(copied) && copied.indexOf(`] ${pe.wkFrom(W)} ~ `) > 0 && (dw === 0 || dw === 6 ? S().tk[rk] === T0 : !S().tk[rk] && /토·일요일에 복사하면 이번 주 리포트로 쳐요/.test(toastTxt())), '주간 리포트: "이번 주 필수"(시험 뒤는 "필수 점수가 없어요"), 이번 주 월요일부터, 토·일요일에만 이번 주 리포트로 침');
     if (rk0) S().tk[rk] = rk0; else delete S().tk[rk];
     // 백업: 마지막 백업 날짜
     delete S().tk.backup; await go('#backup'); ok(/아직 백업한 적이 없어요/.test(txt()), '백업: 아직 백업한 적이 없어요');

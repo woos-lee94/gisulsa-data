@@ -108,7 +108,7 @@
 
 ## 앱 폴더
 
-- `web/`: 앱 화면 원본(v3.3.0, 네이티브 다리 포함). `index.html`의 `?v=N`(지금 9)은 `tests/app.test.js`가 스크립트를 찾는 표시라 남겨 둔다. 버전은 `app.js`의 `APP_VER`, `app.json`의 `expo.version`, `package.json`의 `version`(과 `package-lock.json`의 앱 줄 두 곳)을 함께 올린다(`tests/native.test.js`가 확인)
+- `web/`: 앱 화면 원본(v3.3.1, 네이티브 다리 포함). `index.html`의 `?v=N`(지금 9)은 `tests/app.test.js`가 스크립트를 찾는 표시라 남겨 둔다. 버전은 `app.js`의 `APP_VER`, `app.json`의 `expo.version`, `package.json`의 `version`(과 `package-lock.json`의 앱 줄 두 곳)을 함께 올린다(`tests/native.test.js`가 확인)
 - `tests/`: jsdom 회귀 검사와 가짜 저장소(`tests/fake/data`)
 - 확대 막기: `index.html` viewport에 `maximum-scale=1, user-scalable=no`(WKWebView는 이것을 따른다. 글자 칸을 누를 때 16px보다 작은 칸이 확대되던 것도 막는다), `styles.css`의 `html{touch-action:manipulation}`(두 번 눌러 확대)
 - `assets/icon-1024.png`: iOS 앱 아이콘
@@ -191,6 +191,14 @@
 - 앱 쪽 요청 `{t:'update', op}`(`host.js` `UPDATE_OPS`): `check`(지금 확인, `{found, v}`), `apply`(받는 중이면 기다리고, 받아 둔 것이 없으면 확인·받기 → `reloadAsync`, 다시 열 때 잠깐 보이는 화면은 앱 바탕색. 최신이면 `{s:'none'}`), `store`(앱이 가진 App Store 주소를 연다).
 - 웹(`app.js` "20b"): 오늘 머리 아래 한 줄(`updNoteHTML`: 받아 둠·받는 중·있음·App Store, ×는 그 상태·버전만 숨김), 더보기 → 앱 "앱 업데이트" 줄(`updRowHTML`: 확인 전·최신·확인 중·받는 중·실패·꺼진 빌드). "최신 버전 받기"(`upd-get`)는 타이머가 돌면 멈춘 뒤에, 아니면 `flush()`로 기록을 먼저 네이티브 저장소에 쓰고(메시지 순서대로 처리) `apply`. 업데이트한 뒤 처음 열면 `S.tk.ver`로 한 번 알림(`verOnce`). 브라우저에는 이 줄들이 없다.
 - Firebase 설정은 빌드에 든 값을 키체인(`pe_fbcfg`)에도 적어 두어, 업데이트로 받은 코드에 값이 빠졌어도(`--environment` 없이 올린 경우) 회원 확인이 그대로 된다.
+
+## 초기화·기록 시작일(3.3.1)
+
+- 초기화(`reset`)는 학습 기록·내 카드·받은 세트만 지우고 **시험 일정과 설정은 그대로**(`S.settings`를 새 기록에 옮김, 차례 기록 `seqFrom`·`slipNo`만 지움, 예산 안내 `S.tk.budget`·바뀐 점 `seen:v3`도 남김). 오늘이 **기록 시작일**(`S.recFrom`).
+- `S.recFrom`: 그 전 날짜의 세트·모의는 밀린 것으로 세지 않는다. `wkFrom(W)`(그 주의 첫 셈 날)이 `recFrom`보다 이르면 `recFrom`이라 이번 주 줄·밀린 세트·주말 따라잡기·놓아준 것·주간 리포트·통계의 주 이름이 모두 그날부터. 차례대로의 `seqFrom()`, 분석의 `anaCalc`(계획한 세트)도 그날부터.
+- 새로 설치한 휴대폰(`S_NEW`, `newRec`): `recFrom` = 오늘, 처음 받아 온 저장소 일정(index.json `plan`)을 한 번 따른다(`S.tk.planAdopt = 'due'`).
+- `planHeal`(sync에서 받은 뒤, `planPush` 앞, 한 번 `S.tk.planHeal`): 새로 설치했거나 3.3.0 초기화로 기본 일정이 된 기록(저장소 일정이 시작한 뒤에 만듦 `S.created` ≥ `plan.start`, 시작일 = `PLAN_START`, 기다리는 바꾸기·되돌리기 없음)은 저장소 일정의 시작일(`begin` 또는 `start`)·목표 회차를 쓰고(관리자는 비어 있던 하루 외울 용어도), `pushSig`를 지워 예약 작업에 다시 보낸다. 3.3.0 초기화 기록은 `recFrom` = `S.created`. 예전 기록(그 전에 만듦)은 그대로.
+- 검사: `plan.test.js` 76(초기화: 설정 그대로·기록 시작일·밀린 것 없음·이번 주 세트 줄 목·금·분석, 3.3.0 초기화 기록 되돌림·한 번만, 예전 기록 그대로, 새로 설치는 저장소 일정을 받을 때까지 기다림), `native.test.js` 초기화 확인 문구.
 
 ## 못 한 공부·분석 탭(3.3.0)
 

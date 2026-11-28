@@ -14,7 +14,7 @@ const INTERVALS=[0,1,3,7,14,30,60];
 const REVIEW_STEPS=[1,3,7,14,30];
 const KEY='pe_state_v1', SKEY='pe_sets_v1';
 const DATA_DEFAULT='https://raw.githubusercontent.com/woos-lee94/gisulsa-data/main/data/';
-const APP_VER='3.3.0';
+const APP_VER='3.3.1';
 const MOCK_GRADE_SINCE='2026-11-01';            /* v3.0.0을 내는 날. 이 날짜 전 모의고사는 "채점 받았어요"를 묻지 않는다 */
 const BUDGET_DEF={wd:180,sat:300,sun:240};       /* 하루 공부 시간(분) 기본값: 평일·토요일·일요일과 공휴일(S.settings.budget, budgetOf) */
 const PLAN_START=(window.PE_EXAM&&PE_EXAM.defaults.start)||'2026-10-19';
@@ -160,6 +160,19 @@ function planDocNow(){const st=S.settings,N=st.nextTarget,ov=st.roundDates||{};
   if(N&&N.from){const P1=computePlan(st.start,N.r);o.next=String(P1.target.r);o.nfrom=N.from;o.nexam=P1.target.d;}o.terms=termsWant()==null?'auto':String(termsWant());return o;}
 function pushed(){const st=S.settings;return!!(st.pushSig&&st.pushAt)&&st.pushSig===JSON.stringify(planDocNow());}
 let PUSHING=null;
+/* ── 새 기록의 시험 일정(3.3.1) ──
+   새로 설치한 휴대폰은 오늘부터 기록(recFrom)이고, 처음 받아 온 저장소 일정(SETS.plan: 예약 작업이 세트를 만드는 일정)을 따른다(planAdopt).
+   3.3.0의 초기화는 설정까지 기본값(준비 시작일 PLAN_START)으로 돌려 관리자 휴대폰이 그 일정을 예약 작업에 보낼 수 있었다:
+   저장소 일정이 시작한 뒤에 만든 기록(created ≥ 저장소 start)이 기본 시작일 그대로이고 시험 일정을 바꾼 적이 없으면 한 번 저장소 일정으로 되돌리고 만든 날부터 기록으로 친다 */
+function newRec(){if(!S_NEW||S.recFrom)return;S.recFrom=todayStr();S.tk=S.tk||{};S.tk.planAdopt='due';}
+function planHeal(){const tk=S.tk||(S.tk={}),P=SETS.plan,st=S.settings;if(tk.planHeal||!P||!/^\d{4}-\d{2}-\d{2}$/.test(P.start||''))return;
+  const due=tk.planAdopt==='due',hit=!due&&st.start===PLAN_START&&P.start>PLAN_START&&(S.created||'')>=P.start&&!st.nextTarget&&!st.schUndo;tk.planHeal=todayStr();delete tk.planAdopt;
+  if(!due&&!hit)return save();
+  const b=P.begin&&/^\d{4}-\d{2}-\d{2}$/.test(P.begin)?P.begin:P.start,r=Number(P.target),tg=r&&computePlan(b,'auto').target.r!==r?String(r):'auto';
+  if(hit&&!S.recFrom)S.recFrom=S.created;
+  if(b!==st.start||tg!==(st.target||'auto')){st.start=b;st.target=tg;recalcPlan();S.today=null;delete st.pushSig;}
+  if(ibxOn()&&st.terms==null&&P.terms!=null&&termsNum(P.terms)!=null)termsSet(P.terms);   /* 관리자: 예약 작업이 쓰는 하루 외울 용어 수도 */
+  save();if(hit)toast('시험 일정을 예약 작업 일정('+korDate(b)+' 시작)으로 되돌렸어요');}
 function planPush(){if(!ibxOn())return Promise.resolve(false);const st=S.settings,o=planDocNow(),k=JSON.stringify(o);
   if(st.pushSig===k&&st.pushAt&&!st.termsNo)return Promise.resolve(true);if(PUSHING&&PUSHING.k===k)return PUSHING.p;
   /* 'noterms': Firebase 규칙이 3.2.6 전 판이라 하루 외울 용어 수는 빼고 일정만 보냄 → termsNo(설정에 "규칙 다시 게시" 안내, 보낼 때마다 다시 해 본다) */
@@ -493,6 +506,7 @@ async function sync(force){
   save();syncing=false;
   if(got.k&&!got.sets&&!got.mocks)invalidate();
   if(got.sets||got.mocks){invalidate();toast(got.sets&&got.mocks?`세트 ${got.sets}개, 모의고사 ${got.mocks}개를 받았어요`:got.sets?`새 세트 ${got.sets}개를 받았어요`:`모의고사 ${got.mocks}개를 받았어요`);}
+  planHeal();   /* 새 기록(새로 설치)·3.3.0 초기화로 기본 일정이 된 기록은 저장소 일정을 따른다(한 번) */
   nextApply(todayStr());   /* 받아 오는 동안 기다린 시험 일정 바꾸기(복원한 기록의 지난 바꾸기도). 받은 세트로 캐시를 비운 뒤라 지난주 고정(weekSnap)이 새 자료로 센다 */
   planPush();   /* 관리자: 보낸 일정과 달라졌으면 예약 작업에 보냄(복원·되돌리기·기다리던 바꾸기 뒤 포함) */
   softRender();}
@@ -676,7 +690,7 @@ const wkStart=t=>addDays(t,-((parse(t).getDay()+6)%7)),wkEnd=t=>addDays(wkStart(
 /* 그 날의 계획 주차(주는 시작 주 월요일부터 세므로 한 달력 주 안에서 단계·목표가 바뀌지 않는다). 시작일 전 날은 음수(첫 주의 시작 전 날은 -1) */
 const wkIdx=t=>{const w=weekIndex(t);return t<S.settings.start?Math.min(-1,w):w;};
 /* 그 달력 주(월요일 W)에서 계획에 드는 첫날: 첫 주는 준비 시작일, 그 밖은 W. 첫 주의 시작 전 세트·모의는 이번 주 몫·밀린 세트·넘어온 것·점수에 넣지 않는다 */
-const wkFrom=W=>W===planMon0()?S.settings.start:W;
+const wkFrom=W=>{const f=W===planMon0()?S.settings.start:W,r=S.recFrom||'';return r>f?r:f;};   /* 기록 시작일(S.recFrom: 초기화·새로 설치한 날, 3.3.1) 전 날짜의 세트·모의는 밀린 것으로 세지 않는다 */
 const dlab=d=>md(d)+'('+DAYK[parse(d).getDay()]+')';
 const nowMin=()=>{const d=new Date();return d.getHours()*60+d.getMinutes();};
 const hmOf=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
@@ -923,7 +937,7 @@ const CU_PO=i=>({p:5,pb:'am',po:26+i/10});
    차례에 밀린 세트(지난주 것 포함)에서 그날 시간만큼. 다음 주로 놓아주지 않는다. 그날 할 세트는 오늘 몫을 고정할 때 정하고(S.today.seq), 다 하면 다음 세트는 "미리 하기" */
 const seqOn=()=>(S.settings||{}).carry==='seq';
 /* 차례에 넣는 첫날: 준비 시작일, 차례대로로 바꾼 주의 월요일이나 "밀린 세트 건너뛰기" 날(S.settings.seqFrom)이 더 늦으면 그날 */
-function seqFrom(){const st=S.settings.start||'',f=(S.settings||{}).seqFrom||'';return f>st?f:st;}
+function seqFrom(){return[S.settings.start||'',(S.settings||{}).seqFrom||'',S.recFrom||''].sort().pop();}
 function seqSets(t){const f=seqFrom();return Object.keys(SETS.sets).filter(d=>d>=f&&d<=t).sort();}
 const SEQ_HW=['write','dd','eo','fg'];
 function seqHwOk(d){const P=hwParts(d);return SEQ_HW.every(k=>!P[k]||!P[k].n||P[k].k>=P[k].n);}
@@ -2433,7 +2447,7 @@ function vMatch(){if(MG&&!MG.end)return topbar('짝 맞추기')+mgGameHTML();if(
    예상은 지금 속도로 남은 평일 동안 하는 만큼. 그래프는 주마다 누적(계획 · 한 것 · 지금 속도로), 표는 항목별·주별 */
 const wdN=(a,z)=>{let n=0;for(let d=a;d<=z;d=addDays(d,1)){const g=parse(d).getDay();if(g>=1&&g<=5)n++;}return n;};
 const wdAdd=(d,n)=>{let k=0;while(k<n){d=addDays(d,1);const g=parse(d).getDay();if(g>=1&&g<=5)k++;}return d;};
-function anaCalc(t){t=t||todayStr();return pm('an'+t,()=>{const b0=S.settings.start,ex=PLAN.target.d,last=addDays(ex,-1),pre=t<b0,end=t<last?t:last;
+function anaCalc(t){t=t||todayStr();return pm('an'+t,()=>{const b0=[S.settings.start,S.recFrom||''].sort().pop(),ex=PLAN.target.d,last=addDays(ex,-1),pre=t<b0,end=t<last?t:last;
   const total=wdN(b0,last),L=Object.keys(SETS.sets).filter(d=>d>=b0&&d<=t&&d<=last).sort(),past=L.filter(d=>d<t),ok=d=>!!setCore(d)&&setCore(d).ok;
   const done=L.filter(ok),dIx=done.map(d=>coreDay(d)||d),lagCore=past.filter(d=>!ok(d)).length,soFar=pre?0:wdN(b0,addDays(end,-1))+(t<=last&&parse(t).getDay()%6&&ok(t)?1:0);   /* 지금까지 계획: 어제까지 평일 + 오늘 세트를 끝냈으면 오늘 */
   /* 숙제 필수·논술 실전(필수인 단계)·세트 복습 제때·주간 모의고사: 지금까지 온 것 가운데 한 비율 */
@@ -3356,7 +3370,7 @@ function vBackup(){const bl=(S.tk||{}).backup;return topbar('백업')+`<h1 class
   <p class="note">"파일로 저장"으로 둔 gisulsa-backup-날짜.json을 고르세요(파일 앱 → 이 iPhone·iCloud Drive).</p>
   <label class="f" for="restoreText">붙여 넣어 복원(백업 복사로 둔 글)</label><textarea class="in" id="restoreText" placeholder='{"state":{...},"sets":{...}}'></textarea>
   <div class="btns"><button class="btn sec" data-act="restore">복원</button><button class="btn red" data-act="reset">전체 초기화</button></div>
-  <p class="note">세트와 모의고사는 저장소에서 다시 받아 올 수 있어서 백업에 넣지 않아도 되지만, 함께 넣어 둡니다.</p>`;}
+  <p class="note">세트와 모의고사는 저장소에서 다시 받아 올 수 있어서 백업에 넣지 않아도 되지만, 함께 넣어 둡니다. 전체 초기화는 학습 기록과 내 카드만 지우고 시험 일정·설정은 남겨 <span class="nw">오늘부터 새로 셉니다.</span></p>`;}
 function vAbout(){const cs=deck();const n={base:0,kichul:0,set:0,user:0};cs.forEach(c=>n[c.src]=(n[c.src]||0)+1);const rounds=kichulRounds();const nq=rounds.reduce((a,r)=>a+r.q.length,0);
   return topbar('콘텐츠 출처')+`<h1 class="ptitle">콘텐츠 출처</h1><p class="lsub">카드 ${cs.length}장(기본 ${n.base}, 기출 보강 ${n.kichul}, 세트 ${n.set||0}, 내 카드 ${n.user||0}), 기출 ${rounds.length}회분 ${nq}문항, 논술 목차 ${essays().length}개</p>
   <div class="group" style="margin-top:14px">${PE_SOURCES.map(s=>`<div class="row noic" style="align-items:flex-start"><span class="tx"><span class="tt">${esc(s.t)}</span><span class="ds">${esc(s.d)}</span></span></div>`).join('')}</div>
@@ -4096,7 +4110,10 @@ document.addEventListener('click',e=>{
   case'backup-dl':{const[j,undo]=backupJSON();PE_IO.saveFile('gisulsa-backup-'+todayStr()+'.json',j).then(backupDone,()=>{undo();toast('파일로 저장하지 못했어요');});return;}
   case'restore':return restoreFrom($('#restoreText').value);
   case'restore-file':return PE_IO.pickFile().then(f=>{if(f)restoreFrom(f.text,f.name);},err=>toast('파일을 열지 못했어요: '+(err&&err.message||err)));
-  case'reset':return PE_IO.ask('모든 학습 기록과 내 카드를 지웁니다. 초기화할까요?',()=>PE_IO.ask('마지막 확인: 백업을 복사해 두었나요?',()=>{S=fresh();S.tk['seen:v3']=todayStr();SETS={sets:{},mocks:{},kichul:null,index:null,plan:null};recalcPlan();flush();invalidate();applyLook();flowReset();sync(true);nav('today');toast('초기화했어요');}));
+  case'reset':return PE_IO.ask('모든 학습 기록과 내 카드를 지웁니다. 시험 일정과 설정은 그대로예요. 초기화할까요?',()=>PE_IO.ask('마지막 확인: 백업을 복사해 두었나요?',()=>{
+    /* 3.3.1: 시험 일정(준비 시작일·목표 회차)과 설정(하루 공부 시간·외울 용어 수 등)은 그대로 둔다(예전에는 기본값으로 돌아가 관리자 휴대폰이 예약 작업에 다른 일정을 보냈다).
+       오늘이 기록 시작일(recFrom): 그 전 날짜의 세트·모의는 밀린 것으로 세지 않는다 */
+    const st=S.settings,tb=(S.tk||{}).budget;S=fresh();S.settings=Object.assign(S.settings,st);['seqFrom','slipNo'].forEach(k=>delete S.settings[k]);S.recFrom=todayStr();if(tb)S.tk.budget=tb;S.tk['seen:v3']=todayStr();SETS={sets:{},mocks:{},kichul:null,index:null,plan:null};recalcPlan();flush();invalidate();applyLook();flowReset();sync(true);nav('today');toast('초기화했어요');}));
   }
 });
 document.addEventListener('change',e=>{if(e.target.id==='rangeSel'){S.range=e.target.value;save();render();}
@@ -4123,9 +4140,9 @@ window.addEventListener('scroll',()=>{if(TM.running||TM.remain>0&&TM.remain<TM.t
 /* ════════ 23. 시작 ════════ */
 PE_IO.init({toast});recalcPlan();applyLook();setPreset('essay');R=parseHash();
 if(!location.hash)history.replaceState(null,'','#today');
-termsFix();calOpen();sync(true);route();v3Once();verOnce();   /* 받아 오기를 먼저 시작해 첫 화면이 오래된 자료로 오늘 몫을 고정하지 않게(받아 온 뒤 고정) */
+termsFix();newRec();calOpen();sync(true);route();v3Once();verOnce();   /* 받아 오기를 먼저 시작해 첫 화면이 오래된 자료로 오늘 몫을 고정하지 않게(받아 온 뒤 고정) */
 const fresh2=f=>(...a)=>{PLN++;return f(...a);};
-window.__pe={seqOn,seqHeads,seqDay,seqLag,seqAhead,seqExp,seqSets,coreDay,anaCalc,anaTips,card,gqMain,FIG,figList,figAdd,figShrink,startFillOne,fillOneMore,mgPool,mySetCards,mySetDays,mgSrc,subjOn,setRule,termsSplit,termsWant,termsRepo,termsState,termsReq,termsAt,termsFix,setVis,setHid,setCore,planDocNow,planPush,hwAhead,subjCaps,subjDefault,subjFit,subjOf,subjKey,subjSum,MG:()=>MG,mgPick,mgText,mgCut,mgCount,mgStart,mgTap,mgStop,mgRec,mgDur,coachCalc,evSpeed,evLog,actAvg,actTick,qAvg,coachWeek,nearRounds,buildMapShort,p12End,p3Week,studySince:v=>{if(v)STUDY_SINCE=v;PLN++;return STUDY_SINCE;},mockQs,knowAuto,qSteps,paceF,paceSamples,mockMode,mockMin,mockTot,estStudy,mockShape,cardLv,essayLv,qKey,planDoneMin,mockRowsSync,S:()=>S,rParts,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession,
+window.__pe={wkFrom,newRec,planHeal,seqOn,seqHeads,seqDay,seqLag,seqAhead,seqExp,seqSets,coreDay,anaCalc,anaTips,card,gqMain,FIG,figList,figAdd,figShrink,startFillOne,fillOneMore,mgPool,mySetCards,mySetDays,mgSrc,subjOn,setRule,termsSplit,termsWant,termsRepo,termsState,termsReq,termsAt,termsFix,setVis,setHid,setCore,planDocNow,planPush,hwAhead,subjCaps,subjDefault,subjFit,subjOf,subjKey,subjSum,MG:()=>MG,mgPick,mgText,mgCut,mgCount,mgStart,mgTap,mgStop,mgRec,mgDur,coachCalc,evSpeed,evLog,actAvg,actTick,qAvg,coachWeek,nearRounds,buildMapShort,p12End,p3Week,studySince:v=>{if(v)STUDY_SINCE=v;PLN++;return STUDY_SINCE;},mockQs,knowAuto,qSteps,paceF,paceSamples,mockMode,mockMin,mockTot,estStudy,mockShape,cardLv,essayLv,qKey,planDoneMin,mockRowsSync,S:()=>S,rParts,gqList,gqBuild,gqNumAlt,gqRec,gqStat,jo,KR_HOLI,SETS:()=>SETS,PLAN:()=>PLAN,SES:()=>SES,computePlan,roundList,sync,deck,essays,kq,clozeTokens,fillCands,fillBlanks,fillJudge,glNames,glIdx,glHTML,glStem,glForms,glLookup,glOpen,MEMO:()=>MEMO,memoTick,memoTapes,memoOff,hwItems,ddRows,ddNoun,ddWrap,render,invalidate,startSession,
   enough,setReviewItems,startDueAll,startWrong,budgetOf,dayKind,TM:()=>TM,go:h=>{nav(h);v3Again();},goUp,goTab,R:()=>R,navBadgeN,tabWords,
   /* 오늘 몫·이번 주(검사용: 부를 때마다 새로 센다) */
   taskList:fresh2(taskList),dayPlan:fresh2(dayPlan),planToday:fresh2(planToday),weekBoard:fresh2(weekBoard),weekSnap:fresh2(weekSnap),reqParts:fresh2(reqParts),cardsOut:fresh2(cardsOut),hwParts:fresh2(hwParts),

@@ -2771,6 +2771,37 @@ function runWeek(W, sets, st) {
     await show('#settings'); await tap('[data-act="carry-mode"][data-v="move"]');
     ok(!pe.seqOn() && !S.settings.seqFrom && !(S.today || {}).seq && /일요일까지 못 하면 놓아주고/.test(T_(V$())), '75-9. 다른 날로 옮기기로 되돌림(차례 기록·고정한 머리 지움)');
     IO.ask = ask0; delete S.settings.carry; pe.goTab('today'); await sleep(30); }
+  // 76. 3.3.1: 초기화는 시험 일정·설정을 남기고 오늘부터 기록(recFrom) — 그 전 날짜의 세트·모의는 밀린 것으로 세지 않는다.
+  //     3.3.0 초기화로 기본 일정(PLAN_START)이 된 기록·새로 설치한 휴대폰은 저장소 일정(index.json plan)을 한 번 따른다(planHeal)
+  {
+    const J = JSON.stringify, IO = w.PE_IO, ask0 = IO.ask, t = '2026-10-29', ids = () => pe.taskList(t).map(x => x.id), late = () => ids().filter(id => /^(late|carry)[.:]/.test(id));
+    scene('2026-10-29T07:00:00', EMPTY); const S0 = pe.S(); S0.settings.newPerDay = 3; S0.settings.start = '2026-10-19'; pe.recalcPlan(); pe.invalidate();
+    ok(late().length >= 3, `76-1. (준비) 이번 주 기록 없음: 밀린 세트 ${late().length}줄`);
+    const st0 = J(S0.settings); IO.ask = (m, yes) => yes(); SERVER = clone(FIX);
+    await show('#backup'); click('[data-act="reset"]'); await sleep(300);
+    const S = pe.S(), B = pe.weekBoard(t), cl = B.lines.find(l => l.k === 'core');
+    ok(Object.entries(JSON.parse(st0)).every(([k, v]) => J(S.settings[k]) === J(v)) && S.recFrom === t && !Object.keys(S.cards).length && pe.SETS().sets[t], `76-1. 초기화: 시험 일정·설정은 그대로, 기록 시작일 ${S.recFrom}`);
+    ok(!late().length && ids().includes('set.read:' + t) && !B.lv && cl && cl.b === 2 && pe.wkFrom('2026-10-26') === t,
+      `76-1. 초기화한 날부터: 밀린 세트·옮긴 것 없음, 이번 주 세트 핵심 ${cl && cl.a}/${cl && cl.b}(목·금), 넘침 단계 ${B.lv || 0}(${late().join(',')})`);
+    const A = pe.anaCalc(t); let n = 0; for (let x = t; x < pe.PLAN().target.d; x = add(x, 1)) { const g = new Date(x + 'T12:00:00').getDay(); if (g >= 1 && g <= 5) n++; }
+    ok(A.total === n && !A.lag, `76-1. 분석도 초기화한 날부터(계획 ${A.total}, 밀림 ${A.lag || 0})`);
+    await show('#today'); ok(!/다른 날로 옮긴 것|놓아준 것|밀린 몫/.test(V$().textContent), '76-1. 오늘 화면에 "다른 날로 옮긴 것·놓아준 것·밀린 몫" 없음');
+    IO.ask = ask0; SERVER = null;
+    // 76-2. 3.3.0 초기화로 기본 일정이 된 기록(저장소 일정이 시작한 뒤 만든 기록, 시작일 = PLAN_START): 저장소 일정(시작·목표 회차)을 따르고, 만든 날부터 기록
+    const PS0 = '2026-10-19', heal = (st, plan) => { scene('2026-11-28T09:00:00', st); pe.SETS().plan = plan; pe.planHeal(); return pe.S(); }, RP = { start: '2026-11-16', target: 142, exam: '2027-05-15', terms: 3 };
+    const inc = clone(BLANK); inc.created = '2026-11-20'; inc.settings.start = PS0;
+    let H = heal(inc, RP);
+    ok(H.settings.start === '2026-11-16' && pe.PLAN().target.r === 142 && H.recFrom === '2026-11-20' && H.tk.planHeal === '2026-11-28' && !H.tk.planAdopt && !H.settings.pushSig && /되돌렸어요/.test(d.querySelector('#toast').textContent),
+      `76-2. 3.3.0 초기화한 기록: 시작 ${H.settings.start}, 목표 ${pe.PLAN().target.r}회, 기록 시작 ${H.recFrom}`);
+    const once = J(H.settings); H.settings.start = PS0; pe.planHeal(); ok(H.settings.start === PS0, '76-2. 한 번만(그 뒤 사용자가 바꾼 일정은 그대로)'); H.settings = JSON.parse(once);
+    // 76-3. 예전부터 쓰던 기록(11/28 전에 만듦)은 시작일이 기본값이어도 그대로
+    const old = clone(BLANK); old.settings.start = PS0; H = heal(old, RP);
+    ok(H.settings.start === PS0 && !H.recFrom && H.tk.planHeal, '76-3. 예전 기록: 일정 그대로, 기록 시작일 없음');
+    // 76-4. 새로 설치(planAdopt): 시작일이 무엇이든 저장소 일정, 저장소 일정이 없으면 다음에 받을 때까지 기다림
+    const nw = clone(BLANK); nw.tk = { planAdopt: 'due' }; nw.recFrom = '2026-11-28'; nw.settings.start = '2026-11-02';
+    H = heal(nw, null); ok(H.settings.start === '2026-11-02' && H.tk.planAdopt === 'due' && !H.tk.planHeal, '76-4. 저장소 일정을 받기 전: 기다림');
+    pe.SETS().plan = RP; pe.planHeal(); ok(H.settings.start === '2026-11-16' && !H.tk.planAdopt && H.tk.planHeal && H.recFrom === '2026-11-28', `76-4. 새로 설치: 저장소 일정(${H.settings.start})`);
+    pe.SETS().plan = null; scene('2026-11-02T07:00:00', ST); pe.goTab('today'); await sleep(30); }
   ok(errors.length === 0, '콘솔 오류 없음 ' + errors.slice(0, 3).join(' | '));
   console.log(fails ? `\n${fails}개 실패` : '\n모두 통과');
   process.exit(fails ? 1 : 0);
